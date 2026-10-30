@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schemalist gettext-domain="unified-shell">
-  <schema id="org.gnome.shell.extensions.unified-shell" path="/org/gnome/shell/extensions/unified-shell/">
+<schemalist gettext-domain="ubuntu-plus">
+  <schema id="org.gnome.shell.extensions.ubuntu-plus" path="/org/gnome/shell/extensions/ubuntu-plus/">
 
     <!-- Modules -->
     <key name="module-appearance" type="b">

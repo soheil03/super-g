@@ -1,10 +1,10 @@
 {
-  "uuid": "unified-shell@soheil",
-  "name": "Unified Shell",
+  "uuid": "ubuntu-plus@soheil",
+  "name": "Ubuntu Plus",
   "description": "One extension for the whole desktop look: palette, GTK and shell theming, fonts and motion. Panel, dock, blur, corners, gestures and launcher modules follow.",
   "version": 1,
   "shell-version": ["50", "51"],
   "session-modes": ["user", "unlock-dialog"],
-  "settings-schema": "org.gnome.shell.extensions.unified-shell",
+  "settings-schema": "org.gnome.shell.extensions.ubuntu-plus",
   "url": ""
 }

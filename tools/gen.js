@@ -7,7 +7,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import System from 'system';
-import * as Gen from '../extension/unified-shell@soheil/lib/themeGen.js';
+import * as Gen from '../extension/ubuntu-plus@soheil/lib/themeGen.js';
 
 const here = GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]);
 const root = GLib.path_get_dirname(here);
@@ -28,7 +28,7 @@ const opts = JSON.parse(optsJson);
 const adw = `${GLib.get_home_dir()}/.local/share/themes`;
 
 write(`${outdir}/config/gtk-4.0/gtk.css`, Gen.gtk4Css(tokens, opts));
-for (const [name, dark] of [['Unified', false], ['Unified-dark', true]]) {
+for (const [name, dark] of [['Ubuntu-Plus', false], ['Ubuntu-Plus-dark', true]]) {
     const base = `${adw}/${dark ? 'adw-gtk3-dark' : 'adw-gtk3'}/gtk-3.0/gtk.css`;
     write(`${outdir}/data/themes/${name}/gtk-3.0/gtk.css`, Gen.gtk3Css(tokens, opts, dark, base));
     write(`${outdir}/data/themes/${name}/index.theme`, Gen.gtkThemeIndex(name));

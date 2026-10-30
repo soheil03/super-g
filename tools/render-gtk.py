@@ -138,14 +138,14 @@ def gtk3():
     from gi.repository import GLib, Gtk
 
     s = Gtk.Settings.get_default()
-    s.props.gtk_theme_name = 'Unified-dark' if DARK else 'Unified'
+    s.props.gtk_theme_name = 'Ubuntu-Plus-dark' if DARK else 'Ubuntu-Plus'
     s.props.gtk_decoration_layout = LAYOUT
     s.props.gtk_font_name = 'Ubuntu Sans 11'
 
     off = Gtk.OffscreenWindow()
     outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
     outer.get_style_context().add_class('background')
-    hb = Gtk.HeaderBar(title='GTK3 app', subtitle='adw-gtk3 + Unified', show_close_button=True)
+    hb = Gtk.HeaderBar(title='GTK3 app', subtitle='adw-gtk3 + Ubuntu Plus', show_close_button=True)
     hb.get_style_context().add_class('titlebar')
     hb.pack_end(Gtk.Button.new_from_icon_name('open-menu-symbolic', Gtk.IconSize.BUTTON))
     outer.pack_start(hb, False, False, 0)

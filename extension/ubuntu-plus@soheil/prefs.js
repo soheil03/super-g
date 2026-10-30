@@ -76,7 +76,7 @@ function page(title, icon, groups) {
     return p;
 }
 
-export default class UnifiedShellPrefs extends ExtensionPreferences {
+export default class UbuntuPlusPrefs extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const s = this.getSettings();
         window.set_default_size(720, 760);

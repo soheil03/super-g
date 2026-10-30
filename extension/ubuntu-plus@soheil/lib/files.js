@@ -8,8 +8,8 @@ import GLib from 'gi://GLib';
 export const HOME = GLib.get_home_dir();
 export const CONFIG = GLib.get_user_config_dir();
 export const DATA = GLib.get_user_data_dir();
-export const CACHE = `${GLib.get_user_cache_dir()}/unified-shell`;
-export const STATE = `${GLib.get_user_state_dir()}/unified-shell`;
+export const CACHE = `${GLib.get_user_cache_dir()}/ubuntu-plus`;
+export const STATE = `${GLib.get_user_state_dir()}/ubuntu-plus`;
 
 const decoder = new TextDecoder();
 
@@ -43,18 +43,23 @@ export function remove(path) {
     } catch {}
 }
 
-const BEGIN = '/* unified-shell: begin */';
-const END = '/* unified-shell: end */';
+const BEGIN = '/* ubuntu-plus: begin */';
+const END = '/* ubuntu-plus: end */';
 
-// Put `block` at the top of a CSS file between markers, keeping whatever
-// else the user or other tools wrote there. `null` removes our block.
-export function setManagedBlock(path, block) {
+// Put `block` in a CSS file between markers, keeping whatever else the user
+// or other tools wrote there. `null` removes our block. Blocks holding rules
+// go at the end so other tools' @import lines stay valid at the top.
+export function setManagedBlock(path, block, {atEnd = false} = {}) {
     const current = readText(path) ?? '';
     const start = current.indexOf(BEGIN), stop = current.indexOf(END);
     let rest = current;
     if (start >= 0 && stop > start)
-        rest = (current.slice(0, start) + current.slice(stop + END.length)).replace(/^\n+/, '');
-    const next = block === null ? rest : `${BEGIN}\n${block}\n${END}\n${rest}`;
+        rest = (current.slice(0, start) + current.slice(stop + END.length)).replace(/^\n+/, '').replace(/\n+$/, '\n');
+    let next = rest;
+    if (block !== null) {
+        const ours = `${BEGIN}\n${block}\n${END}\n`;
+        next = atEnd ? `${rest}${rest && !rest.endsWith('\n') ? '\n' : ''}${ours}` : `${ours}${rest}`;
+    }
     if (next === current)
         return false;
     if (!next.trim() && block === null) {

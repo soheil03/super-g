@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Unified Shell: one extension, many independent modules. Each module is
+// Ubuntu Plus: one extension, many independent modules. Each module is
 // started and stopped on its own; one that throws is switched off and
 // reported, and the rest keep running.
 
@@ -12,7 +12,7 @@ const MODULES = {
     appearance: AppearanceModule,
 };
 
-export default class UnifiedShell extends Extension {
+export default class UbuntuPlus extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._active = new Map();
@@ -34,15 +34,15 @@ export default class UnifiedShell extends Extension {
     // Called by modules when something fails after start-up, e.g. in a
     // signal handler after a GNOME update changed an internal API.
     reportError(name, error) {
-        console.error(`unified-shell: module "${name}" failed`, error);
+        console.error(`ubuntu-plus: module "${name}" failed`, error);
         if (!this._active?.has(name))
             return;
         this._stop(name);
         const broken = new Set(this._settings.get_strv('broken-modules'));
         broken.add(name);
         this._settings.set_strv('broken-modules', [...broken]);
-        Main.notify('Unified Shell',
-            `The ${name} module hit an error and was switched off. Turn it back on in Unified Shell settings.`);
+        Main.notify('Ubuntu Plus',
+            `The ${name} module hit an error and was switched off. Turn it back on in Ubuntu Plus settings.`);
     }
 
     _sync() {
@@ -72,7 +72,7 @@ export default class UnifiedShell extends Extension {
         try {
             module.disable();
         } catch (e) {
-            console.error(`unified-shell: module "${name}" failed to stop`, e);
+            console.error(`ubuntu-plus: module "${name}" failed to stop`, e);
         }
     }
 }

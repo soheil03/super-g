@@ -12,9 +12,11 @@ import * as Files from '../lib/files.js';
 import * as Gen from '../lib/themeGen.js';
 
 const IFACE = 'org.gnome.desktop.interface';
-const THEME = 'Unified';
-const THEME_DARK = 'Unified-dark';
-const GTK4_FILE = `${Files.CONFIG}/gtk-4.0/unified-shell.css`;
+const THEME = 'Ubuntu-Plus';
+const THEME_DARK = 'Ubuntu-Plus-dark';
+// Earlier versions wrote a separate file and @imported it; snaps copy only
+// gtk.css, so the CSS now lives inline in gtk.css.
+const GTK4_FILE = `${Files.CONFIG}/gtk-4.0/ubuntu-plus.css`;
 const GTK4_MAIN = `${Files.CONFIG}/gtk-4.0/gtk.css`;
 const ORIGINAL = `${Files.STATE}/original-settings.json`;
 const SAVED_KEYS = [
@@ -40,7 +42,12 @@ export default class AppearanceModule extends Module {
         this.connect(this.settings, 'changed', () => this.later('apply', 150, () => this._applyAll()));
         this.connect(this._iface, 'changed::color-scheme', () => this._applyAll());
         // Ubuntu's Appearance panel writes Yaru-* here; keep ours while active.
-        this.connect(this._iface, 'changed::gtk-theme', () => this.later('theme', 300, () => this._applyGtkTheme()));
+        this.connect(this._iface, 'changed::gtk-theme', () => {
+            this.later('theme', 300, () => this._applyGtkTheme());
+            // Other tools (Kiwi) rewrite gtk.css on theme changes too; if one
+            // raced us and dropped our block, put it back.
+            this.later('gtk-verify', 2000, () => this._applyGtk());
+        });
         this.connect(St.ThemeContext.get_for_stage(global.stage), 'changed', () => {
             if (this._currentShellSource() !== this._shellSource)
                 this.later('shell', 100, () => this._applyShell());
@@ -92,8 +99,8 @@ export default class AppearanceModule extends Module {
             return;
         }
         const opts = this._opts();
-        Files.writeText(GTK4_FILE, Gen.gtk4Css(this._tokens, opts));
-        Files.setManagedBlock(GTK4_MAIN, '@import url("unified-shell.css");');
+        Files.remove(GTK4_FILE);
+        Files.setManagedBlock(GTK4_MAIN, Gen.gtk4Css(this._tokens, opts).trim(), {atEnd: true});
 
         let gtk3Changed = false;
         if (this._adwGtk3) {
@@ -126,17 +133,22 @@ export default class AppearanceModule extends Module {
             if (GLib.file_test(`${dir}/adw-gtk3/gtk-3.0/gtk.css`, GLib.FileTest.EXISTS))
                 return `${dir}/adw-gtk3`;
         }
-        console.warn('unified-shell: adw-gtk3 not found, GTK3 apps keep their theme');
+        console.warn('ubuntu-plus: adw-gtk3 not found, GTK3 apps keep their theme');
         return null;
     }
 
     /* -------------------------------------------------------- Shell -- */
 
     // The session's theme (Yaru, Adwaita) is the default stylesheet; a
-    // user-theme extension adds an application stylesheet on top.
+    // user-theme extension adds an application stylesheet on top; other
+    // extensions add custom stylesheets. All of them may use the accent.
     _themeSheets() {
         const theme = St.ThemeContext.get_for_stage(global.stage).get_theme();
-        return [theme?.default_stylesheet, theme?.application_stylesheet].filter(Boolean);
+        if (!theme)
+            return [];
+        const ours = this._shellSheet?.get_uri();
+        const custom = (theme.get_custom_stylesheets() ?? []).filter(f => f.get_uri() !== ours);
+        return [theme.default_stylesheet, theme.application_stylesheet, ...custom].filter(Boolean);
     }
 
     _currentShellSource() {
