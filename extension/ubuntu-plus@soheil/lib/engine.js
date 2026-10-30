@@ -141,6 +141,7 @@ export class Engine extends Module {
     disable() {
         this._generation = (this._generation ?? 0) + 1;
         this.cleanup();
+        this.cleanupExtra?.();
         if (this.instance) {
             try {
                 this.instance.disable();

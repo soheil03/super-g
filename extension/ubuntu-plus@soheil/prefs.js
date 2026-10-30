@@ -15,7 +15,25 @@ const SIDEBARS = [['floating-card', 'Floating card'], ['stock', 'Stock GNOME']];
 const WEIGHTS = [[500, 'Medium'], [600, 'Semibold'], [700, 'Bold']];
 const CURVES = [['snappy', 'Snappy spring'], ['soft', 'Soft spring']];
 const PANEL_STYLES = [['floating', 'Floating bar'], ['islands', 'Islands'], ['adaptive', 'Adaptive']];
+const PANEL_HEIGHTS = [[24, 'Compact (24 px)'], [28, 'Default (28 px)'], [32, 'Comfortable (32 px)'],
+    [36, 'Large (36 px)'], [40, 'Extra large (40 px)']];
 const STATUS_STYLES = [['grouped', 'Grouped pill'], ['bare', 'Bare icons']];
+const INDICATORS = [['DOT', 'Small dot'], ['DOTS', 'Dots per window'], ['DASHES', 'Dashes'], ['DEFAULT', 'GNOME default']];
+
+// Settings of a vendored engine; they live in our own compiled schemas.
+function engineSettings(path, name) {
+    const source = Gio.SettingsSchemaSource.new_from_directory(`${path}/schemas`,
+        Gio.SettingsSchemaSource.get_default(), false);
+    const schema = source.lookup(`org.gnome.shell.extensions.ubuntu-plus.${name}`, true);
+    return schema ? new Gio.Settings({settings_schema: schema}) : null;
+}
+
+function invertedSwitch(settings, key, title, subtitle = '') {
+    const row = new Adw.SwitchRow({title, subtitle});
+    settings.bind(key, row, 'active', Gio.SettingsBindFlags.INVERT_BOOLEAN);
+    return row;
+}
+
 const MODULES = [
     ['appearance', 'Appearance', 'Palette, GTK and shell theming, fonts and motion'],
     ['panel', 'Top bar', 'Floating, islands or adaptive bar, clock, status pill'],
@@ -116,7 +134,7 @@ export default class UbuntuPlusPrefs extends ExtensionPreferences {
         window.add(page('Top bar', 'view-continuous-symbolic', [
             group('Bar', [
                 comboRow(s, 'panel-style', 'Style', PANEL_STYLES),
-                spinRow(s, 'panel-height', 'Height', {lower: 22, upper: 48, step: 1}),
+                comboRow(s, 'panel-height', 'Height', PANEL_HEIGHTS, {int: true}),
                 switchRow(s, 'panel-glass', 'Glass', 'Blur behind the bar'),
                 comboRow(s, 'panel-status-style', 'Status icons', STATUS_STYLES),
                 switchRow(s, 'hide-accessibility', 'Hide accessibility icon'),
@@ -130,6 +148,33 @@ export default class UbuntuPlusPrefs extends ExtensionPreferences {
                 switchRow(s, 'startup-desktop', 'Start on the desktop', 'Instead of the overview'),
             ]),
         ]));
+
+        const dock = engineSettings(this.path, 'dock');
+        const motion = engineSettings(this.path, 'dockmotion');
+        if (dock && motion) {
+            window.add(page('Dock', 'user-desktop-symbolic', [
+                group('Icons', [
+                    spinRow(dock, 'dash-max-icon-size', 'Icon size', {lower: 24, upper: 96, step: 1}),
+                    switchRow(motion, 'custom-hover-enabled', 'Magnification', 'Icons grow under the pointer'),
+                    spinRow(motion, 'custom-hover-scale', 'Magnification size', {lower: 1.1, upper: 2.2, step: 0.05, digits: 2}),
+                    switchRow(motion, 'custom-hover-dynamic-spacing', 'Neighbours make room'),
+                    invertedSwitch(dock, 'hide-tooltip', 'Labels', 'App name above the icon on hover'),
+                    comboRow(dock, 'running-indicator-style', 'Running apps', INDICATORS),
+                ]),
+                group('Behaviour', [
+                    invertedSwitch(dock, 'dock-fixed', 'Auto-hide'),
+                    switchRow(dock, 'intellihide', 'Hide only when a window overlaps'),
+                    switchRow(dock, 'show-show-apps-button', 'Apps button'),
+                    switchRow(dock, 'show-trash', 'Trash'),
+                    switchRow(dock, 'show-mounts', 'Drives and mounts'),
+                ]),
+                group('Motion', [
+                    switchRow(motion, 'custom-launch-enabled', 'Launch animation'),
+                    switchRow(motion, 'custom-press-enabled', 'Press animation'),
+                    switchRow(motion, 'custom-attention-enabled', 'Attention animation', 'When an app needs you'),
+                ]),
+            ]));
+        }
 
         window.add(page('Fonts', 'font-x-generic-symbolic', [
             group('Fonts', [

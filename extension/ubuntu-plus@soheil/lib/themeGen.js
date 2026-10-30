@@ -149,7 +149,17 @@ window.tiled-left .sidebar-pane, window.tiled-right .sidebar-pane { border-color
 .navigation-sidebar > row:selected:hover { background-color: color-mix(in srgb, var(--accent-bg-color) 24%, transparent); }`;
 }
 
-export function gtk4Css(tokens, opts) {
+// Drop rules whose selector mentions any of `words` (used to keep only the
+// harmless parts of third-party fix-up CSS).
+export function withoutRules(css, words) {
+    const body = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    return body.split('}').filter(chunk => {
+        const sel = chunk.slice(0, chunk.indexOf('{'));
+        return chunk.includes('{') && !words.some(w => sel.includes(w));
+    }).map(chunk => `${chunk.trim()}\n}`).join('\n');
+}
+
+export function gtk4Css(tokens, opts, extraCss = '') {
     opts = {...DEFAULTS, ...opts};
     const light = resolve(tokens, opts, false);
     const dark = resolve(tokens, opts, true);
@@ -164,6 +174,7 @@ ${gtk4Buttons(opts.windowButtons, light)}
 @media (prefers-color-scheme: dark) {
 ${gtk4Buttons(opts.windowButtons, dark)}
 }
+${extraCss}
 ${gtk4Sidebar(opts.sidebarStyle, opts.windowRadius)}
 `;
 }
@@ -198,7 +209,7 @@ ${hov} { background-color: ${c.controlHover}; }
 ${common}`;
 }
 
-export function gtk3Css(tokens, opts, dark, adwGtk3Path) {
+export function gtk3Css(tokens, opts, dark, adwGtk3Path, extraCss = '') {
     opts = {...DEFAULTS, ...opts};
     const c = resolve(tokens, opts, dark);
     const named = {
@@ -236,6 +247,7 @@ headerbar.titlebar, .titlebar:not(headerbar) {
   border-top-left-radius: ${r(opts.windowRadius)}; border-top-right-radius: ${r(opts.windowRadius)}; }
 .maximized headerbar.titlebar, .tiled headerbar.titlebar, .maximized decoration, .tiled decoration { border-radius: 0; }
 headerbar .title { font-weight: ${opts.titleWeight}; }
+${extraCss}
 button.suggested-action, button.suggested-action label { color: ${c.accentFg}; }
 .sidebar, .sidebar list, .sidebar row:not(:selected), placessidebar, stacksidebar,
 headerbar.sidebar, .sidebar-pane { background-color: ${c.sidebar}; }
@@ -295,7 +307,7 @@ export function shellCss(tokens, opts, dark, themeCss = '') {
     opts = {...DEFAULTS, ...opts};
     const c = resolve(tokens, opts, dark);
     const solid = withAlpha(c.popover, 0.96);
-    const glass = withAlpha(c.popover, dark ? 0.58 : 0.62);
+    const glass = withAlpha(c.popover, dark ? 0.74 : 0.62);
     const tile = c.control;
     const rule = (sel, body) => `${scoped(sel)} { ${body} }`;
     const glassSel = BLUR_CLASSES.flatMap(k => SURFACES.map(s => `${ROOT}.${k} ${s}`)).join(',\n');
@@ -328,6 +340,10 @@ ${rule('.modal-dialog-linked-button', 'border-radius: 999px;')}
 ${rule('.switcher-list, .workspace-switcher', 'border-radius: 24px;')}
 ${rule('.switcher-list .item-box', 'border-radius: 16px;')}
 ${rule('.osd-window', 'border-radius: 999px;')}
+
+${rule('.search-entry', `background-color: ${withAlpha(c.window, dark ? 0.55 : 0.6)}; color: ${c.fg}; border-radius: 999px; border: none; box-shadow: inset 0 0 0 1px ${c.hairline};`)}
+${rule('.search-entry:focus', `box-shadow: inset 0 0 0 2px ${withAlpha(c.accent, 0.6)};`)}
+${rule('.search-entry .search-entry-icon, .search-entry StLabel.hint-text', `color: ${c.fgMuted};`)}
 `;
 }
 

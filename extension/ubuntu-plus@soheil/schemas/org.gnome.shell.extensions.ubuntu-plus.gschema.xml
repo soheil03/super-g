@@ -64,8 +64,8 @@
       <summary>Status icons: grouped (one pill) or bare</summary>
     </key>
     <key name="panel-glass" type="b">
-      <default>true</default>
-      <summary>Blur behind the top bar</summary>
+      <default>false</default>
+      <summary>Blur behind the top bar (the blur is rectangular, so a floating bar shows square corners)</summary>
     </key>
     <key name="clock-weekday" type="b">
       <default>true</default>

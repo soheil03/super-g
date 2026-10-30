@@ -10,19 +10,36 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import AppearanceModule from './modules/appearance.js';
 import PanelModule from './modules/panel.js';
 import {engine} from './lib/engine.js';
+import {configureDock, configureDockMotion} from './lib/dockStyle.js';
+import {configureBlur} from './lib/blurSetup.js';
 
 export const MODULES = {
     appearance: AppearanceModule,
     corners: engine('corners', 'rounded-window-corners@fxgn'),
-    dock: engine('dock', 'dash-to-dock@micxgx.gmail.com', ['dash-to-dock@micxgx.gmail.com', 'ubuntu-dock@ubuntu.com']),
-    dockmotion: engine('dockmotion', 'flourish@orsso.github.io'),
-    blur: engine('blur', 'blur-my-shell@aunetx'),
+    dock: engine('dock', 'dash-to-dock@micxgx.gmail.com', ['dash-to-dock@micxgx.gmail.com', 'ubuntu-dock@ubuntu.com'], {
+        configure() {
+            configureDock(this);
+        },
+    }),
+    dockmotion: engine('dockmotion', 'flourish@orsso.github.io', ['flourish@orsso.github.io'], {
+        configure() {
+            configureDockMotion(this);
+        },
+    }),
+    blur: engine('blur', 'blur-my-shell@aunetx', ['blur-my-shell@aunetx'], {
+        configure() {
+            configureBlur(this);
+        },
+    }),
     // Window buttons belong to the appearance module, so Kiwi's own
     // (traffic-light) button CSS stays off.
     windows: engine('windows', 'kiwi@kemma', ['kiwi@kemma'], {
         configure() {
             const s = this.instance.getSettings();
-            for (const key of ['enable-app-window-buttons', 'show-window-controls'])
+            // popup-menu-styling also imports Kiwi's GTK fix-ups from inside
+            // the extension folder, which snaps and Flatpaks can't read; the
+            // appearance module inlines those fix-ups instead.
+            for (const key of ['enable-app-window-buttons', 'show-window-controls', 'popup-menu-styling'])
                 if (s.get_boolean(key))
                     s.set_boolean(key, false);
         },

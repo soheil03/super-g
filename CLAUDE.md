@@ -7,6 +7,7 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - `extension/ubuntu-plus@soheil/`
   - `extension.js` — module registry (`MODULES`, start order matters: dock before dockmotion/windows/blur), sequential async start/stop, kill switch (`reportError` → `broken-modules`), lock-screen rule, `notePendingLogout`.
   - `lib/module.js` (base: tracked signals, `later()` debounce, `guard()`), `lib/engine.js` (runs vendored upstream extensions, lookup stand-ins, handover, first-run dconf migration), `lib/themeGen.js` (pure CSS generators, also used by tools), `lib/color.js`, `lib/files.js` (managed blocks), `lib/stylesheet.js` (`LiveStylesheet`, `engineSettings`).
+  - `lib/dockStyle.js` (dock glass, apps-button icon, magnification defaults), `lib/blurSetup.js` (clear/dock blur pipelines).
   - `modules/appearance.js` (GTK4 CSS inline in `~/.config/gtk-4.0/gtk.css`, GTK3 themes `Ubuntu-Plus[-dark]` over adw-gtk3, shell CSS, fonts, `slow_down_factor`, system accent), `modules/panel.js` (top bar).
   - `vendor/<name>/` — upstream code (blur, corners, dock, dockmotion, windows, hotcorners, gestures, launcher). `UPSTREAM` records version and schema/dconf renames.
   - `schemas/` — ours + one renamed schema per engine (`org.gnome.shell.extensions.ubuntu-plus.<name>`, dconf `/org/gnome/shell/extensions/ubuntu-plus/<name>/`).
@@ -31,7 +32,12 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - vendor.sh: escape dots in schema ids before sed (they matched `/`); cross-engine references live in vendor-fixups.sh.
 - Kiwi and we both rewrite gtk.css; appearance re-checks its block 2 s after theme changes. Kiwi's button CSS is forced off (`windows` configure).
 - GTK3 can't do the floating sidebar card or a joined capsule; it falls back.
-- New or renamed extension → logout required (Wayland).
+- New or renamed extension → logout required (Wayland). Code changes too: a running extension never reloads.
+- Blur my Shell clears dock backgrounds with `!important`; our dock glass uses `!important` too (lib/dockStyle.js).
+- GNOME BaseIcon keeps `createIcon` bound per instance; the apps-button icon is swapped per instance, not on the prototype.
+- Blur my Shell's panel blur is a rectangle, so a floating bar shows square corners; panel glass defaults off.
+- Dock magnification (Flourish) can't be verified headless; confirm on the real session.
+- Engine defaults Ubuntu Plus applies once are tracked in `~/.local/state/ubuntu-plus/tuned.json` (delete a key to re-apply).
 
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.

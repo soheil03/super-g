@@ -100,14 +100,14 @@ export default class AppearanceModule extends Module {
         }
         const opts = this._opts();
         Files.remove(GTK4_FILE);
-        Files.setManagedBlock(GTK4_MAIN, Gen.gtk4Css(this._tokens, opts).trim(), {atEnd: true});
+        Files.setManagedBlock(GTK4_MAIN, Gen.gtk4Css(this._tokens, opts, this._appFixes(4)).trim(), {atEnd: true});
 
         let gtk3Changed = false;
         if (this._adwGtk3) {
             for (const [name, dark] of [[THEME, false], [THEME_DARK, true]]) {
                 const dir = `${Files.DATA}/themes/${name}`;
                 const base = `${this._adwGtk3}${dark ? '-dark' : ''}/gtk-3.0/gtk.css`;
-                const changed = Files.writeText(`${dir}/gtk-3.0/gtk.css`, Gen.gtk3Css(this._tokens, opts, dark, base));
+                const changed = Files.writeText(`${dir}/gtk-3.0/gtk.css`, Gen.gtk3Css(this._tokens, opts, dark, base, this._appFixes(3)));
                 Files.writeText(`${dir}/index.theme`, Gen.gtkThemeIndex(name));
                 gtk3Changed ||= changed && dark === this._dark;
             }
@@ -126,6 +126,13 @@ export default class AppearanceModule extends Module {
             return;
         }
         this._setIface('gtk-theme', wanted);
+    }
+
+    // Kiwi's per-app fix-ups (Nautilus, Geary, menus...), inlined so snaps
+    // and Flatpaks see them; its window-button rules are ours to decide.
+    _appFixes(version) {
+        const css = Files.readText(`${this.ext.path}/vendor/windows/css/fixes${version}.css`);
+        return css ? Gen.withoutRules(css, ['windowcontrols', 'titlebutton']) : '';
     }
 
     _findAdwGtk3() {
