@@ -1,0 +1,82 @@
+{
+  "$comment": "Single source of truth for the theme. Every palette and accent is a user-selectable setting in the extension.",
+  "defaults": {
+    "palette": "catppuccin",
+    "accent": "lavender",
+    "windowButtons": "capsule",
+    "sidebar": "floating-card",
+    "dock": "split-pill"
+  },
+  "palettes": {
+    "graphite": {
+      "label": "Graphite neutral",
+      "defaultAccent": "blue",
+      "light": { "wall": "#cdd5e1", "window": "#fafafa", "view": "#ffffff", "sidebarCard": "rgba(0,0,0,.04)", "fg": "#1d1d20", "fgMuted": "#6e6e76", "hairline": "rgba(0,0,0,.09)", "control": "rgba(0,0,0,.07)", "glass": "rgba(255,255,255,.45)" },
+      "dark":  { "wall": "#161920", "window": "#1e1e21", "view": "#28282c", "sidebarCard": "rgba(255,255,255,.05)", "fg": "#ededf0", "fgMuted": "#9b9ba4", "hairline": "rgba(255,255,255,.09)", "control": "rgba(255,255,255,.09)", "glass": "rgba(30,30,34,.5)" }
+    },
+    "catppuccin": {
+      "label": "Catppuccin-tuned",
+      "defaultAccent": "lavender",
+      "light": { "wall": "#d6dbe6", "window": "#eff1f5", "view": "#f8f9fb", "sidebarCard": "rgba(76,79,105,.06)", "fg": "#4c4f69", "fgMuted": "#6c6f85", "hairline": "rgba(76,79,105,.12)", "control": "rgba(76,79,105,.08)", "glass": "rgba(239,241,245,.5)" },
+      "dark":  { "wall": "#11111b", "window": "#1e1e2e", "view": "#272739", "sidebarCard": "rgba(205,214,244,.05)", "fg": "#cdd6f4", "fgMuted": "#a6adc8", "hairline": "rgba(205,214,244,.09)", "control": "rgba(205,214,244,.08)", "glass": "rgba(30,30,46,.5)" }
+    },
+    "stone": {
+      "label": "Warm stone",
+      "defaultAccent": "sage",
+      "light": { "wall": "#d8d2c8", "window": "#f7f6f3", "view": "#fdfcfa", "sidebarCard": "rgba(60,50,40,.05)", "fg": "#2a2723", "fgMuted": "#75706a", "hairline": "rgba(60,50,40,.1)", "control": "rgba(60,50,40,.07)", "glass": "rgba(250,248,244,.5)" },
+      "dark":  { "wall": "#191816", "window": "#222120", "view": "#2c2b29", "sidebarCard": "rgba(255,245,230,.05)", "fg": "#ece9e4", "fgMuted": "#a39d95", "hairline": "rgba(255,245,230,.09)", "control": "rgba(255,245,230,.08)", "glass": "rgba(34,33,32,.5)" }
+    },
+    "slate": {
+      "label": "Cool slate",
+      "defaultAccent": "slate",
+      "light": { "wall": "#c8d2e0", "window": "#f5f7fa", "view": "#ffffff", "sidebarCard": "rgba(30,45,70,.05)", "fg": "#1c2330", "fgMuted": "#667085", "hairline": "rgba(30,45,70,.1)", "control": "rgba(30,45,70,.07)", "glass": "rgba(245,247,250,.5)" },
+      "dark":  { "wall": "#11141a", "window": "#1b1f27", "view": "#242a35", "sidebarCard": "rgba(200,215,240,.05)", "fg": "#e6eaf2", "fgMuted": "#98a2b3", "hairline": "rgba(200,215,240,.09)", "control": "rgba(200,215,240,.08)", "glass": "rgba(27,31,39,.5)" }
+    }
+  },
+  "accents": {
+    "blue":     { "light": "#3478f6", "dark": "#5a95f8" },
+    "lavender": { "light": "#7287fd", "dark": "#b4befe" },
+    "slate":    { "light": "#4a6fa5", "dark": "#8aa8d8" },
+    "teal":     { "light": "#179299", "dark": "#6fd0c6" },
+    "sage":     { "light": "#5f8a6a", "dark": "#8fbf98" },
+    "peach":    { "light": "#d9622f", "dark": "#f5a97f" },
+    "rose":     { "light": "#c94a6a", "dark": "#f38ba8" }
+  },
+  "radii": { "window": 18, "sidebarCard": 12, "row": 10, "pill": 999, "windowSmoothing": 0.6 },
+  "windowButtons": ["capsule", "mini-dots", "close-emphasized"],
+  "sidebar": ["floating-card"],
+  "dock": { "style": "split-pill", "indicator": "dot" },
+  "panel": {
+    "styles": ["floating", "islands", "adaptive"],
+    "style": "floating",
+    "height": 28,
+    "left": "workspace-dots+focused-app",
+    "clockFormat": "%a %H:%M",
+    "statusStyles": ["grouped-pill", "bare"],
+    "status": "grouped-pill"
+  },
+  "appDrawer": {
+    "styles": ["dock-popup", "overview", "fullscreen"],
+    "style": "dock-popup",
+    "layouts": ["grid"],
+    "layout": "grid"
+  },
+  "motion": {
+    "curves": {
+      "snappy": { "damping": 1.0, "response": 0.32 },
+      "soft":   { "damping": 0.86, "response": 0.38 }
+    },
+    "curve": "snappy",
+    "speed": 1.15,
+    "speedRange": [0.5, 2.0],
+    "reduceMotion": false
+  },
+  "typography": {
+    "ui": "Ubuntu Sans 11",
+    "document": "Ubuntu Sans 11",
+    "monospace": "Ubuntu Sans Mono 11",
+    "titleWeight": 600,
+    "persianFallback": "Vazirmatn",
+    "textScaling": 1.11
+  }
+}
