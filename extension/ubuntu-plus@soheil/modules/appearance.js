@@ -78,6 +78,7 @@ export default class AppearanceModule extends Module {
             windowRadius: s.get_int('window-radius'),
             sidebarStyle: s.get_string('sidebar-style'),
             titleWeight: s.get_int('title-weight'),
+            glass: s.get_boolean('module-glass') && !s.get_strv('broken-modules').includes('glass'),
         };
     }
 

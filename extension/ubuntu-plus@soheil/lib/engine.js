@@ -156,7 +156,10 @@ export class Engine extends Module {
             this._standIn = null;
         }
         uninstallLookup();
-        this._handBack(this.constructor.replaces);
+        // Engines whose job another Ubuntu Plus module took over (blur → glass)
+        // must not bring the original back.
+        if (!this.constructor.noHandBack)
+            this._handBack(this.constructor.replaces);
     }
 
     // First run: copy the original extension's settings (dconf tree) into

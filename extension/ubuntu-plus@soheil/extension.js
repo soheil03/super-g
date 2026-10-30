@@ -9,6 +9,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import AppearanceModule from './modules/appearance.js';
 import PanelModule from './modules/panel.js';
+import GlassModule from './modules/glass.js';
 import {engine} from './lib/engine.js';
 import {configureDock, configureDockMotion} from './lib/dockStyle.js';
 import {configureBlur} from './lib/blurSetup.js';
@@ -26,11 +27,13 @@ export const MODULES = {
             configureDockMotion(this);
         },
     }),
-    blur: engine('blur', 'blur-my-shell@aunetx', ['blur-my-shell@aunetx'], {
+    // Legacy: Ubuntu Plus glass replaces it, so turning it off never brings
+    // Blur my Shell back.
+    blur: Object.assign(engine('blur', 'blur-my-shell@aunetx', ['blur-my-shell@aunetx'], {
         configure() {
             configureBlur(this);
         },
-    }),
+    }), {noHandBack: true}),
     // Window buttons belong to the appearance module, so Kiwi's own
     // (traffic-light) button CSS stays off.
     windows: engine('windows', 'kiwi@kemma', ['kiwi@kemma'], {
@@ -45,6 +48,7 @@ export const MODULES = {
         },
     }),
     panel: PanelModule,
+    glass: GlassModule,
     hotcorners: engine('hotcorners', 'custom-hot-corners-extended@G-dH.github.com'),
     gestures: engine('gestures', 'touchpad-gesture-customization@coooolapps.com'),
     launcher: engine('launcher', 'superbar@Furkan-rgb.github.io'),

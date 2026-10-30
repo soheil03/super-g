@@ -120,7 +120,8 @@ export default class Camera extends Extension {
                 const px = x + w / 2, py = y + h / 2;
                 // The hover engine reads global.get_pointer(), so move the real pointer.
                 seat.warp_pointer(px, py);
-                ext._active.get('dockmotion')?.instance?._dockIntegration?.onPointerMotion(px, py);
+                // Headless stages get no pointer events; drive the magnifier directly.
+                ext._active.get('dock')?.magnifier?.applyAt(dockManager._allDocks[0], px, py);
                 await wait(900);
                 await shot(`${dir}/dock-hover-${i}.png`);
             }

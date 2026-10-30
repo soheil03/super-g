@@ -7,7 +7,8 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - `extension/ubuntu-plus@soheil/`
   - `extension.js` — module registry (`MODULES`, start order matters: dock before dockmotion/windows/blur), sequential async start/stop, kill switch (`reportError` → `broken-modules`), lock-screen rule, `notePendingLogout`.
   - `lib/module.js` (base: tracked signals, `later()` debounce, `guard()`), `lib/engine.js` (runs vendored upstream extensions, lookup stand-ins, handover, first-run dconf migration), `lib/themeGen.js` (pure CSS generators, also used by tools), `lib/color.js`, `lib/files.js` (managed blocks), `lib/stylesheet.js` (`LiveStylesheet`, `engineSettings`).
-  - `lib/dockStyle.js` (dock glass, apps-button icon, magnification defaults), `lib/blurSetup.js` (clear/dock blur pipelines).
+  - `lib/glass.js` + `modules/glass.js` — Ubuntu Plus glass (replaces Blur my Shell): Shell.BlurEffect of the wallpaper + one GLSL pass (squircle AA outline, vibrancy, palette tint, top-weighted rim, grain). Applied to the top bar (tracked layer under panelBox), dock (child of dash._background), every PopupMenu (bin wrapped on first open) and the overview backdrop.
+  - `lib/dockStyle.js` (dock CSS, apps-button icon, one-time engine defaults), `lib/dockMagnify.js` (Apple-style magnification: widens item slots + scales the icon's inner widget), `lib/wallpaper.js` (wallpaper strip luminance → automatic top bar text colour), `lib/blurSetup.js` (legacy blur engine pipelines).
   - `modules/appearance.js` (GTK4 CSS inline in `~/.config/gtk-4.0/gtk.css`, GTK3 themes `Ubuntu-Plus[-dark]` over adw-gtk3, shell CSS, fonts, `slow_down_factor`, system accent), `modules/panel.js` (top bar).
   - `vendor/<name>/` — upstream code (blur, corners, dock, dockmotion, windows, hotcorners, gestures, launcher). `UPSTREAM` records version and schema/dconf renames.
   - `schemas/` — ours + one renamed schema per engine (`org.gnome.shell.extensions.ubuntu-plus.<name>`, dconf `/org/gnome/shell/extensions/ubuntu-plus/<name>/`).
@@ -36,7 +37,10 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Blur my Shell clears dock backgrounds with `!important`; our dock glass uses `!important` too (lib/dockStyle.js).
 - GNOME BaseIcon keeps `createIcon` bound per instance; the apps-button icon is swapped per instance, not on the prototype.
 - Blur my Shell's panel blur is a rectangle, so a floating bar shows square corners; panel glass defaults off.
-- Dock magnification (Flourish) can't be verified headless; confirm on the real session.
+- Dock magnification is ours (Flourish's hover doesn't track Dash to Dock 110). Flourish resets the AppIcon's own transforms each frame, so scale the icon's inner widget and widen the DashItemContainer. Test it headless via `magnifier.applyAt()` (shell-test dock-hover).
+- Glass layers contain a full-monitor wallpaper copy: they must report preferred size 0 or they blow up their parents.
+- Forking vendored engines is allowed (user's call); every change lives in `tools/vendor-fixups.sh` so it survives `vendor.sh` updates (e.g. the dock clip headroom).
+- Turning an engine off hands its original back unless another module replaced it (`noHandBack`, used by blur).
 - Engine defaults Ubuntu Plus applies once are tracked in `~/.local/state/ubuntu-plus/tuned.json` (delete a key to re-apply).
 
 ## Conventions

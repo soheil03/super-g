@@ -182,8 +182,19 @@ const DashSlideContainer = GObject.registerClass({
 
         this.child.allocate(childBox);
 
-        this.child.set_clip(-childBox.x1, -childBox.y1,
-            -childBox.x1 + availWidth, -childBox.y1 + availHeight);
+        // Ubuntu Plus: headroom for magnified icons on the inner side.
+        const headroom = 160;
+        // Same (x, y, width, height) as upstream, grown on the inner side.
+        const [x, y, w, h] = [-childBox.x1, -childBox.y1,
+            -childBox.x1 + availWidth, -childBox.y1 + availHeight];
+        if (this.side === St.Side.BOTTOM)
+            this.child.set_clip(x, y - headroom, w, h + headroom);
+        else if (this.side === St.Side.TOP)
+            this.child.set_clip(x, y, w, h + headroom);
+        else if (this.side === St.Side.LEFT)
+            this.child.set_clip(x, y, w + headroom, h);
+        else
+            this.child.set_clip(x - headroom, y, w + headroom, h);
     }
 
     /**

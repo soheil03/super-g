@@ -10,33 +10,45 @@ import * as Files from './files.js';
 import {engineChildSettings} from './stylesheet.js';
 
 export const CLEAR_PIPELINE = 'pipeline_ubuntu_plus_clear';
-// The dock keeps Blur my Shell's refraction ("liquid glass") but at full
-// brightness, without the dark colour wash of the stock dash pipeline.
-export const DOCK_PIPELINE = 'pipeline_ubuntu_plus_dock';
+// The dock gets plain frosted glass: full-brightness blur, no colour wash and
+// no refraction (refraction smears edges); the tint and rim come from CSS.
+export const DOCK_PIPELINE = 'pipeline_ubuntu_plus_dock_v2';
 const PIPELINES = {
     [CLEAR_PIPELINE]: "{'name': <'Ubuntu Plus clear'>, 'effects': <[<{'type': <'dual_kawase_blur'>, " +
         "'id': <'effect_ubuntu_plus_clear'>, 'params': <{'unscaled_radius': <36>, 'brightness': <1.0>}>}>]>}",
     [DOCK_PIPELINE]: "{'name': <'Ubuntu Plus dock'>, 'effects': <[<{'type': <'dual_kawase_blur'>, " +
-        "'id': <'effect_ubuntu_plus_dock_blur'>, 'params': <{'unscaled_radius': <30>, 'brightness': <1.0>}>}>, " +
-        "<{'type': <'refraction'>, 'id': <'effect_ubuntu_plus_dock_refraction'>, 'params': <@a{sv} {}>}>]>}",
+        "'id': <'effect_ubuntu_plus_dock_blur'>, 'params': <{'unscaled_radius': <34>, 'brightness': <1.0>}>}>]>}",
 };
 const TUNED = `${Files.STATE}/tuned.json`;
 
 export function ensureClearPipeline(rootSettings) {
-    const current = rootSettings.get_value('pipelines');
-    // Shallow unpack keeps each pipeline as a GLib.Variant, ready to re-pack.
-    const pipelines = current.unpack();
+    // 'pipelines' is a{sa{sv}}: unpack to {id: {key: Variant}} and back.
+    const pipelines = {};
+    for (const [id, v] of Object.entries(rootSettings.get_value('pipelines').unpack()))
+        pipelines[id] = v.unpack();
     const missing = Object.keys(PIPELINES).filter(id => !pipelines[id]);
     if (!missing.length)
         return;
     for (const id of missing)
-        pipelines[id] = GLib.Variant.parse(null, PIPELINES[id], null, null);
-    rootSettings.set_value('pipelines', new GLib.Variant('a{sv}', pipelines));
+        pipelines[id] = GLib.Variant.parse(new GLib.VariantType('a{sv}'), PIPELINES[id], null, null).unpack();
+    rootSettings.set_value('pipelines', new GLib.Variant('a{sa{sv}}', pipelines));
 }
+
+// Blur is drawn as a rectangle unless its corner radius matches the shape on
+// top; these keep the panel and dock blur clipped to their rounded outlines.
+export const PANEL_RADIUS = 12;
+export const DOCK_RADIUS = 26;
 
 export function configureBlur(module) {
     const root = module.instance.getSettings();
     ensureClearPipeline(root);
+    const panel = engineChildSettings(module.ext.path, 'blur', 'panel');
+    panel?.set_int('corner-radius', PANEL_RADIUS);
+    panel?.set_int('rounded-corners', 0);
+    const dash = engineChildSettings(module.ext.path, 'blur', 'dash-to-dock');
+    if (dash?.settings_schema.has_key('corner-radius'))
+        dash.set_int('corner-radius', DOCK_RADIUS);
+    dash?.set_string('pipeline', DOCK_PIPELINE);
     const done = JSON.parse(Files.readText(TUNED) ?? '{}');
     if (done.blur)
         return;

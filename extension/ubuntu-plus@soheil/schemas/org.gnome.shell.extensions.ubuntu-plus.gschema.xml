@@ -15,8 +15,12 @@
       <default>true</default>
       <summary>Rounded window corners and shadows (Rounded Window Corners Reborn engine)</summary>
     </key>
-    <key name="module-blur" type="b">
+    <key name="module-glass" type="b">
       <default>true</default>
+      <summary>Ubuntu Plus glass for the top bar, dock, menus, popups and overview</summary>
+    </key>
+    <key name="module-blur" type="b">
+      <default>false</default>
       <summary>Blur for menus, dock, panel, overview and app folders (Blur my Shell engine)</summary>
     </key>
     <key name="module-dock" type="b">
@@ -86,6 +90,43 @@
     <key name="startup-desktop" type="b">
       <default>true</default>
       <summary>Start on the desktop instead of the overview</summary>
+    </key>
+
+    <!-- Glass -->
+    <key name="glass-tint" type="d">
+      <range min="0.0" max="0.95"/>
+      <default>0.5</default>
+      <summary>How strongly the palette colour tints the glass</summary>
+    </key>
+    <key name="glass-saturation" type="d">
+      <range min="0.5" max="2.5"/>
+      <default>1.5</default>
+      <summary>Colour vibrancy of what shows through the glass</summary>
+    </key>
+    <key name="glass-blur" type="i">
+      <range min="8" max="120"/>
+      <default>40</default>
+      <summary>Blur radius</summary>
+    </key>
+    <key name="glass-overview" type="b">
+      <default>true</default>
+      <summary>Blurred wallpaper behind the overview and app grid</summary>
+    </key>
+
+    <!-- Dock -->
+    <key name="dock-magnify" type="b">
+      <default>true</default>
+      <summary>Magnify dock icons under the pointer</summary>
+    </key>
+    <key name="dock-magnify-scale" type="d">
+      <range min="1.1" max="2.5"/>
+      <default>1.6</default>
+      <summary>Largest icon size while magnifying, as a multiple</summary>
+    </key>
+    <key name="dock-magnify-reach" type="d">
+      <range min="1.0" max="5.0"/>
+      <default>2.6</default>
+      <summary>How many icons to each side grow with the pointer</summary>
     </key>
 
     <!-- Appearance -->

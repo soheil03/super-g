@@ -18,6 +18,7 @@ const PANEL_STYLES = [['floating', 'Floating bar'], ['islands', 'Islands'], ['ad
 const PANEL_HEIGHTS = [[24, 'Compact (24 px)'], [28, 'Default (28 px)'], [32, 'Comfortable (32 px)'],
     [36, 'Large (36 px)'], [40, 'Extra large (40 px)']];
 const STATUS_STYLES = [['grouped', 'Grouped pill'], ['bare', 'Bare icons']];
+const DOCK_POSITIONS = [['BOTTOM', 'Bottom'], ['LEFT', 'Left'], ['RIGHT', 'Right']];
 const INDICATORS = [['DOT', 'Small dot'], ['DOTS', 'Dots per window'], ['DASHES', 'Dashes'], ['DEFAULT', 'GNOME default']];
 
 // Settings of a vendored engine; they live in our own compiled schemas.
@@ -38,7 +39,8 @@ const MODULES = [
     ['appearance', 'Appearance', 'Palette, GTK and shell theming, fonts and motion'],
     ['panel', 'Top bar', 'Floating, islands or adaptive bar, clock, status pill'],
     ['corners', 'Window corners', 'Rounded corners, borders and shadows'],
-    ['blur', 'Blur', 'Glass behind menus, dock, top bar, overview and app folders'],
+    ['glass', 'Glass', 'Ubuntu Plus glass for the top bar, dock, menus, popups and overview'],
+    ['blur', 'Classic blur', 'Blur my Shell engine (legacy; off by default)'],
     ['dock', 'Dock', 'Autohide, intellihide, previews, trash and mounts'],
     ['dockmotion', 'Dock motion', 'Hover, press, launch and attention motion'],
     ['windows', 'Window extras', 'App title in the top bar, minimize to dock and more'],
@@ -124,6 +126,13 @@ export default class UbuntuPlusPrefs extends ExtensionPreferences {
                 comboRow(s, 'sidebar-style', 'Sidebar', SIDEBARS),
                 comboRow(s, 'title-weight', 'Title weight', WEIGHTS, {int: true}),
             ], 'Open apps pick up window changes after a restart.'),
+            group('Glass', [
+                spinRow(s, 'glass-tint', 'Tint', {lower: 0, upper: 0.95, step: 0.05, digits: 2,
+                    subtitle: 'How much palette colour the glass carries'}),
+                spinRow(s, 'glass-saturation', 'Vibrancy', {lower: 0.5, upper: 2.5, step: 0.05, digits: 2}),
+                spinRow(s, 'glass-blur', 'Blur', {lower: 8, upper: 120, step: 2}),
+                switchRow(s, 'glass-overview', 'Blurred overview background'),
+            ]),
             group('Apply to', [
                 switchRow(s, 'theme-gtk', 'GTK apps', 'GTK4, libadwaita and GTK3 apps, including Flatpaks'),
                 switchRow(s, 'theme-shell', 'Shell menus and popups', 'Quick settings, calendar, menus, dialogs, switchers'),
@@ -155,13 +164,15 @@ export default class UbuntuPlusPrefs extends ExtensionPreferences {
             window.add(page('Dock', 'user-desktop-symbolic', [
                 group('Icons', [
                     spinRow(dock, 'dash-max-icon-size', 'Icon size', {lower: 24, upper: 96, step: 1}),
-                    switchRow(motion, 'custom-hover-enabled', 'Magnification', 'Icons grow under the pointer'),
-                    spinRow(motion, 'custom-hover-scale', 'Magnification size', {lower: 1.1, upper: 2.2, step: 0.05, digits: 2}),
-                    switchRow(motion, 'custom-hover-dynamic-spacing', 'Neighbours make room'),
+                    switchRow(s, 'dock-magnify', 'Magnification', 'Icons grow under the pointer'),
+                    spinRow(s, 'dock-magnify-scale', 'Magnification size', {lower: 1.1, upper: 2.5, step: 0.05, digits: 2}),
+                    spinRow(s, 'dock-magnify-reach', 'Magnification reach', {lower: 1, upper: 5, step: 0.1, digits: 1,
+                        subtitle: 'Icons to each side that grow with the pointer'}),
                     invertedSwitch(dock, 'hide-tooltip', 'Labels', 'App name above the icon on hover'),
                     comboRow(dock, 'running-indicator-style', 'Running apps', INDICATORS),
                 ]),
                 group('Behaviour', [
+                    comboRow(dock, 'dock-position', 'Position', DOCK_POSITIONS),
                     invertedSwitch(dock, 'dock-fixed', 'Auto-hide'),
                     switchRow(dock, 'intellihide', 'Hide only when a window overlaps'),
                     switchRow(dock, 'show-show-apps-button', 'Apps button'),
