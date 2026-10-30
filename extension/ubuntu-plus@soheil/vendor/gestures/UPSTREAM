@@ -1,0 +1,4 @@
+upstream: touchpad-gesture-customization@coooolapps.com
+version/url: 28 https://github.com/HieuTNg/touchpad-gesture-customization
+schema: org.gnome.shell.extensions.touchpad-gesture-customization -> org.gnome.shell.extensions.ubuntu-plus.gestures
+dconf: /org/gnome/shell/extensions/touchpad-gesture-customization/ -> /org/gnome/shell/extensions/ubuntu-plus/gestures/

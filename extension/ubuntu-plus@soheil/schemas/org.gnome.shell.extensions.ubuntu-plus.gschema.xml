@@ -7,9 +7,85 @@
       <default>true</default>
       <summary>Theme GTK apps and the shell from the palette</summary>
     </key>
+    <key name="module-panel" type="b">
+      <default>true</default>
+      <summary>Top bar: floating, islands or adaptive bar, clock, status pill</summary>
+    </key>
+    <key name="module-corners" type="b">
+      <default>true</default>
+      <summary>Rounded window corners and shadows (Rounded Window Corners Reborn engine)</summary>
+    </key>
+    <key name="module-blur" type="b">
+      <default>true</default>
+      <summary>Blur for menus, dock, panel, overview and app folders (Blur my Shell engine)</summary>
+    </key>
+    <key name="module-dock" type="b">
+      <default>true</default>
+      <summary>Dock (Dash to Dock engine)</summary>
+    </key>
+    <key name="module-dockmotion" type="b">
+      <default>true</default>
+      <summary>Dock hover, press and launch motion (Flourish engine)</summary>
+    </key>
+    <key name="module-windows" type="b">
+      <default>true</default>
+      <summary>Window and panel extras: minimize to dock, app title in the top bar (Kiwi engine)</summary>
+    </key>
+    <key name="module-hotcorners" type="b">
+      <default>true</default>
+      <summary>Hot corners and edges (Custom Hot Corners Extended engine)</summary>
+    </key>
+    <key name="module-gestures" type="b">
+      <default>true</default>
+      <summary>Touchpad gestures (Touchpad Gesture Customization engine)</summary>
+    </key>
+    <key name="module-launcher" type="b">
+      <default>true</default>
+      <summary>Keyboard command bar (Superbar engine)</summary>
+    </key>
     <key name="broken-modules" type="as">
       <default>[]</default>
       <summary>Modules switched off after an error; cleared from prefs</summary>
+    </key>
+
+
+    <!-- Top bar -->
+    <key name="panel-style" type="s">
+      <default>'floating'</default>
+      <summary>Top bar style: floating, islands or adaptive</summary>
+    </key>
+    <key name="panel-height" type="i">
+      <range min="22" max="48"/>
+      <default>28</default>
+      <summary>Top bar height in pixels</summary>
+    </key>
+    <key name="panel-status-style" type="s">
+      <default>'grouped'</default>
+      <summary>Status icons: grouped (one pill) or bare</summary>
+    </key>
+    <key name="panel-glass" type="b">
+      <default>true</default>
+      <summary>Blur behind the top bar</summary>
+    </key>
+    <key name="clock-weekday" type="b">
+      <default>true</default>
+      <summary>Show the weekday in the clock</summary>
+    </key>
+    <key name="clock-date" type="b">
+      <default>false</default>
+      <summary>Show the date in the clock</summary>
+    </key>
+    <key name="clock-24h" type="b">
+      <default>true</default>
+      <summary>Use a 24-hour clock</summary>
+    </key>
+    <key name="hide-accessibility" type="b">
+      <default>true</default>
+      <summary>Hide the accessibility icon in the top bar</summary>
+    </key>
+    <key name="startup-desktop" type="b">
+      <default>true</default>
+      <summary>Start on the desktop instead of the overview</summary>
     </key>
 
     <!-- Appearance -->

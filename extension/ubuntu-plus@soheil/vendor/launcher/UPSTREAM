@@ -1,0 +1,4 @@
+upstream: superbar@Furkan-rgb.github.io
+version/url: None https://github.com/Furkan-rgb/superbar
+schema: org.gnome.shell.extensions.superbar -> org.gnome.shell.extensions.ubuntu-plus.launcher
+dconf: /org/gnome/shell/extensions/superbar/ -> /org/gnome/shell/extensions/ubuntu-plus/launcher/

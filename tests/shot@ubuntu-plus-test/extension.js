@@ -3,6 +3,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
+import Clutter from 'gi://Clutter';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
@@ -99,6 +100,41 @@ export default class Camera extends Extension {
             await shot(`${dir}/${scene}.png`);
             Main.overview.hide();
             return wait(800);
+        case 'dock-hover': {
+            // Point at the 2nd and 6th dock icons in turn: hover motion
+            // should reach every icon, not only the first few.
+            const pointer = Clutter.get_default_backend().get_default_seat()
+                .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+            const dock = global.stage.find_child_by_name?.('dashtodockContainer') ??
+                Main.uiGroup.get_children().find(a => a.name === 'dashtodockContainer');
+            if (!dock)
+                return undefined;
+            const [x, y] = dock.get_transformed_position();
+            const [w, h] = dock.get_transformed_size();
+            for (const [i, frac] of [[2, 0.22], [6, 0.62]]) {
+                pointer.notify_absolute_motion(GLib.get_monotonic_time(), x + w * frac, y + h - 30);
+                // Headless stages get no motion events from virtual pointers;
+                // feed the dock motion engine directly.
+                Main.extensionManager.lookup('ubuntu-plus@soheil')?.stateObj?._active?.get('dockmotion')
+                    ?.instance?._dockIntegration?.onPointerMotion(x + w * frac, y + h - 30);
+                await wait(900);
+                await shot(`${dir}/dock-hover-${i}.png`);
+            }
+            pointer.notify_absolute_motion(GLib.get_monotonic_time(), 800, 300);
+            return wait(500);
+        }
+        case 'eval': {
+            // EVAL holds a JS function body; its JSON result goes to eval.txt.
+            let out;
+            try {
+                const AsyncFunction = (async () => {}).constructor;
+                out = JSON.stringify(await new AsyncFunction('Main', 'global', GLib.getenv('EVAL'))(Main, global), null, 2);
+            } catch (e) {
+                out = `${e}\n${e.stack}`;
+            }
+            GLib.file_set_contents(`${dir}/eval.txt`, out ?? 'undefined');
+            return undefined;
+        }
         case 'prefs':
             Main.extensionManager.openExtensionPrefs('ubuntu-plus@soheil', '', {});
             await wait(4000);

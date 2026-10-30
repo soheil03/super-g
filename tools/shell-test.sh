@@ -3,10 +3,13 @@
 # Nothing touches the real session: settings, data and config live in the sandbox.
 #
 #   tools/shell-test.sh <sandbox> [light|dark] [key=value ...]
-#     key=value pairs set Ubuntu Plus settings, e.g. palette=stone window-buttons=mini-dots
+#     key=value pairs set Ubuntu Plus settings, e.g. palette=stone window-buttons=mini-dots;
+#     engine settings take a prefix: dockmotion:custom-hover-enabled=true
 #   CLONE=1 tools/shell-test.sh ...
 #     start from a copy of the real settings and extensions (minus GSConnect),
 #     to catch clashes with other extensions and see real apps.
+#   EVAL="return ..." with SHOTS="eval" runs JS inside the shell, result in shots/eval.txt.
+#   TAKEOVER=1 runs tools/takeover.sh first, as a real switch-over would.
 #   EXCLUDE="kiwi@ blur-my-shell@" drops extensions from a clone (prefix match).
 #   SHOTS="desktop quick-settings calendar overview app-grid files ..." limits the scenes.
 set -euo pipefail
@@ -18,7 +21,7 @@ run=$(mktemp -d "/run/user/$(id -u)/ust-XXXXXX")
 trap 'rm -rf "$run"' EXIT
 export XDG_DATA_HOME="$sb/data" XDG_CONFIG_HOME="$sb/config" XDG_CACHE_HOME="$sb/cache" \
        XDG_STATE_HOME="$sb/state" XDG_RUNTIME_DIR="$run" SANDBOX="$sb" SHOT_DIR="$sb/shots" \
-       CLONE="${CLONE:-0}" SHOTS="${SHOTS:-}" EXCLUDE="${EXCLUDE:-}"
+       CLONE="${CLONE:-0}" SHOTS="${SHOTS:-}" EXCLUDE="${EXCLUDE:-}" TAKEOVER="${TAKEOVER:-0}" ROOT="$root" EVAL="${EVAL:-}"
 unset WAYLAND_DISPLAY DISPLAY
 
 real="$HOME/.local/share"
@@ -54,10 +57,13 @@ print(str(l + [\"ubuntu-plus@soheil\", \"shot@ubuntu-plus-test\"]))")
     enabled="[\"ubuntu-plus@soheil\", \"shot@ubuntu-plus-test\"]"
   fi
   gsettings set org.gnome.shell enabled-extensions "$enabled"
+  if [ "$TAKEOVER" = 1 ]; then "$ROOT/tools/takeover.sh" >/dev/null; fi
   gsettings set org.gnome.shell disable-user-extensions false
   gsettings set org.gnome.desktop.interface color-scheme "$([ "$0" = dark ] && echo prefer-dark || echo default)"
   for kv in "$@"; do
-    gsettings --schemadir "$schemadir" set org.gnome.shell.extensions.ubuntu-plus "${kv%%=*}" "${kv#*=}"
+    key=${kv%%=*}; schema=org.gnome.shell.extensions.ubuntu-plus
+    case $key in *:*) schema="$schema.${key%%:*}"; key=${key#*:} ;; esac
+    gsettings --schemadir "$schemadir" set "$schema" "$key" "${kv#*=}"
   done
   gnome-shell --headless --wayland --no-x11 --mode=ubuntu --virtual-monitor 1600x1000 > "$SANDBOX/shell.log" 2>&1 &
   pid=$!

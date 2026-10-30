@@ -1,0 +1,4 @@
+upstream: blur-my-shell@aunetx
+version/url: 76 https://github.com/aunetx/blur-my-shell
+schema: org.gnome.shell.extensions.blur-my-shell -> org.gnome.shell.extensions.ubuntu-plus.blur
+dconf: /org/gnome/shell/extensions/blur-my-shell/ -> /org/gnome/shell/extensions/ubuntu-plus/blur/

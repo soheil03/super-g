@@ -14,7 +14,20 @@ const BUTTONS = [['capsule', 'Capsule group'], ['mini-dots', 'Mini dots'], ['clo
 const SIDEBARS = [['floating-card', 'Floating card'], ['stock', 'Stock GNOME']];
 const WEIGHTS = [[500, 'Medium'], [600, 'Semibold'], [700, 'Bold']];
 const CURVES = [['snappy', 'Snappy spring'], ['soft', 'Soft spring']];
-const MODULES = [['appearance', 'Appearance', 'Palette, GTK and shell theming, fonts and motion']];
+const PANEL_STYLES = [['floating', 'Floating bar'], ['islands', 'Islands'], ['adaptive', 'Adaptive']];
+const STATUS_STYLES = [['grouped', 'Grouped pill'], ['bare', 'Bare icons']];
+const MODULES = [
+    ['appearance', 'Appearance', 'Palette, GTK and shell theming, fonts and motion'],
+    ['panel', 'Top bar', 'Floating, islands or adaptive bar, clock, status pill'],
+    ['corners', 'Window corners', 'Rounded corners, borders and shadows'],
+    ['blur', 'Blur', 'Glass behind menus, dock, top bar, overview and app folders'],
+    ['dock', 'Dock', 'Autohide, intellihide, previews, trash and mounts'],
+    ['dockmotion', 'Dock motion', 'Hover, press, launch and attention motion'],
+    ['windows', 'Window extras', 'App title in the top bar, minimize to dock and more'],
+    ['hotcorners', 'Hot corners', 'Actions for corners and edges'],
+    ['gestures', 'Touchpad gestures', 'Custom touchpad gestures'],
+    ['launcher', 'Launcher', 'Keyboard command bar'],
+];
 
 function comboRow(settings, key, title, items, {subtitle = '', int = false} = {}) {
     const row = new Adw.ComboRow({title, subtitle, model: Gtk.StringList.new(items.map(i => i[1]))});
@@ -97,6 +110,24 @@ export default class UbuntuPlusPrefs extends ExtensionPreferences {
                 switchRow(s, 'theme-gtk', 'GTK apps', 'GTK4, libadwaita and GTK3 apps, including Flatpaks'),
                 switchRow(s, 'theme-shell', 'Shell menus and popups', 'Quick settings, calendar, menus, dialogs, switchers'),
                 switchRow(s, 'sync-system-accent', 'Match GNOME accent', 'For apps outside the theme, such as Chrome and Electron apps'),
+            ]),
+        ]));
+
+        window.add(page('Top bar', 'view-continuous-symbolic', [
+            group('Bar', [
+                comboRow(s, 'panel-style', 'Style', PANEL_STYLES),
+                spinRow(s, 'panel-height', 'Height', {lower: 22, upper: 48, step: 1}),
+                switchRow(s, 'panel-glass', 'Glass', 'Blur behind the bar'),
+                comboRow(s, 'panel-status-style', 'Status icons', STATUS_STYLES),
+                switchRow(s, 'hide-accessibility', 'Hide accessibility icon'),
+            ]),
+            group('Clock', [
+                switchRow(s, 'clock-weekday', 'Weekday'),
+                switchRow(s, 'clock-date', 'Date'),
+                switchRow(s, 'clock-24h', '24-hour'),
+            ]),
+            group('Start-up', [
+                switchRow(s, 'startup-desktop', 'Start on the desktop', 'Instead of the overview'),
             ]),
         ]));
 

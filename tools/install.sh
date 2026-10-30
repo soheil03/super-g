@@ -13,4 +13,8 @@ mkdir -p "$dest"
 cp -r "$root/extension/$uuid/." "$dest/"
 cp "$root/tokens/palette.json" "$dest/tokens.json"
 glib-compile-schemas --strict "$dest/schemas"
+# Vendored engines look their schemas up in their own folder.
+for v in "$dest"/vendor/*/; do
+    mkdir -p "$v/schemas" && cp "$dest/schemas/gschemas.compiled" "$v/schemas/"
+done
 echo "installed $dest"
