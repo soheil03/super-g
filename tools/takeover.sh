@@ -22,6 +22,7 @@ map=(
   "hotcorners custom-hot-corners-extended@G-dH.github.com"
   "gestures touchpad-gesture-customization@coooolapps.com"
   "launcher superbar@Furkan-rgb.github.io"
+  "lockscreen wack-lockscreen-clock@rinzler69-wastaken.github.com"
 )
 
 mkdir -p "$state_dir"

@@ -7,11 +7,11 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - `extension/super-g@soheil/`
   - `extension.js` — module registry (`MODULES`, start order matters: dock before dockmotion/windows/blur), sequential async start/stop, kill switch (`reportError` → `broken-modules`), lock-screen rule, `notePendingLogout`.
   - `lib/module.js` (base: tracked signals, `later()` debounce, `guard()`), `lib/engine.js` (runs vendored upstream extensions, lookup stand-ins, handover, first-run dconf migration), `lib/themeGen.js` (pure CSS generators, also used by tools), `lib/color.js`, `lib/files.js` (managed blocks), `lib/stylesheet.js` (`LiveStylesheet`, `engineSettings`).
-  - `lib/glass.js` + `modules/glass.js` — Super G glass, truly live: each frame copy the pixels behind from the stage view, Clutter.BlurNode them, one GLSL pass (squircle AA outline, vibrancy, palette tint, rim, fine dark outline, grain) plus a hollow analytic drop shadow. On the top bar (tracked layer under panelBox), dock (child of dash._background), every PopupMenu (bin wrapped on first open) and the drawer. Overview backdrop uses the older static wallpaper blur (`live: false`).
+  - `lib/glass.js` + `modules/glass.js` — Super G glass, truly live: each frame copy the pixels behind from the stage view (plus a margin, so edges don't smear), blur with Blur my Shell's dual Kawase passes imported from `vendor/blur/effects/blur/`, one GLSL pass (edge lens, (squircle AA outline, vibrancy, palette tint, rim, fine dark outline, grain) plus a hollow analytic drop shadow. On the top bar (tracked layer under panelBox), dock (child of dash._background), every PopupMenu (bin wrapped on first open) and the drawer. Overview backdrop uses the older static wallpaper blur (`live: false`).
   - `modules/drawer.js` — app drawer (dock popup / fullscreen / GNOME's overview).
   - `lib/dockStyle.js` (dock CSS, apps-button icon, one-time engine defaults), `lib/dockMagnify.js` (per-frame magnification on transforms only, after Dhruva: cosine bell, items translate, inner widget scales, the glass stretches inside its effect), `lib/wallpaper.js` (wallpaper strip luminance → automatic top bar text colour), `lib/blurSetup.js` (legacy blur engine pipelines).
   - `modules/appearance.js` (GTK4 CSS inline in `~/.config/gtk-4.0/gtk.css`, GTK3 themes `Super-G[-dark]` over adw-gtk3, shell CSS, fonts, `slow_down_factor`, system accent), `modules/panel.js` (top bar).
-  - `vendor/<name>/` — upstream code (blur, corners, dock, dockmotion, windows, hotcorners, gestures, launcher). `UPSTREAM` records version and schema/dconf renames.
+  - `vendor/<name>/` — upstream code (blur, corners, dock, dockmotion, windows, hotcorners, gestures, launcher, lockscreen). `UPSTREAM` records version and schema/dconf renames.
   - `schemas/` — ours + one renamed schema per engine (`org.gnome.shell.extensions.super-g.<name>`, dconf `/org/gnome/shell/extensions/super-g/<name>/`).
   - `prefs.js` — Adw prefs (Appearance, Fonts, Motion, Modules).
 - `tools/` — `install.sh`, `takeover.sh`, `vendor.sh` + `vendor-fixups.sh`, `gen.js`, `render.sh`/`render-gtk.py`, `shell-test.sh`.
@@ -39,6 +39,9 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Blur my Shell clears dock backgrounds with `!important`; our dock glass uses `!important` too (lib/dockStyle.js).
 - GNOME BaseIcon keeps `createIcon` bound per instance; the apps-button icon is swapped per instance, not on the prototype.
 - Dock magnification is ours (Flourish's hover doesn't track Dash to Dock 110). Never touch layout per frame: DashItemContainer multiplies its preferred size by its scale, so scale the widget inside the icon (Flourish also resets the AppIcon's own transforms) and translate the container. Items live in several places (apps button, `_box`, Kiwi's strips); `_items` finds them.
+- `frame(name)` in EVAL scripts captures the frame the stage really drew. `shot` repaints everything, so culling and damage bugs (dock ends cut off, stale regions) only show in `frame`. A parent caches its paint volume: an effect's volume must stay constant (`reach`) or the parent culls what grew past it.
+- `glass.js` imports pass code from `vendor/blur`; re-check those exports after `vendor.sh blur`.
+- MessageTray's source is `getSystemSource()`. Exercise every notification path before shipping: a thrown handler kills the module, and appearance dying resets the GTK theme.
 - The dock's glass stretches without layout: `GlassLayer.setRoom` fixes the copy size for a hover, `setStretch` per frame. `set_size` on it would grow its parents (feedback loop).
 - Share compiled shaders: copy `shaderTemplates` pipelines, never add a snippet per surface.
 - Glass layers contain a full-monitor wallpaper copy: they must report preferred size 0 or they blow up their parents.
@@ -59,6 +62,10 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Wallpapers can be timed XML (lib/wallpaper.js `currentImage`) and half light, half dark: each top bar box picks its own text colour.
 - A running session keeps the old code: when the user reports a bug, confirm what's actually running (installed version, journal) before debugging.
 
+- A click on the dock seats the row (`seatedAt`): it eases home and stays until the pointer moves. Timelines stop when nothing moves (`_sleep`); a running timeline redraws the glass every frame.
+- Running dots are pushed below the icon with translation (`DOT_DROP`), compensated for the inner widget's scale.
+- Drawer tiles are cached for the module's life; detach them before destroying their rows.
+
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.
 - Every user-facing choice becomes a setting (user's rule). Show options before building visual pieces.
@@ -68,4 +75,3 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Confirm licenses of `corners` and `gestures` upstream repos (no LICENSE file shipped in their packages) and add their license files to vendor/.
 - Replace the `<you>` placeholders in README/INSTALL; consider a neutral uuid before publishing.
 - Screenshots in README.
-- Delete `tools/migrate-from-ubuntu-plus.sh` once the author's machine has switched.

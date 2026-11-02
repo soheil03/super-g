@@ -54,6 +54,7 @@ const MODULES = [
     ['hotcorners', 'Hot corners', 'Actions for corners and edges'],
     ['gestures', 'Touchpad gestures', 'Custom touchpad gestures'],
     ['launcher', 'Launcher', 'Keyboard command bar'],
+    ['lockscreen', 'Lock screen', 'WACK clock and unlock prompt'],
 ];
 
 function comboRow(settings, key, title, items, {subtitle = '', int = false} = {}) {
@@ -102,6 +103,23 @@ function fontRow(settings, key, title) {
     row.add_suffix(button);
     row.activatable_widget = button;
     return row;
+}
+
+function installedThemes() {
+    const names = new Set();
+    for (const dir of [`${GLib.get_user_data_dir()}/themes`, `${GLib.get_home_dir()}/.themes`,
+        ...GLib.get_system_data_dirs().map(d => `${d}/themes`)]) {
+        const file = Gio.File.new_for_path(dir);
+        if (!file.query_exists(null))
+            continue;
+        const it = file.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
+        for (let info = it.next_file(null); info; info = it.next_file(null)) {
+            const name = info.get_name();
+            if (!name.startsWith('Super-G') && GLib.file_test(`${dir}/${name}/gtk-3.0`, GLib.FileTest.IS_DIR))
+                names.add(name);
+        }
+    }
+    return [['super-g', 'Super G'], ...[...names].sort().map(n => [n, n])];
 }
 
 // Tint, vibrancy and blur apply to the Custom thickness only.
@@ -169,6 +187,10 @@ export default class SuperGPrefs extends ExtensionPreferences {
                 comboRow(s, 'palette', 'Palette', PALETTES),
                 comboRow(s, 'accent', 'Accent color', ACCENTS),
             ]),
+            group('Apps', [
+                comboRow(s, 'gtk-theme-choice', 'GTK theme', installedThemes(),
+                    {subtitle: 'Super G follows the palette. Any other installed theme replaces its colors and window buttons'}),
+            ]),
             group('Windows', [
                 comboRow(s, 'window-buttons', 'Window buttons', BUTTONS),
                 spinRow(s, 'window-radius', 'Corner radius', {lower: 0, upper: 28, step: 1}),
@@ -177,6 +199,8 @@ export default class SuperGPrefs extends ExtensionPreferences {
             ], 'Open apps pick up window changes after a restart.'),
             group('Glass', [
                 comboRow(s, 'glass-material', 'Thickness', GLASS_MATERIALS, {subtitle: 'How much the glass hides what is behind it'}),
+                spinRow(s, 'glass-refraction', 'Edge refraction', {lower: 0, upper: 1, step: 0.05, digits: 2,
+                    subtitle: 'How much the rim bends what is behind it'}),
                 ...customGlass(s, [
                 spinRow(s, 'glass-tint', 'Tint', {lower: 0, upper: 0.95, step: 0.05, digits: 2,
                     subtitle: 'How much palette colour the glass carries'}),
@@ -211,6 +235,7 @@ export default class SuperGPrefs extends ExtensionPreferences {
             ]),
         ]));
 
+        const lock = engineSettings(this.path, 'lockscreen');
         const dock = engineSettings(this.path, 'dock');
         const motion = engineSettings(this.path, 'dockmotion');
         if (dock && motion) {
@@ -266,6 +291,13 @@ export default class SuperGPrefs extends ExtensionPreferences {
             ]),
         ]));
 
+        window.add(page('Lock screen', 'system-lock-screen-symbolic', [
+            group('Style', [
+                comboRow(lock, 'lockscreen-mode', 'Style', [['cupertino', 'Sonoma'], ['wack', 'WACK classic']]),
+                switchRow(lock, 'cupertino-always-show-user', 'Always show the user'),
+                switchRow(lock, 'cursor-blink', 'Blinking cursor in the password field'),
+            ]),
+        ]));
         window.add(this._modulesPage(s));
     }
 

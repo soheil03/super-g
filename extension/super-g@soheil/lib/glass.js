@@ -17,6 +17,16 @@ import St from 'gi://St';
 import * as Background from 'resource:///org/gnome/shell/ui/background.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+// The blur itself: Blur my Shell's dual Kawase passes (GPL-3.0), the method KWin
+// and Hyprland use. Reused as they are; only the input and output are ours.
+import {
+    DOWNSAMPLE_CODE, DOWNSAMPLE_DECLARATIONS, UPSAMPLE_CODE, UPSAMPLE_DECLARATIONS,
+    ORIGINAL_REGION, SOURCE_REGION, addPassNode, createPassPipeline, createRenderTarget,
+    levelSize, projectRenderTarget, resizeRenderTarget, setFloat, setVector2,
+} from '../vendor/blur/effects/blur/kawase_passes.js';
+import {getKawaseConfiguration} from '../vendor/blur/effects/blur/kawase_sampling.js';
+import {getTextureCapacity, largestViewSize, TextureRegion, textureFits} from '../vendor/blur/render/shader/texture_region.js';
+
 const DECLARATIONS = `
 uniform vec2 size;
 uniform vec2 uv_origin;
@@ -32,6 +42,7 @@ uniform float outline;
 uniform float grain;
 uniform float guard;
 uniform float light_text;
+uniform float lens;
 
 // Signed distance to a rounded rectangle whose corners are superellipses
 // (exponent 2 = circle, higher = smoother "continuous" corners).
@@ -62,7 +73,19 @@ vec2 px = uv * size;
 float d = roundedBox(px - size * 0.5, size * 0.5, radius, exponent);
 float inside = clamp(0.5 - d / aa, 0.0, 1.0);
 
+// Edge lens: towards the outline the rim bends what's behind, pulling it from
+// further in, as a thick curved edge does. Follows the idea of Liquid Glass
+// for GNOME Shell (ryohsuke1231, MIT).
 vec3 rgb = cogl_color_out.rgb;
+if (lens > 0.0) {
+    vec2 p = px - size * 0.5;
+    vec2 q = abs(p) - size * 0.5 + radius;
+    vec2 n = (q.x > 0.0 && q.y > 0.0) ? normalize(q) : (q.x > q.y ? vec2(1.0, 0.0) : vec2(0.0, 1.0));
+    float band = min(18.0, min(size.x, size.y) * 0.3);
+    float t = clamp(1.0 + d / band, 0.0, 1.0);
+    vec2 pull = -sign(p) * n * lens * t * t * t;
+    rgb = texture2D(cogl_sampler0, cogl_tex_coord_in[0].st + pull / size * uv_size).rgb;
+}
 float luma = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 rgb = mix(vec3(luma), rgb, saturation) * brightness;
 // Contrast guard: where what's behind fights the theme's text (a dark window
@@ -117,12 +140,15 @@ a *= clamp(shape / aa + 0.5, 0.0, 1.0);
 cogl_color_out = vec4(0.0, 0.0, 0.0, a);
 `;
 
+// How far past the surface the blur reads real pixels, in blur sigmas.
+const BLUR_REACH = 2.5;
+
 const NO_ROOM = {left: 0, right: 0, top: 0, bottom: 0};
 
 // Room around the actor the shadow can reach.
 const SHADOW_PAD = 48;
 
-const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text'];
+const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens'];
 
 export const GlassEffect = GObject.registerClass(
 class SuperGGlassEffect extends Shell.GLSLEffect {
@@ -150,6 +176,7 @@ class SuperGGlassEffect extends Shell.GLSLEffect {
         f('outline', [u.outline]);
         f('guard', [u.guard]);
         f('light_text', [u.lightText]);
+        f('lens', [0]);
         f('grain', [u.grain]);
         this.queue_repaint();
     }
@@ -164,19 +191,6 @@ class SuperGGlassEffect extends Shell.GLSLEffect {
 const blit = Cogl.Framebuffer.prototype.blit
     ? (src, ...args) => src.blit(...args)
     : Cogl.blit_framebuffer;
-
-function renderTarget(context, width, height) {
-    const texture = Cogl.Texture2D.new_with_size(context, width, height);
-    texture.set_components(Cogl.TextureComponents.RGBA);
-    texture.allocate();
-    const framebuffer = Cogl.Offscreen.new_with_texture(texture);
-    framebuffer.allocate();
-    framebuffer.orthographic(0, 0, width, height, -1, 1);
-    const pipeline = Cogl.Pipeline.new(context);
-    pipeline.set_layer_texture(0, texture);
-    pipeline.set_layer_wrap_mode(0, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
-    return {texture, framebuffer, pipeline, width, height};
-}
 
 // One compiled shader per context: copies of a pipeline share it, while a new
 // snippet on every surface (or size) compiles another.
@@ -231,18 +245,30 @@ function paintSource(context) {
     return {fb, x: 0, y: 0, scale: fb.get_width() / global.stage.width};
 }
 
-// The actor's box, grown by `room`, in the source framebuffer's pixels.
-function sourceBox(actor, {fb, x: ox, y: oy, scale}, room) {
+// What to copy: the actor's box grown by `room` and by `pad`, in the source
+// framebuffer's pixels. The pad gives the blur real pixels past the edges
+// instead of smearing the last row. Sized from the actor, not what's on screen:
+// an opening menu or drawer is scaling, and blurred, the small difference in
+// what's copied doesn't show. Aligned to the blur's coarsest grid, so a surface
+// that moves doesn't shimmer.
+function sourceBox(actor, {fb, x: ox, y: oy, scale}, room, pad, align) {
     const rect = actor.get_transformed_extents();
-    const x = Math.floor((rect.get_x() - room.left - ox) * scale);
-    const y = Math.floor((rect.get_y() - room.top - oy) * scale);
-    const width = Math.max(1, Math.ceil((rect.get_width() + room.left + room.right) * scale));
-    const height = Math.max(1, Math.ceil((rect.get_height() + room.top + room.bottom) * scale));
-    const sx = Math.max(0, x), sy = Math.max(0, y);
+    const width = actor.width * scale, height = actor.height * scale;
+    const left = (rect.get_x() + rect.get_width() / 2 - ox) * scale - width / 2;
+    const top = (rect.get_y() + rect.get_height() / 2 - oy) * scale - height / 2;
+    const down = v => Math.floor(v / align) * align;
+    const up = v => Math.ceil(v / align) * align;
+    const x1 = Math.max(0, down(left - room.left * scale - pad));
+    const y1 = Math.max(0, down(top - room.top * scale - pad));
+    const x2 = Math.min(fb.get_width(), up(left + width + room.right * scale + pad));
+    const y2 = Math.min(fb.get_height(), up(top + height + room.bottom * scale + pad));
     return {
-        width, height, sx, sy, dx: sx - x, dy: sy - y, scale,
-        cw: Math.max(0, Math.min(width - (sx - x), fb.get_width() - sx)),
-        ch: Math.max(0, Math.min(height - (sy - y), fb.get_height() - sy)),
+        x: x1, y: y1, width: Math.max(1, x2 - x1), height: Math.max(1, y2 - y1), scale,
+        // The actor itself, inside that copy and on the framebuffer.
+        ox: left - x1, oy: top - y1,
+        ax1: Math.max(0, Math.floor(left)), ay1: Math.max(0, Math.floor(top)),
+        ax2: Math.min(fb.get_width(), Math.ceil(left + width)),
+        ay2: Math.min(fb.get_height(), Math.ceil(top + height)),
     };
 }
 
@@ -258,30 +284,101 @@ export const LiveGlassEffect = GObject.registerClass({
         this._uniforms = null;
     }
 
-    _ensure(context, w, h) {
-        if (this._capture?.width !== w || this._capture?.height !== h || this._context !== context) {
+    // One target per blur level, kept while they still fit: copies change size
+    // as surfaces move near the screen's edges.
+    _ensure(context, width, height, passes) {
+        if (this._context !== context || !textureFits(width, this._capW) || !textureFits(height, this._capH)) {
+            const limit = largestViewSize();
+            const sameContext = this._context === context;
+            this._capW = sameContext ? getTextureCapacity(width, this._capW, limit.width) : width;
+            this._capH = sameContext ? getTextureCapacity(height, this._capH, limit.height) : height;
             this._context = context;
-            this._capture = renderTarget(context, w, h);
-            this._blurred = renderTarget(context, w, h);
+            this._down = [];
+            this._up = [];
+            this._downPass = [];
+            this._upPass = [];
+            this._regions = new Map();
+            this._glass = null;
+            this._usedW = this._usedH = 0;
+            this._applied = null;
+        }
+        const target = level => createRenderTarget(context, levelSize(this._capW, level), levelSize(this._capH, level));
+        const fresh = this._down.length <= passes || this._usedW !== width || this._usedH !== height;
+        for (let level = this._down.length; level <= passes; level++)
+            this._down.push(target(level));
+        for (let level = 1; level <= passes; level++) {
+            this._downPass[level] ??= this._pass(context, this._down[level - 1], DOWNSAMPLE_DECLARATIONS, DOWNSAMPLE_CODE);
+        }
+        for (let level = 0; level < passes; level++) {
+            this._up[level] ??= target(level);
+            this._upPass[level] ??= this._pass(context, this._down[level + 1], UPSAMPLE_DECLARATIONS, UPSAMPLE_CODE, this._down[level]);
+        }
+        if (!this._glass) {
             const templates = shaderTemplates(context);
             this._glass = templates.glass.copy();
-            this._glass.set_layer_texture(0, this._blurred.texture);
+            this._glass.set_layer_texture(0, this._up[0].texture);
             this._shadow = templates.shadow.copy();
-            this._shadow.set_layer_texture(0, this._blurred.texture);
-            this._uniforms = null;
+            this._shadow.set_layer_texture(0, this._up[0].texture);
             this._captured = false;
+        }
+        if (!fresh)
+            return;
+        const bounds = {x: 0, y: 0, width, height};
+        for (const list of [this._down, this._up]) {
+            list.forEach((t, level) => {
+                resizeRenderTarget(t, level, width, height);
+                projectRenderTarget(t, bounds);
+            });
+        }
+        this._usedW = width;
+        this._usedH = height;
+        for (const [pipeline, {source, original, level, up}] of this._regions) {
+            source.update(up ? this._down[level + 1] : this._down[level - 1]);
+            original?.update(this._down[level]);
         }
     }
 
+    _pass(context, source, declarations, code, original = null) {
+        const pipeline = createPassPipeline(context, source.texture, declarations, code);
+        const level = this._down.indexOf(source) + (original ? -1 : 1);
+        this._regions.set(pipeline, {
+            source: new TextureRegion(pipeline, SOURCE_REGION),
+            original: original ? new TextureRegion(pipeline, ORIGINAL_REGION) : null,
+            level, up: !!original,
+        });
+        setVector2(pipeline, 'halfpixel', 0.5 / source.width, 0.5 / source.height);
+        if (original) {
+            pipeline.set_layer_texture(1, original.texture);
+            pipeline.set_layer_filters(1, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
+            pipeline.set_layer_wrap_mode(1, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
+            setFloat(pipeline, 'level_blend', 1);
+        }
+        return pipeline;
+    }
+
+    // The deepest upsample mixes towards its finer level, for radii in between.
+    _sampling(passes, blend) {
+        if (this._applied?.passes === passes && this._applied.blend === blend)
+            return;
+        for (let level = passes - 1; level >= 0; level--) {
+            const source = level === passes - 1 ? this._down[level + 1] : this._up[level + 1];
+            this._upPass[level].set_layer_texture(0, source.texture);
+            setFloat(this._upPass[level], 'level_blend', level === passes - 1 ? blend : 1);
+        }
+        this._applied = {passes, blend};
+    }
+
+    // Constant for the layer's life: parents cache their volume from this, and
+    // a stale one culls what grew past it (the dock's ends and shadow, cut off).
     vfunc_modify_paint_volume(volume) {
-        const pad = this._layer.uniforms?.shadow ? SHADOW_PAD : 0;
-        const room = this._layer.room;
+        const pad = this._layer.wantsShadow ? SHADOW_PAD : 0;
+        const reach = this._layer.reach;
         const origin = volume.get_origin();
-        origin.x -= room.left + pad;
-        origin.y -= room.top + pad;
+        origin.x -= reach.left + pad;
+        origin.y -= reach.top + pad;
         volume.set_origin(origin);
-        volume.set_width(volume.get_width() + room.left + room.right + 2 * pad);
-        volume.set_height(volume.get_height() + room.top + room.bottom + 2 * pad);
+        volume.set_width(volume.get_width() + reach.left + reach.right + 2 * pad);
+        volume.set_height(volume.get_height() + reach.top + reach.bottom + 2 * pad);
         return true;
     }
 
@@ -300,6 +397,7 @@ export const LiveGlassEffect = GObject.registerClass({
         set('outline', u.outline);
         set('guard', u.guard);
         set('light_text', u.lightText);
+        set('lens', u.lens);
         set('grain', u.grain);
     }
 
@@ -311,11 +409,13 @@ export const LiveGlassEffect = GObject.registerClass({
             return;
         const source = paintSource(paintContext);
         const fb = source.fb;
-        const room = this._layer.room;
-        const box = sourceBox(actor, source, room);
-        if (!box.cw || !box.ch)
+        const sigma = u.blur * source.scale;
+        const {passes, blend} = getKawaseConfiguration(sigma * 4);
+        const box = sourceBox(actor, source, this._layer.room, Math.ceil(sigma * BLUR_REACH), 2 ** passes);
+        if (box.ax2 <= box.ax1 || box.ay2 <= box.ay1)
             return;
-        this._ensure(fb.get_context(), box.width, box.height);
+        this._ensure(fb.get_context(), box.width, box.height, passes);
+        this._sampling(passes, blend);
 
         // A partial redraw would copy our own previous frame from the
         // undamaged part. Show the last clean blur and ask for a full redraw
@@ -330,30 +430,28 @@ export const LiveGlassEffect = GObject.registerClass({
             const it = new Mtk.RegionIterator();
             for (it.init(clip); !it.at_end(); it.next()) {
                 const r = it.rectangle;
-                const x1 = Math.max(box.sx, Math.floor((r.x - ox) * scale));
-                const y1 = Math.max(box.sy, Math.floor((r.y - oy) * scale));
-                const x2 = Math.min(box.sx + box.cw, Math.ceil((r.x + r.width - ox) * scale));
-                const y2 = Math.min(box.sy + box.ch, Math.ceil((r.y + r.height - oy) * scale));
+                const x1 = Math.max(box.ax1, Math.floor((r.x - ox) * scale));
+                const y1 = Math.max(box.ay1, Math.floor((r.y - oy) * scale));
+                const x2 = Math.min(box.ax2, Math.ceil((r.x + r.width - ox) * scale));
+                const y2 = Math.min(box.ay2, Math.ceil((r.y + r.height - oy) * scale));
                 if (x2 > x1 && y2 > y1)
                     covered += (x2 - x1) * (y2 - y1);
             }
-            clean = covered >= box.cw * box.ch;
-            if (!clean)
+            clean = covered >= (box.ax2 - box.ax1) * (box.ay2 - box.ay1);
+            // Damage only around the glass (its shadow) needs no new copy.
+            if (!clean && covered > 0)
                 this._layer.queueFullRedraw();
         }
 
         if (clean || !this._captured) {
-            this._capture.framebuffer.clear4f(Cogl.BufferBit.COLOR, 0, 0, 0, 0);
-            blit(fb, this._capture.framebuffer, box.sx, box.sy, box.dx, box.dy, box.cw, box.ch);
-            const blurred = Clutter.LayerNode.new_to_framebuffer(this._blurred.framebuffer, this._blurred.pipeline);
-            const blur = Clutter.BlurNode.new(box.width, box.height, Math.max(1, u.blur * box.scale / 2));
-            blur.add_rectangle(new Clutter.ActorBox({x1: 0, y1: 0, x2: box.width, y2: box.height}));
-            const pixels = new Clutter.PipelineNode(this._capture.pipeline);
-            pixels.add_rectangle(new Clutter.ActorBox({x1: 0, y1: 0, x2: box.width, y2: box.height}));
-            blur.add_child(pixels);
-            blurred.add_child(blur);
-            node.add_child(blurred);
+            blit(fb, this._down[0].framebuffer, box.x, box.y, 0, 0, box.width, box.height);
+            const bounds = {x: 0, y: 0, width: box.width, height: box.height};
+            for (let level = 1; level <= passes; level++)
+                addPassNode(node, this._down[level], this._downPass[level], bounds, `glass down ${level}`);
+            for (let level = passes - 1; level >= 0; level--)
+                addPassNode(node, this._up[level], this._upPass[level], bounds, `glass up ${level}`);
             this._captured = clean;
+            this._drawn = box;
         }
 
         if (u.shadow) {
@@ -377,10 +475,11 @@ export const LiveGlassEffect = GObject.registerClass({
 
         // The shown part of the blurred copy: the actor, plus any stretch.
         const s = this._layer.stretch;
-        const uvX1 = (room.left - s.left) * box.scale / box.width;
-        const uvY1 = (room.top - s.top) * box.scale / box.height;
-        const uvX2 = (room.left + actor.width + s.right) * box.scale / box.width;
-        const uvY2 = (room.top + actor.height + s.bottom) * box.scale / box.height;
+        const shown = this._drawn ?? box;
+        const uvX1 = (shown.ox - s.left * box.scale) / this._capW;
+        const uvY1 = (shown.oy - s.top * box.scale) / this._capH;
+        const uvX2 = (shown.ox + (actor.width + s.right) * box.scale) / this._capW;
+        const uvY2 = (shown.oy + (actor.height + s.bottom) * box.scale) / this._capH;
         this._setUniforms(u);
         const set = (name, v) => this._glass.set_uniform_1f(this._glass.get_uniform_location(name), v);
         set('uv_x', uvX1);
@@ -406,7 +505,9 @@ class SuperGGlassLayer extends St.Widget {
     // shadow: draw the drop shadow (top bar and backdrops have none).
     // guard: how much the contrast guard may thicken the tint; surfaces whose
     // text picks its colour from the backdrop (the top bar) want none.
-    _init({style, shapeSource = null, radius = null, track = null, smoothing = 0.5, live = true, shadow = true, guard = 1}) {
+    // reach: the most setRoom will ever ask for.
+    _init({style, shapeSource = null, radius = null, track = null, smoothing = 0.5, live = true, shadow = true, guard = 1,
+        reach = NO_ROOM}) {
         // Only the wallpaper copy is larger than the layer and needs clipping.
         super._init({x_expand: true, y_expand: true, clip_to_allocation: !live, reactive: false});
         this._live = live;
@@ -417,6 +518,8 @@ class SuperGGlassLayer extends St.Widget {
         this._track = track;
         this._smoothing = smoothing;
         this._shadowOn = shadow;
+        this.wantsShadow = shadow;
+        this.reach = {...NO_ROOM, ...reach};
         this._guard = guard;
         this.room = {...NO_ROOM};
         this.stretch = {...NO_ROOM};
@@ -582,7 +685,7 @@ class SuperGGlassLayer extends St.Widget {
         this.uniforms = {
             size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.blur,
             tint: s.tint, saturation: s.saturation, brightness: s.brightness, rim: s.rim, outline: s.outline, grain: s.grain,
-            guard: this._guard, lightText: s.lightText, shadow: this._shadowOn ? s.shadow : 0, shadowSpread: s.shadowSpread, shadowDrop: s.shadowDrop,
+            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, shadow: this._shadowOn ? s.shadow : 0, shadowSpread: s.shadowSpread, shadowDrop: s.shadowDrop,
         };
         if (this._effect)
             this._effect.setUniforms(this.uniforms);
@@ -594,11 +697,11 @@ class SuperGGlassLayer extends St.Widget {
 // Thickness, as Apple names its materials: how much palette colour the glass
 // carries, how far it blurs, how much colour it lets through.
 const MATERIALS = {
-    'ultra-thin': {tint: 0.18, blur: 22, saturation: 1.7},
-    'thin': {tint: 0.34, blur: 30, saturation: 1.6},
-    'regular': {tint: 0.5, blur: 40, saturation: 1.5},
-    'thick': {tint: 0.68, blur: 52, saturation: 1.4},
-    'ultra-thick': {tint: 0.84, blur: 64, saturation: 1.3},
+    'ultra-thin': {tint: 0.18, blur: 26, saturation: 1.8},
+    'thin': {tint: 0.34, blur: 32, saturation: 1.7},
+    'regular': {tint: 0.5, blur: 40, saturation: 1.6},
+    'thick': {tint: 0.68, blur: 48, saturation: 1.45},
+    'ultra-thick': {tint: 0.84, blur: 56, saturation: 1.3},
 };
 
 function material(settings) {
@@ -627,6 +730,7 @@ export function glassStyle(c, settings) {
         rim: c.dark ? 0.16 : 0.32,
         outline: c.dark ? 0.32 : 0.14,
         lightText: c.dark ? 1 : 0,
+        lens: settings.get_double('glass-refraction') * 12,
         shadow: c.dark ? 0.32 : 0.2,
         shadowSpread: 34,
         shadowDrop: 8,

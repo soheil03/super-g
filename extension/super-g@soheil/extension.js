@@ -54,12 +54,19 @@ export const MODULES = {
                     s.set_boolean(key, false);
         },
     }),
+    // WACK only exists on the lock screen, as upstream declares.
+    lockscreen: Object.assign(engine('lockscreen', 'wack-lockscreen-clock@rinzler69-wastaken.github.com',
+        ['wack-lockscreen-clock@rinzler69-wastaken.github.com']), {onlyWhenLocked: true}),
     panel: PanelModule,
     glass: GlassModule,
     drawer: DrawerModule,
     hotcorners: engine('hotcorners', 'custom-hot-corners-extended@G-dH.github.com'),
     gestures: engine('gestures', 'touchpad-gesture-customization@coooolapps.com'),
-    launcher: engine('launcher', 'superbar@Furkan-rgb.github.io'),
+    launcher: engine('launcher', 'superbar@Furkan-rgb.github.io', ['superbar@Furkan-rgb.github.io'], {
+        configure() {
+            this.ext._active.get('glass')?.attachLauncher();
+        },
+    }),
 };
 
 // Extensions that clash with a module (null: clash with the desktop as a whole).
@@ -79,6 +86,7 @@ const CONFLICTS = {
     'custom-hot-corners-extended@G-dH.github.com': 'hotcorners',
     'touchpad-gesture-customization@coooolapps.com': 'gestures',
     'superbar@Furkan-rgb.github.io': 'launcher',
+    'wack-lockscreen-clock@rinzler69-wastaken.github.com': 'lockscreen',
 };
 
 export default class SuperG extends Extension {
@@ -137,7 +145,7 @@ export default class SuperG extends Extension {
     }
 
     _tell(body, action = null) {
-        const source = MessageTray.getSystemNotificationSource();
+        const source = MessageTray.getSystemSource();
         const notification = new MessageTray.Notification({source, title: 'Super G', body});
         if (action)
             notification.addAction(...action);
@@ -190,6 +198,8 @@ export default class SuperG extends Extension {
         if (this._settings.get_strv('broken-modules').includes(name))
             return false;
         if (Main.sessionMode.isLocked && Module.runsWhenLocked && !Module.runsWhenLocked(this.path))
+            return false;
+        if (Module.onlyWhenLocked && !Main.sessionMode.isLocked)
             return false;
         // The dock stops on the lock screen; what attached to it goes first.
         if (Main.sessionMode.isLocked && Module.needsDock)

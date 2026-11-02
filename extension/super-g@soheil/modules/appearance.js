@@ -46,7 +46,14 @@ export default class AppearanceModule extends Module {
         this.connect(this.settings, 'changed', (_s, key) => {
             this.later('apply', 150, () => this._applyAll());
             if (RESTART_KEYS.includes(key))
-                this.later('restart-note', 1800, () => this._offerRestart());
+                this.later('restart-note', 1800, () => {
+                    // A nicety: failing here must never cost the user the theme.
+                    try {
+                        this._offerRestart();
+                    } catch (e) {
+                        console.error('super-g: restart offer failed', e);
+                    }
+                });
         });
         this.connect(this._iface, 'changed::color-scheme', () => this._applyAll());
         // Ubuntu's Appearance panel writes Yaru-* here; keep ours while active.
@@ -66,10 +73,14 @@ export default class AppearanceModule extends Module {
     disable() {
         this.cleanup();
         this._unloadShell();
-        Files.setManagedBlock(GTK4_MAIN, null);
-        Files.remove(GTK4_FILE);
+        if (!this.crashed) {
+            Files.setManagedBlock(GTK4_MAIN, null);
+            Files.remove(GTK4_FILE);
+        }
         St.Settings.get().slow_down_factor = 1.0;
-        this._restoreOriginal();
+        // After a crash the theme stays until the next login retries the module.
+        if (!this.crashed)
+            this._restoreOriginal();
         this._iface = null;
     }
 
@@ -94,7 +105,7 @@ export default class AppearanceModule extends Module {
         const apps = this._gtk4Apps();
         if (!apps.length)
             return;
-        const source = MessageTray.getSystemNotificationSource();
+        const source = MessageTray.getSystemSource();
         const notification = new MessageTray.Notification({source, title: 'New colors are ready',
             body: `${apps.map(a => a.get_name()).join(', ')} will show them after a restart.`});
         notification.addAction('Restart them', () => {
@@ -146,6 +157,15 @@ export default class AppearanceModule extends Module {
             this._setIface('gtk-theme', this._original()['gtk-theme'] ?? 'Adwaita');
             return;
         }
+        const chosen = this._chosenTheme();
+        if (chosen) {
+            // Someone else's theme: GTK4 imports its stylesheet, if it ships one.
+            const css = this._themeFile(chosen, 'gtk-4.0/gtk.css');
+            Files.remove(GTK4_FILE);
+            Files.setManagedBlock(GTK4_MAIN, css ? `@import url("file://${css}");` : null, {atEnd: true});
+            this._setIface('gtk-theme', chosen);
+            return;
+        }
         const opts = this._opts();
         Files.remove(GTK4_FILE);
         Files.setManagedBlock(GTK4_MAIN, Gen.gtk4Css(this._tokens, opts, this._appFixes(4)).trim(), {atEnd: true});
@@ -163,9 +183,31 @@ export default class AppearanceModule extends Module {
         this._applyGtkTheme(gtk3Changed);
     }
 
+    // An installed theme the user picked over the generated one, if any.
+    _chosenTheme() {
+        const choice = this.settings.get_string('gtk-theme-choice');
+        return choice && choice !== 'super-g' ? choice : null;
+    }
+
+    _themeFile(name, file) {
+        const dirs = [`${Files.DATA}/themes`, `${GLib.get_home_dir()}/.themes`,
+            ...GLib.get_system_data_dirs().map(d => `${d}/themes`)];
+        for (const dir of dirs) {
+            const path = `${dir}/${name}/${file}`;
+            if (GLib.file_test(path, GLib.FileTest.EXISTS))
+                return path;
+        }
+        return null;
+    }
+
     _applyGtkTheme(forceReload = false) {
         if (!this.settings.get_boolean('theme-gtk') || !this._adwGtk3)
             return;
+        const chosen = this._chosenTheme();
+        if (chosen) {
+            this._setIface('gtk-theme', chosen);
+            return;
+        }
         const wanted = this._dark ? THEME_DARK : THEME;
         if (forceReload && this._iface.get_string('gtk-theme') === wanted) {
             // GTK3 only re-reads a theme when its name changes.

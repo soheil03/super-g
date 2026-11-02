@@ -129,15 +129,26 @@ export default class PanelModule extends Module {
         const pill = withAlpha(c.fg, dark ? 0.1 : 0.07);
         const pillHover = withAlpha(c.fg, dark ? 0.16 : 0.12);
         const P = '#uiGroup #panel';
+        // Buttons sit inset in a roomy bar; a low one gives them all of it, or
+        // their text no longer fits (a line takes about 28 px with the clock's box).
+        const inset = Math.max(0, Math.min(4, Math.floor((height - 28) / 2)));
 
         const base = `
-${P} { height: ${height}px; color: ${c.fg}; font-weight: 500; transition-duration: 250ms; }
-${P} .panel-button { color: ${c.fg}; border-radius: 999px; -natural-hpadding: 10px; -minimum-hpadding: 6px;
-  margin: 3px 1px; padding-top: 0; padding-bottom: 0; }
+${P} { height: ${height}px; color: ${c.fg}; font-weight: 500; font-size: ${height < 28 ? 9.5 : height < 32 ? 10 : 10.5}pt;
+  transition-duration: 250ms; padding: 0 ${style === 'adaptive' ? 8 : 4}px; }
+${P} .panel-button { color: ${c.fg}; border-radius: 999px; -natural-hpadding: 9px; -minimum-hpadding: 6px;
+  margin: ${inset}px 1px; padding-top: 0; padding-bottom: 0; }
+${P} .panel-button .panel-button { margin: 0; padding: 0; background-color: transparent; box-shadow: none; -natural-hpadding: 0; -minimum-hpadding: 0; spacing: 6px; }
+${P} .clock-display-box, ${P} .clock { padding: 0; margin: 0; spacing: 0; }
+${P} .panel-status-indicators-box, ${P} .panel-status-menu-box { spacing: 9px; }
+${P} .power-status { spacing: 3px; }
+${P} .system-status-icon { icon-size: 16px; padding: 0; margin: 0; }
+${P} .app-menu-icon { icon-size: 16px; }
+${P} #panelActivities { -natural-hpadding: 8px; }
 ${P} .panel-button:hover, ${P} .panel-button:active, ${P} .panel-button:checked, ${P} .panel-button:focus {
   background-color: ${pillHover}; color: ${c.fg}; box-shadow: none; }
 ${P} .panel-button .system-status-icon, ${P} .panel-button StIcon { color: ${c.fg}; }
-${P} .kiwi-input-themed StLabel { border: 1.5px solid ${c.fg}; color: ${c.fg}; background-color: transparent; border-radius: 5px; }
+${P} .kiwi-input-themed StLabel { border: 1.5px solid ${c.fg}; color: ${c.fg}; background-color: transparent; border-radius: 5px; padding: 0 5px; font-size: 9.5pt; }
 ${P} .kiwi-input-en StLabel { background-color: ${c.fg}; color: ${onColor(c.fg)}; }
 ${P} #panelActivities { background-color: transparent; }
 ${P} #panelActivities:checked, ${P} #panelActivities:hover { background-color: ${pillHover}; }`;
@@ -152,7 +163,7 @@ ${P} .panel-button.${STATUS_CLASS}:hover, ${P} .panel-button.${STATUS_CLASS}:che
             // St takes margins from CSS, so the gaps around the bar live here
             // (and reserve the same room under it when a window is maximized).
             shape = `${P} { background-color: transparent; border: none; box-shadow: none; margin: ${GAP}px ${GAP}px ${GAP}px ${GAP}px; }
-${P} .panel-button { background-color: ${glassOn ? 'transparent' : glass}; box-shadow: ${glassOn ? 'none' : `inset 0 0 0 1px ${c.hairline}`}; margin: 0 2px; }
+${P} .panel-button { background-color: ${glassOn ? 'transparent' : glass}; box-shadow: ${glassOn ? 'none' : `inset 0 0 0 1px ${c.hairline}`}; margin: ${inset}px 2px; }
 ${P} .panel-button.${STATUS_CLASS} { background-color: ${glassOn ? 'transparent' : glass}; }
 ${P} .panel-button:hover, ${P} .panel-button:checked, ${P} .panel-button:active { background-color: ${pillHover}; }`;
         } else if (style === 'adaptive') {

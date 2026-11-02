@@ -334,7 +334,10 @@ ${rule('.quick-toggle-has-menu .quick-toggle-menu-button:ltr', 'border-radius: 0
 ${rule('.quick-toggle-has-menu .quick-toggle-menu-button:rtl', 'border-radius: 999px 0 0 999px;')}
 ${rule('.quick-toggle:hover', `background-color: ${c.controlHover};`)}
 ${rule('.quick-menu-toggle .quick-toggle-arrow', 'border-radius: 0 999px 999px 0;')}
-${rule('.quick-toggle-menu', `border-radius: 20px; background-color: ${withAlpha(c.fg, 0.05)};`)}
+${rule('.quick-toggle-menu', `border-radius: 22px; background-color: ${withAlpha(c.popover, 0.98)}; color: ${c.fg}; box-shadow: 0 8px 26px rgba(0,0,0,${dark ? 0.4 : 0.18}), inset 0 0 0 1px ${c.hairline};`)}
+${rule('.quick-toggle-menu .header .title, .quick-toggle-menu .popup-menu-item', `color: ${c.fg};`)}
+${rule('.quick-toggle-menu .header .subtitle, .quick-toggle-menu .popup-inactive-menu-item, .quick-toggle-menu .popup-menu-item:insensitive', `color: ${withAlpha(c.fg, 0.72)};`)}
+${rule('.quick-toggle-menu .header .icon', `background-color: ${tile}; color: ${c.fg};`)}
 ${rule('.quick-toggle-has-menu .quick-toggle-menu-button', `background-color: ${tile}; color: ${c.fg};`)}
 ${rule('.quick-toggle-has-menu .quick-toggle-menu-button:hover', `background-color: ${c.controlHover};`)}
 ${rule('.quick-toggle-has-menu .quick-toggle-menu-button:checked', `background-color: ${c.accent}; color: ${c.accentFg};`)}
@@ -376,6 +379,8 @@ ${rule('.app-folder', `background-color: ${withAlpha(c.fg, dark ? 0.1 : 0.07)}; 
 ${rule('.app-folder:hover, .app-folder:focus', `background-color: ${withAlpha(c.fg, dark ? 0.16 : 0.12)};`)}
 ${rule('.app-folder-dialog', `background-color: ${withAlpha(c.window, 0.94)}; color: ${c.fg}; border-radius: 32px; border: none; box-shadow: inset 0 0 0 1px ${withAlpha(c.fg, 0.08)};`)}
 ${rule('.app-folder-dialog .overview-tile, .app-folder-dialog .folder-name-label', `color: ${c.fg}; text-shadow: none;`)}
+${rule('.spotlight-entry, .spotlight-entry:focus, .spotlight-entry:hover', `background-color: transparent; border: none; box-shadow: none; color: ${c.fg};`)}
+${rule('.spotlight-entry StLabel.hint-text', `color: ${withAlpha(c.fg, 0.55)};`)}
 ${rule('.search-entry', `background-color: ${withAlpha(c.window, dark ? 0.55 : 0.6)}; color: ${c.fg}; border-radius: 999px; border: none; box-shadow: inset 0 0 0 1px ${c.hairline};`)}
 ${rule('.search-entry:focus', `box-shadow: inset 0 0 0 2px ${withAlpha(c.accent, 0.6)};`)}
 ${rule('.search-entry .search-entry-icon, .search-entry StLabel.hint-text', `color: ${c.fgMuted};`)}

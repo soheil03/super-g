@@ -1,0 +1,4 @@
+upstream: wack-lockscreen-clock@rinzler69-wastaken.github.com
+version/url: 2.1.0 https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen
+schema: org.gnome.shell.extensions.wack-lockscreen-clock -> org.gnome.shell.extensions.super-g.lockscreen
+dconf: /org/gnome/shell/extensions/wack-lockscreen-clock/ -> /org/gnome/shell/extensions/super-g/lockscreen/

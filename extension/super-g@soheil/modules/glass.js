@@ -4,6 +4,7 @@
 // glass (lib/glass.js). Replaces the Blur my Shell engine for all of these.
 
 import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -25,6 +26,9 @@ function isBlank(actor) {
     walk(actor);
     return labels.length > 0 && labels.every(label => !label.text?.trim() || !label.visible);
 }
+
+// More than magnification can stretch the dock, at any setting.
+const DOCK_REACH = 420;
 
 // The union of some top bar buttons, for a glass layer to follow.
 class Island {
@@ -120,6 +124,21 @@ export default class GlassModule extends Module {
         this.connect(Main.overview, 'hidden', () => this._overviewOut());
 
         this._attachDocks();
+        this.attachLauncher();
+    }
+
+    // Superbar's surface is glass too. Either of the two modules can start last.
+    attachLauncher() {
+        const material = this.ext._active?.get('launcher')?.instance?._materialLayer;
+        if (!material || this._launcherGlass)
+            return;
+        material.style = 'background-color: transparent; background-image: none; border: none; box-shadow: none;';
+        this._launcherGlass = new GlassLayer({style: this._style, shapeSource: material});
+        material.insert_child_at_index(this._launcherGlass, 0);
+        this._launcherGlass.add_constraint(new Clutter.BindConstraint({
+            source: material, coordinate: Clutter.BindCoordinate.SIZE,
+        }));
+        this._launcherGlass.connect('destroy', () => (this._launcherGlass = null));
     }
 
     disable() {
@@ -137,6 +156,7 @@ export default class GlassModule extends Module {
             this._dockExt?.dockManager?.disconnect(this._dockReadyId);
         this._panelGlass?.destroy();
         this._panelGlass = null;
+        this._launcherGlass?.destroy();
         this._islands.forEach(glass => glass.destroy());
         this._islands = [];
         this._overviewOut(true);
@@ -152,7 +172,7 @@ export default class GlassModule extends Module {
 
     _restyle() {
         this._style = this._computeStyle();
-        const all = [this._panelGlass, ...this._islands, ...[...this._menus.values()].map(e => e.glass),
+        const all = [this._panelGlass, this._launcherGlass, ...this._islands, ...[...this._menus.values()].map(e => e.glass),
             ...this._docks.values(), ...(this._overview ?? [])];
         for (const glass of all.filter(Boolean))
             glass.setStyle(this._style);
@@ -190,6 +210,19 @@ export default class GlassModule extends Module {
         if (!entry)
             return;
         this._menus.set(menu, entry);
+        // Quick settings dims itself behind a submenu; full strength turns glass
+        // to dull grey.
+        if (menu._setDimmed && menu._dimEffect) {
+            menu._setDimmed = dim => {
+                const val = 127 * (dim ? 0.86 : 1);
+                menu._boxPointer.ease_property('@effects.dim.brightness',
+                    new Cogl.Color({red: val, green: val, blue: val, alpha: 255}), {
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD, duration: 200,
+                        onStopped: () => (menu._dimEffect.enabled = dim),
+                    });
+                menu._dimEffect.enabled = true;
+            };
+        }
         menu.connect('destroy', () => this._menus.delete(menu));
     }
 
@@ -209,7 +242,8 @@ export default class GlassModule extends Module {
                 const bg = dock.dash?._background;
                 if (!bg)
                     continue;
-                const glass = new GlassLayer({style: this._style, shapeSource: bg, smoothing: 0.25, guard: 0.35});
+                const glass = new GlassLayer({style: this._style, shapeSource: bg, smoothing: 0.25, guard: 0.35,
+                    reach: {left: DOCK_REACH, right: DOCK_REACH, top: DOCK_REACH, bottom: DOCK_REACH}});
                 bg.insert_child_at_index(glass, 0);
                 glass.add_constraint(new Clutter.BindConstraint({
                     source: bg, coordinate: Clutter.BindCoordinate.SIZE,

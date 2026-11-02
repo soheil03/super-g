@@ -47,6 +47,14 @@
       <default>true</default>
       <summary>Touchpad gestures (Touchpad Gesture Customization engine)</summary>
     </key>
+    <key name="module-lockscreen" type="b">
+      <default>true</default>
+      <summary>Lock screen theme (WACK)</summary>
+    </key>
+    <key name="gtk-theme-choice" type="s">
+      <default>'super-g'</default>
+      <summary>GTK theme: super-g (generated from the palette) or the name of an installed theme</summary>
+    </key>
     <key name="module-launcher" type="b">
       <default>true</default>
       <summary>Keyboard command bar (Superbar engine)</summary>
@@ -74,6 +82,11 @@
     <key name="glass-material" type="s">
       <default>'regular'</default>
       <summary>Glass thickness: ultra-thin, thin, regular, thick, ultra-thick, or custom (uses tint, vibrancy and blur)</summary>
+    </key>
+    <key name="glass-refraction" type="d">
+      <range min="0" max="1"/>
+      <default>0.5</default>
+      <summary>How much the glass's rim bends what's behind it</summary>
     </key>
     <key name="conflicts-auto-off" type="b">
       <default>true</default>

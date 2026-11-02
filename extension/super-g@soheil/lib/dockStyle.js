@@ -195,7 +195,7 @@ ${D} .show-apps .overview-icon, ${D} .show-apps:hover .overview-icon, ${D} .show
   background-color: transparent; box-shadow: none; }
 ${D} .overview-icon { background-color: transparent !important; box-shadow: none; }
 ${D} .overview-tile, ${D} .overview-tile:hover, ${D} .overview-tile:focus { background-color: transparent; }
-${D} .app-grid-running-dot { background-color: ${c.fg}; width: 5px; height: 5px; border-radius: 3px; margin-bottom: 2px; }
+${D} .app-grid-running-dot { background-color: ${c.fg}; width: 5px; height: 5px; border-radius: 3px; margin: 0; }
 ${D} .dash-separator { background-color: ${dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)'} !important; width: 1px; margin: 12px 5px; }
 ${D} .dash-label, #uiGroup .dash-label {
   background-color: ${withAlpha(c.popover, 0.92)}; color: ${c.fg}; border-radius: 999px;
@@ -215,5 +215,13 @@ export function configureDockMotion(module) {
     onceOnly('dockmotion', () => {
         setIf(s, 'motion-profile', 'custom');
         setIf(s, 'show-hover-background', false);
+    });
+    // Click: the magnifier settles the row, then one soft bounce while the app
+    // starts, as on a Mac. A squash on press or a stretch fights both.
+    onceOnly('dockmotion-launch', () => {
+        setIf(s, 'custom-press-enabled', false);
+        setIf(s, 'custom-launch-effect', 'bounce');
+        setIf(s, 'custom-launch-intensity', 0.45);
+        setIf(s, 'custom-launch-repeat', false);
     });
 }

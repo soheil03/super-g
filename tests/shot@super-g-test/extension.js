@@ -4,6 +4,9 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
+import GObject from 'gi://GObject';
+import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
@@ -11,6 +14,49 @@ const wait = ms => new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, 
     r();
     return GLib.SOURCE_REMOVE;
 }));
+
+// The frame the stage really drew, partial redraw and all: Shell.Screenshot
+// repaints everything, which hides culling and damage bugs. Copies the view at
+// after-paint, then shoots an overlay showing that copy.
+const FrameOverlay = GObject.registerClass(
+class FrameOverlay extends Clutter.Effect {
+    _init(pipeline, width, height) {
+        super._init();
+        this._args = [pipeline, width, height];
+    }
+
+    vfunc_paint_node(node) {
+        const [pipeline, width, height] = this._args;
+        const out = new Clutter.PipelineNode(pipeline);
+        out.add_rectangle(new Clutter.ActorBox({x1: 0, y1: 0, x2: width, y2: height}));
+        node.add_child(out);
+    }
+});
+
+function frameShot(path) {
+    return new Promise((resolve, reject) => {
+        const id = global.stage.connect('after-paint', (_s, view) => {
+            global.stage.disconnect(id);
+            const fb = view.get_framebuffer();
+            const [w, h] = [fb.get_width(), fb.get_height()];
+            const context = fb.get_context();
+            const texture = Cogl.Texture2D.new_with_size(context, w, h);
+            texture.allocate();
+            const target = Cogl.Offscreen.new_with_texture(texture);
+            target.allocate();
+            fb.blit(target, 0, 0, 0, 0, w, h);
+            const pipeline = Cogl.Pipeline.new(context);
+            pipeline.set_layer_texture(0, texture);
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                const overlay = new Clutter.Actor({x: 0, y: 0, width: global.stage.width, height: global.stage.height});
+                overlay.add_effect(new FrameOverlay(pipeline, global.stage.width, global.stage.height));
+                Main.layoutManager.uiGroup.add_child(overlay);
+                shot(path).then(resolve, reject).finally(() => overlay.destroy());
+                return GLib.SOURCE_REMOVE;
+            });
+        });
+    });
+}
 
 function shot(path) {
     return new Promise((resolve, reject) => {
@@ -32,8 +78,12 @@ function shot(path) {
 function makePointer() {
     const device = Clutter.get_default_backend().get_default_seat()
         .create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+    // A pixel's worth of damage, not a stage redraw: real frames are partial,
+    // and many bugs (culling, stale regions) only exist there.
+    const speck = new St.Widget({x: 0, y: 0, width: 1, height: 1, style: 'background-color: rgba(0,0,0,0.01)'});
+    Main.layoutManager.uiGroup.add_child(speck);
     const pump = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
-        global.stage.queue_redraw();
+        speck.queue_redraw();
         return GLib.SOURCE_CONTINUE;
     });
     const now = () => GLib.get_monotonic_time();
@@ -57,7 +107,13 @@ function makePointer() {
             button(Clutter.ButtonState.RELEASED);
             await wait(250);
         },
-        stop: () => GLib.source_remove(pump),
+        stop: () => {
+            if (pointer.stopped)
+                return;
+            pointer.stopped = true;
+            GLib.source_remove(pump);
+            speck.destroy();
+        },
     };
     return pointer;
 }
@@ -220,8 +276,9 @@ export default class Camera extends Extension {
             try {
                 const AsyncFunction = (async () => {}).constructor;
                 const pointer = makePointer();
-                out = JSON.stringify(await new AsyncFunction('Main', 'global', 'pointer', 'shot', 'wait',
-                    GLib.getenv('EVAL'))(Main, global, pointer, name => shot(`${dir}/${name}.png`), wait), null, 2);
+                out = JSON.stringify(await new AsyncFunction('Main', 'global', 'pointer', 'shot', 'wait', 'frame',
+                    GLib.getenv('EVAL'))(Main, global, pointer, name => shot(`${dir}/${name}.png`), wait,
+                    name => frameShot(`${dir}/${name}.png`)), null, 2);
                 pointer.stop();
             } catch (e) {
                 out = `${e}\n${e.stack}`;

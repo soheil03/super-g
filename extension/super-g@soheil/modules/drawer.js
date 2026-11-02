@@ -49,22 +49,33 @@ export default class DrawerModule extends Module {
         this._tokens = JSON.parse(Files.readText(`${this.ext.path}/tokens.json`));
         this._sheet = new LiveStylesheet('drawer');
         this._buttons = new Map();
+        this._tiles = new Map();
         this._applyStyle();
         this.connect(this._iface, 'changed::color-scheme', () => this._applyStyle());
         this.connect(this.settings, 'changed', () => this.later('drawer-style', 120, () => this._applyStyle()));
-        this.connect(Shell.AppSystem.get_default(), 'installed-changed', () => (this._apps = null));
+        this.connect(Shell.AppSystem.get_default(), 'installed-changed', () => {
+            this._apps = null;
+            this._dropTiles();
+        });
         this._hookDocks();
     }
 
     disable() {
         this.cleanup();
         this.close(true);
+        this._dropTiles();
         for (const [button, state] of this._buttons)
             this._unhookButton(button, state);
         this._buttons.clear();
         if (this._readyId)
             this._dockExt?.dockManager?.disconnect(this._readyId);
         this._sheet.clear();
+    }
+
+    _dropTiles() {
+        for (const {button} of [...this._tiles.values()])
+            button.destroy();
+        this._tiles.clear();
     }
 
     /* --------------------------------------------- dock apps button -- */
@@ -143,6 +154,10 @@ ${D} .drawer-app { border-radius: 18px; padding: 10px 2px 8px; color: ${c.fg}; f
 ${D} .drawer-app:hover { background-color: ${tile}; }
 ${D} .drawer-app:focus, ${D} .drawer-app.first-hit { background-color: ${withAlpha(c.accent, 0.22)}; }
 ${D} .drawer-app:active { background-color: ${withAlpha(c.fg, c.dark ? 0.18 : 0.14)}; }
+${D} .drawer-everywhere { margin: 10px 22px 14px; padding: 10px 14px; border-radius: 14px; background-color: ${tile}; color: ${c.fg}; font-size: 10.5pt; transition-duration: 120ms; }
+${D} .drawer-everywhere:hover { background-color: ${withAlpha(c.fg, c.dark ? 0.16 : 0.12)}; }
+${D} .drawer-everywhere:focus, ${D} .drawer-everywhere.first-hit { background-color: ${withAlpha(c.accent, 0.22)}; }
+${D} .drawer-key { border-radius: 6px; padding: 1px 7px; font-size: 9pt; color: ${withAlpha(c.fg, 0.72)}; background-color: ${tile}; }
 ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 48px; }
 `);
     }
@@ -262,7 +277,10 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         global.stage.set_key_focus(this._entry.clutter_text);
 
         const speed = this.settings.get_double('animation-speed');
-        drawer.set({opacity: 0, scale_x: 0.9, scale_y: 0.9});
+        drawer.set({opacity: 0, scale_x: 0.92, scale_y: 0.92});
+        content.set({opacity: 0, translation_y: 10});
+        content.ease({opacity: 255, translation_y: 0, duration: Math.round(340 * speed), delay: 40,
+            mode: Clutter.AnimationMode.EASE_OUT_QUINT});
         drawer.ease({opacity: 255, scale_x: 1, scale_y: 1, duration: Math.round(300 * speed),
             mode: Clutter.AnimationMode.EASE_OUT_QUINT});
     }
@@ -276,7 +294,12 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             Main.popModal(this._grab);
             this._grab = null;
         }
-        const finish = () => open.root.destroy();
+        const finish = () => {
+            // The tiles outlive the drawer they were shown in.
+            for (const {button} of this._tiles.values())
+                button.get_parent()?.remove_child(button);
+            open.root.destroy();
+        };
         if (now) {
             finish();
             return;
@@ -314,6 +337,10 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
                 this._entry.set_text('');
             else
                 this.close();
+            return Clutter.EVENT_STOP;
+        }
+        if (key === Clutter.KEY_Tab && this._entry.get_text().trim() && this._launcher()) {
+            this._searchEverywhere();
             return Clutter.EVENT_STOP;
         }
         const dir = {
@@ -362,6 +389,8 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         const first = this._visible?.[0];
         if (first)
             this._launch(first);
+        else if (this._entry.get_text().trim())
+            this._searchEverywhere();
     }
 
     /* -------------------------------------------------------- render -- */
@@ -377,26 +406,42 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
                 this._section = name;
                 this._entry.set_text('');
                 this._renderChips();
-                this._render();
+                this._render({animate: true});
             });
             this._chips.add_child(chip);
         }
     }
 
+    // Tiles live as long as the module, so opening and filtering only move
+    // them around; building them on the fly is what made typing stutter.
     _tile(app) {
+        const cached = this._tiles.get(app);
+        if (cached?.slot === this._slot)
+            return cached.button;
+        cached?.button.destroy();
         const button = new St.Button({style_class: 'drawer-app', can_focus: true, width: this._slot,
             reactive: true, track_hover: true});
         const box = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style: 'spacing: 6px;',
             x_align: Clutter.ActorAlign.CENTER});
         const icon = app.create_icon_texture(64);
         icon.x_align = Clutter.ActorAlign.CENTER;
+        icon.set_pivot_point(0.5, 0.5);
         box.add_child(icon);
         const label = new St.Label({text: app.get_name(), x_align: Clutter.ActorAlign.CENTER});
         label.clutter_text.set({ellipsize: Pango.EllipsizeMode.END, line_wrap: false});
         label.style = `max-width: ${this._slot - 12}px;`;
         box.add_child(label);
         button.set_child(box);
+        const react = () => {
+            const scale = button.pressed ? 0.94 : button.hover ? 1.07 : 1;
+            icon.ease({scale_x: scale, scale_y: scale, duration: button.pressed ? 70 : 150,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+        };
+        button.connect('notify::hover', react);
+        button.connect('notify::pressed', react);
         button.connect('clicked', () => this._launch(app));
+        button.connect('destroy', () => this._tiles.delete(app));
+        this._tiles.set(app, {button, slot: this._slot});
         return button;
     }
 
@@ -410,7 +455,11 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         return grid;
     }
 
-    _render() {
+    _render({animate = false} = {}) {
+        for (const {button} of this._tiles.values()) {
+            button.remove_style_class_name('first-hit');
+            button.get_parent()?.remove_child(button);
+        }
         this._body.destroy_all_children();
         const query = this._entry.get_text().trim();
         const all = this._allApps();
@@ -430,11 +479,12 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             if (hits.length) {
                 add('', hits);
                 // Enter launches this one.
-                this._body.get_first_child().get_first_child().get_first_child().add_style_class_name('first-hit');
-            }
-            else
+                this._tile(hits[0]).add_style_class_name('first-hit');
+            } else if (!this._launcher()) {
                 this._body.add_child(new St.Label({text: `No apps match "${query}"`, style_class: 'drawer-empty',
                     x_align: Clutter.ActorAlign.CENTER}));
+            }
+            this._addEverywhere(query, !hits.length);
         } else if (this._section === 'All') {
             if (this.settings.get_boolean('app-drawer-suggestions')) {
                 const used = Shell.AppUsage.get_default().get_most_used()
@@ -450,5 +500,44 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             add(this._section, all.filter(app => sectionOf(app) === this._section));
         }
         this._scroll.vadjustment.value = 0;
+        if (animate) {
+            this._body.remove_all_transitions();
+            this._body.set({opacity: 0, translation_y: 8});
+            this._body.ease({opacity: 255, translation_y: 0, duration: 180,
+                mode: Clutter.AnimationMode.EASE_OUT_CUBIC});
+        }
+    }
+
+    /* ------------------------------------------------------ Superbar -- */
+
+    // The launcher engine searches what the drawer doesn't: files, windows,
+    // calculations, the web, system actions.
+    _launcher() {
+        const instance = this.ext._active?.get('launcher')?.instance;
+        return instance?._openSearch ? instance : null;
+    }
+
+    _addEverywhere(query, primary) {
+        if (!this._launcher())
+            return;
+        const row = new St.Button({style_class: `drawer-everywhere${primary ? ' first-hit' : ''}`, can_focus: true, x_expand: true});
+        const box = new St.BoxLayout({style: 'spacing: 10px;', x_expand: true, x_align: Clutter.ActorAlign.FILL});
+        box.add_child(new St.Icon({icon_name: 'system-search-symbolic', icon_size: 16, y_align: Clutter.ActorAlign.CENTER}));
+        box.add_child(new St.Label({text: `Search everything for \u201c${query}\u201d`, y_align: Clutter.ActorAlign.CENTER, x_expand: true}));
+        box.add_child(new St.Label({text: 'Tab', style_class: 'drawer-key', y_align: Clutter.ActorAlign.CENTER}));
+        row.set_child(box);
+        row.connect('clicked', () => this._searchEverywhere());
+        this._body.add_child(row);
+    }
+
+    _searchEverywhere() {
+        const launcher = this._launcher();
+        if (!launcher)
+            return;
+        const query = this._entry.get_text();
+        this.close(true);
+        launcher._openSearch();
+        launcher._entry.set_text(query);
+        launcher._entry.clutter_text.set_cursor_position(-1);
     }
 }
