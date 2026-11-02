@@ -48,6 +48,9 @@ export function configureDock(module) {
         setIf(dtd, 'dash-max-icon-size', 54);
     });
 
+    // The engine's own dots draw over the icon's art; the plain one sits below.
+    onceOnly('dock-dot-below', () => setIf(dtd, 'running-indicator-style', 'DEFAULT'));
+
     const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
     const tokens = JSON.parse(Files.readText(`${module.ext.path}/tokens.json`));
     const sheet = new LiveStylesheet('dock');
@@ -186,6 +189,7 @@ ${D}.left .dash-item-container > StButton, ${D}.left .show-apps { padding: 3px 9
 ${D}.right .dash-item-container > StButton, ${D}.right .show-apps { padding: 3px 11px 3px 9px; }
 ${D} .dash-item-container { margin: 0; padding: 0; }
 ${D} .overview-icon { padding: 0; }
+${D} .kiwi-downloads-item { margin: 0; padding: 9px 3px 11px 3px; }
 ${D} .dash-item-container > StButton:hover, ${D} .dash-item-container > StButton:focus,
 ${D} .dash-item-container > StButton:active, ${D} .dash-item-container > StButton:checked,
 ${D} .overview-tile:hover .overview-icon, ${D} .overview-tile:focus .overview-icon,

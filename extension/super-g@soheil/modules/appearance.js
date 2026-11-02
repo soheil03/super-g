@@ -110,11 +110,15 @@ export default class AppearanceModule extends Module {
             body: `${apps.map(a => a.get_name()).join(', ')} will show them after a restart.`});
         notification.addAction('Restart them', () => {
             for (const app of this._gtk4Apps()) {
+                const pids = [...new Set(app.get_windows().map(w => w.get_pid()))];
                 const id = app.connect('notify::state', () => {
-                    if (app.state === Shell.AppState.STOPPED) {
-                        app.disconnect(id);
-                        app.activate();
-                    }
+                    if (app.state !== Shell.AppState.STOPPED)
+                        return;
+                    app.disconnect(id);
+                    // Apps like Files live on as a service with no windows left,
+                    // and a new window would come from the same old process.
+                    pids.forEach(pid => GLib.spawn_command_line_async(`kill ${pid}`));
+                    this.later(`restart-${app.get_id()}`, 400, () => app.activate());
                 });
                 app.request_quit();
             }

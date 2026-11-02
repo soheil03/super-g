@@ -102,7 +102,7 @@ export default class SuperG extends Extension {
                 this._sync();
         });
         this._sessionId = Main.sessionMode.connect('updated', () => this._sync());
-        this._conflictsId = Main.extensionManager.connect('extension-state-changed', () => this._checkConflicts());
+        this._conflictsId = global.settings.connect('changed::enabled-extensions', () => this._checkConflicts());
         this._sync();
         this._checkConflicts();
     }
@@ -110,11 +110,11 @@ export default class SuperG extends Extension {
     /* ----------------------------------------------------- conflicts -- */
 
     _conflicting() {
-        const manager = Main.extensionManager;
+        const enabled = global.settings.get_strv('enabled-extensions');
         return Object.entries(CONFLICTS).filter(([uuid, module]) => {
             if (module && !this._settings.get_boolean(`module-${module}`))
                 return false;
-            return manager.getUuids().includes(uuid) && manager.lookup(uuid)?.enabled;
+            return enabled.includes(uuid);
         }).map(([uuid]) => uuid);
     }
 
@@ -122,7 +122,7 @@ export default class SuperG extends Extension {
         const uuids = this._conflicting();
         if (!uuids.length || this._checking)
             return;
-        // Disabling one below reports its state change right back here.
+        // Switching one off below changes the list we're watching.
         this._checking = true;
         const names = uuids.map(uuid => Main.extensionManager.lookup(uuid)?.metadata?.name ?? uuid);
         if (this._settings.get_boolean('conflicts-auto-off')) {
@@ -155,7 +155,7 @@ export default class SuperG extends Extension {
     disable() {
         this._settings.disconnect(this._settingsId);
         Main.sessionMode.disconnect(this._sessionId);
-        Main.extensionManager.disconnect(this._conflictsId);
+        global.settings.disconnect(this._conflictsId);
         for (const name of [...this._active.keys()].reverse())
             this._stop(name);
         this._active = null;
