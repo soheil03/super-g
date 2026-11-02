@@ -137,10 +137,22 @@ export default class SuperGPrefs extends ExtensionPreferences {
             windowButtons: s.get_string('window-buttons'), windowRadius: s.get_int('window-radius'),
             sidebarStyle: s.get_string('sidebar-style'), titleWeight: s.get_int('title-weight'),
         }));
+        // A provider of our own doesn't follow the session's light or dark on
+        // its own, unlike the user's gtk.css.
+        const style = Adw.StyleManager.get_default();
+        const scheme = () => {
+            if ('prefers_color_scheme' in provider) {
+                provider.prefers_color_scheme = style.dark
+                    ? Gtk.InterfaceColorScheme.DARK : Gtk.InterfaceColorScheme.LIGHT;
+            }
+        };
+        const styleId = style.connect('notify::dark', scheme);
+        scheme();
         const id = s.connect('changed', apply);
         apply();
         window.connect('close-request', () => {
             s.disconnect(id);
+            style.disconnect(styleId);
             Gtk.StyleContext.remove_provider_for_display(display, provider);
             return false;
         });
