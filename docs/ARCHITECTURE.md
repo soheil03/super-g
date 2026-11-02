@@ -4,9 +4,9 @@
 
 ```
 tokens/palette.json ──► lib/themeGen.js ──► GTK4 CSS (inline block in ~/.config/gtk-4.0/gtk.css)
-                                        ├─► GTK3 themes ~/.local/share/themes/Ubuntu-Plus[-dark] (@import adw-gtk3 + overrides)
+                                        ├─► GTK3 themes ~/.local/share/themes/GNOME-Plus[-dark] (@import adw-gtk3 + overrides)
                                         └─► shell CSS (LiveStylesheet, scoped under #uiGroup)
-extension.js ── MODULES (in order) ──► Module (ours)   appearance, panel
+extension.js ── MODULES (in order) ──► Module (ours)   appearance, panel, glass, drawer
                                    └─► Engine (vendor) corners, dock, dockmotion, blur, windows, hotcorners, gestures, launcher
 ```
 
@@ -16,15 +16,17 @@ A module is a class with `enable()` (may be async) and `disable()`, built on
 `lib/module.js`. `extension.js` starts and stops modules one after another in
 `MODULES` order. A module is wanted when `module-<name>` is on, it isn't in
 `broken-modules`, and, while the screen is locked, its upstream declares
-`unlock-dialog`. Errors in `enable()` or in guarded callbacks go to
-`reportError`: the module stops, is added to `broken-modules`, and the user
-gets one notification.
+`unlock-dialog` (modules with `needsDock` stop on lock too, and restart after
+the dock). Errors in `enable()` or in guarded callbacks go to `reportError`:
+the module stops, is added to `broken-modules` for this session (the list
+resets at login), keeps its original switched off, and the user gets one
+notification.
 
 ## Engines (vendored upstream extensions)
 
 `lib/engine.js`:
 1. **Handover:** switches off the original extension if it's active and records
-   that in `~/.local/state/ubuntu-plus/handover.json`. On disable, only originals
+   that in `~/.local/state/gnome-plus/handover.json`. On disable, only originals
    that we switched off are switched back on.
 2. **Migration (first run):** `dconf dump <old path>` → `dconf load <new path>`
    if ours is empty. The paths come from `vendor/<name>/UPSTREAM`.
@@ -50,11 +52,11 @@ CLONE=1 tools/shell-test.sh /tmp/up light   # then look at the shots
 
 ## Settings
 
-- Ours: `org.gnome.shell.extensions.ubuntu-plus` (appearance, panel, motion, modules).
-- Engines: `org.gnome.shell.extensions.ubuntu-plus.<name>[.<child>]`. Modules
+- Ours: `org.gnome.shell.extensions.gnome-plus` (appearance, panel, motion, modules).
+- Engines: `org.gnome.shell.extensions.gnome-plus.<name>[.<child>]`. Modules
   can reach them through `engineSettings()` / `engineChildSettings()` (e.g. the
   panel module sets the blur engine's panel blur and turns off Kiwi's panel styling).
-- Values Ubuntu Plus overwrites in system settings are saved first and restored
+- Values GNOME Plus overwrites in system settings are saved first and restored
   on disable: `original-settings.json` (appearance), `panel-original.json` (panel).
 
 ## Theme details

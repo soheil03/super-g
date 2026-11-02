@@ -1,4 +1,4 @@
-# Installing Ubuntu Plus
+# Installing GNOME Plus
 
 ## Requirements
 
@@ -12,13 +12,13 @@
 ## Install
 
 ```bash
-git clone https://github.com/<you>/ubuntu-plus.git
-cd ubuntu-plus
+git clone https://github.com/<you>/gnome-plus.git
+cd gnome-plus
 tools/install.sh
 ```
 
 `tools/install.sh` copies the extension to
-`~/.local/share/gnome-shell/extensions/ubuntu-plus@soheil` and compiles its settings.
+`~/.local/share/gnome-shell/extensions/gnome-plus@soheil` and compiles its settings.
 
 ### If you already use any of the replaced extensions
 
@@ -31,9 +31,9 @@ tools/takeover.sh --dry-run   # shows what would happen
 tools/takeover.sh
 ```
 
-It copies each extension's settings into Ubuntu Plus, switches the originals
-off and enables Ubuntu Plus. Run it **before** logging out, so the originals
-don't load again. If you skip it, Ubuntu Plus does the same at the next login,
+It copies each extension's settings into GNOME Plus, switches the originals
+off and enables GNOME Plus. Run it **before** logging out, so the originals
+don't load again. If you skip it, GNOME Plus does the same at the next login,
 but then needs one more logout to finish.
 
 ### Finish
@@ -43,26 +43,26 @@ Log out and back in. On Wayland, GNOME only loads new extensions at login.
 ## Update
 
 ```bash
-cd ubuntu-plus && git pull && tools/install.sh
+cd gnome-plus && git pull && tools/install.sh
 ```
 
 Then log out and back in.
 
 ## Turn off or uninstall
 
-- **Turn off one module:** Ubuntu Plus settings → Modules. Any original
+- **Turn off one module:** GNOME Plus settings → Modules. Any original
   extension that module replaced is switched back on.
-- **Turn off everything:** switch Ubuntu Plus off in the Extensions app. Your
+- **Turn off everything:** switch GNOME Plus off in the Extensions app. Your
   previous GTK theme, accent, fonts and clock settings are restored, and the
   originals are switched back on.
 - **Uninstall:** turn it off first, then
-  `rm -rf ~/.local/share/gnome-shell/extensions/ubuntu-plus@soheil ~/.local/share/themes/Ubuntu-Plus*`.
+  `rm -rf ~/.local/share/gnome-shell/extensions/gnome-plus@soheil ~/.local/share/themes/GNOME-Plus*`.
 
 ## Troubleshooting
 
 | Symptom | What to do |
 |---|---|
-| A notification says a module was switched off | Check `journalctl --user -b \| grep ubuntu-plus` for the error, then turn the module back on in Settings → Modules |
+| A notification says a module was switched off | Check `journalctl --user -b \| grep gnome-plus` for the error, then turn the module back on in Settings → Modules |
 | "Log out and back in once to finish switching" | Log out once. An original extension was still loaded in this session. |
 | GTK apps didn't change | Restart the app. GTK4 apps read the theme at start-up. |
-| Theme reverted after using Ubuntu's Appearance panel | Ubuntu Plus switches it back within a second. Choose colours in Ubuntu Plus settings instead. |
+| Theme reverted after using Ubuntu's Appearance panel | GNOME Plus switches it back within a second. Choose colours in GNOME Plus settings instead. |

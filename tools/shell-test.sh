@@ -3,7 +3,7 @@
 # Nothing touches the real session: settings, data and config live in the sandbox.
 #
 #   tools/shell-test.sh <sandbox> [light|dark] [key=value ...]
-#     key=value pairs set Ubuntu Plus settings, e.g. palette=stone window-buttons=mini-dots;
+#     key=value pairs set GNOME Plus settings, e.g. palette=stone window-buttons=mini-dots;
 #     engine settings take a prefix: dockmotion:custom-hover-enabled=true
 #   CLONE=1 tools/shell-test.sh ...
 #     start from a copy of the real settings and extensions (minus GSConnect),
@@ -26,15 +26,15 @@ unset WAYLAND_DISPLAY DISPLAY
 
 real="$HOME/.local/share"
 "$root/tools/install.sh" "$sb/data" >/dev/null
-cp -r "$root/tests/shot@ubuntu-plus-test" "$sb/data/gnome-shell/extensions/"
+cp -r "$root/tests/shot@gnome-plus-test" "$sb/data/gnome-shell/extensions/"
 for t in "$real"/themes/*; do
-    case $(basename "$t") in Unified*|Ubuntu-Plus*) continue ;; esac
+    case $(basename "$t") in Unified*|Ubuntu-Plus*|GNOME-Plus*) continue ;; esac
     ln -s "$t" "$sb/data/themes/"
 done
 if [ "$CLONE" = 1 ]; then
     XDG_CONFIG_HOME="$HOME/.config" dconf dump / > "$sb/user.ini"
     for d in "$real"/gnome-shell/extensions/*; do
-        case $(basename "$d") in ubuntu-plus@*|unified-shell@*|gsconnect@*) continue ;; esac
+        case $(basename "$d") in gnome-plus@*|ubuntu-plus@*|unified-shell@*|gsconnect@*) continue ;; esac
         ln -s "$d" "$sb/data/gnome-shell/extensions/"
     done
     for x in icons fonts backgrounds applications; do
@@ -44,24 +44,24 @@ fi
 
 dbus-run-session -- bash -c '
   set -e
-  schemadir="$XDG_DATA_HOME/gnome-shell/extensions/ubuntu-plus@soheil/schemas"
+  schemadir="$XDG_DATA_HOME/gnome-shell/extensions/gnome-plus@soheil/schemas"
   if [ "$CLONE" = 1 ]; then
     dconf load / < "$SANDBOX/user.ini"
     enabled=$(gsettings get org.gnome.shell enabled-extensions | python3 -I -c "
 import ast, sys
 import os
-drop = (\"unified-shell@\", \"gsconnect@\", *os.environ[\"EXCLUDE\"].split())
+drop = (\"unified-shell@\", \"ubuntu-plus@\", \"gsconnect@\", *os.environ[\"EXCLUDE\"].split())
 l = [e for e in ast.literal_eval(sys.stdin.read()) if not e.startswith(drop)]
-print(str(l + [\"ubuntu-plus@soheil\", \"shot@ubuntu-plus-test\"]))")
+print(str(l + [\"gnome-plus@soheil\", \"shot@gnome-plus-test\"]))")
   else
-    enabled="[\"ubuntu-plus@soheil\", \"shot@ubuntu-plus-test\"]"
+    enabled="[\"gnome-plus@soheil\", \"shot@gnome-plus-test\"]"
   fi
   gsettings set org.gnome.shell enabled-extensions "$enabled"
   if [ "$TAKEOVER" = 1 ]; then "$ROOT/tools/takeover.sh" >/dev/null; fi
   gsettings set org.gnome.shell disable-user-extensions false
   gsettings set org.gnome.desktop.interface color-scheme "$([ "$0" = dark ] && echo prefer-dark || echo default)"
   for kv in "$@"; do
-    key=${kv%%=*}; schema=org.gnome.shell.extensions.ubuntu-plus
+    key=${kv%%=*}; schema=org.gnome.shell.extensions.gnome-plus
     case $key in *:*) schema="$schema.${key%%:*}"; key=${key#*:} ;; esac
     gsettings --schemadir "$schemadir" set "$schema" "$key" "${kv#*=}"
   done
@@ -72,4 +72,4 @@ print(str(l + [\"ubuntu-plus@soheil\", \"shot@ubuntu-plus-test\"]))")
 ' "$scheme" "$@" >/dev/null 2>&1
 
 ls "$sb/shots"
-grep -iE "ubuntu-plus|JS ERROR|camera" "$sb/shell.log" | head -30 || true
+grep -iE "gnome-plus|JS ERROR|camera" "$sb/shell.log" | head -30 || true

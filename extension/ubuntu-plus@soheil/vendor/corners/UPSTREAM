@@ -1,4 +1,0 @@
-upstream: rounded-window-corners@fxgn
-version/url: 25 https://github.com/flexagoon/rounded-window-corners
-schema: org.gnome.shell.extensions.rounded-window-corners-reborn -> org.gnome.shell.extensions.ubuntu-plus.corners
-dconf: /org/gnome/shell/extensions/rounded-window-corners-reborn/ -> /org/gnome/shell/extensions/ubuntu-plus/corners/

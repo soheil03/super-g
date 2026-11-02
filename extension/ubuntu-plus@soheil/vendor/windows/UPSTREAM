@@ -1,4 +1,0 @@
-upstream: kiwi@kemma
-version/url: 2.3.1 https://github.com/kem-a/kiwi-kemma
-schema: org.gnome.shell.extensions.kiwi -> org.gnome.shell.extensions.ubuntu-plus.windows
-dconf: /org/gnome/shell/extensions/kiwi/ -> /org/gnome/shell/extensions/ubuntu-plus/windows/

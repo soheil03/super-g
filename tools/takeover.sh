@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Hand the replaced extensions over to Ubuntu Plus before the next login:
-# copy each one's settings into Ubuntu Plus (if not done yet), take it out of
-# the enabled list and record it so Ubuntu Plus can switch it back on if the
+# Hand the replaced extensions over to GNOME Plus before the next login:
+# copy each one's settings into GNOME Plus (if not done yet), take it out of
+# the enabled list and record it so GNOME Plus can switch it back on if the
 # matching module is ever turned off. Then a single logout finishes the switch.
 #   tools/takeover.sh            run it
 #   tools/takeover.sh --dry-run  only show what would happen
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 dry=${1:-}
-vendor="$root/extension/ubuntu-plus@soheil/vendor"
-state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/ubuntu-plus"
+vendor="$root/extension/gnome-plus@soheil/vendor"
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/gnome-plus"
 
 # module  upstream-uuids...
 map=(
@@ -54,8 +54,8 @@ for row in rows:
             enabled.remove(uuid)
             state[uuid] = module
 
-if 'ubuntu-plus@soheil' not in enabled:
-    enabled.append('ubuntu-plus@soheil')
+if 'gnome-plus@soheil' not in enabled:
+    enabled.append('gnome-plus@soheil')
 if not dry:
     subprocess.check_call(['gsettings', 'set', 'org.gnome.shell', 'enabled-extensions', str(enabled)])
     json.dump(state, open(state_path, 'w'), indent=2)

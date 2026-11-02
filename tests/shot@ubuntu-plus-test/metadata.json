@@ -1,6 +1,0 @@
-{
-  "uuid": "shot@ubuntu-plus-test",
-  "name": "Ubuntu Plus test camera",
-  "description": "Test-only: screenshots the headless shell, then signals done.",
-  "shell-version": ["50", "51"]
-}
