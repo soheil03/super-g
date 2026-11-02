@@ -1,4 +1,4 @@
-# Installing GNOME Plus
+# Installing Super G
 
 ## Requirements
 
@@ -12,13 +12,13 @@
 ## Install
 
 ```bash
-git clone https://github.com/<you>/gnome-plus.git
-cd gnome-plus
+git clone https://github.com/<you>/super-g.git
+cd super-g
 tools/install.sh
 ```
 
 `tools/install.sh` copies the extension to
-`~/.local/share/gnome-shell/extensions/gnome-plus@soheil` and compiles its settings.
+`~/.local/share/gnome-shell/extensions/super-g@soheil` and compiles its settings.
 
 ### If you already use any of the replaced extensions
 
@@ -31,9 +31,9 @@ tools/takeover.sh --dry-run   # shows what would happen
 tools/takeover.sh
 ```
 
-It copies each extension's settings into GNOME Plus, switches the originals
-off and enables GNOME Plus. Run it **before** logging out, so the originals
-don't load again. If you skip it, GNOME Plus does the same at the next login,
+It copies each extension's settings into Super G, switches the originals
+off and enables Super G. Run it **before** logging out, so the originals
+don't load again. If you skip it, Super G does the same at the next login,
 but then needs one more logout to finish.
 
 ### Finish
@@ -43,26 +43,26 @@ Log out and back in. On Wayland, GNOME only loads new extensions at login.
 ## Update
 
 ```bash
-cd gnome-plus && git pull && tools/install.sh
+cd super-g && git pull && tools/install.sh
 ```
 
 Then log out and back in.
 
 ## Turn off or uninstall
 
-- **Turn off one module:** GNOME Plus settings → Modules. Any original
+- **Turn off one module:** Super G settings → Modules. Any original
   extension that module replaced is switched back on.
-- **Turn off everything:** switch GNOME Plus off in the Extensions app. Your
+- **Turn off everything:** switch Super G off in the Extensions app. Your
   previous GTK theme, accent, fonts and clock settings are restored, and the
   originals are switched back on.
 - **Uninstall:** turn it off first, then
-  `rm -rf ~/.local/share/gnome-shell/extensions/gnome-plus@soheil ~/.local/share/themes/GNOME-Plus*`.
+  `rm -rf ~/.local/share/gnome-shell/extensions/super-g@soheil ~/.local/share/themes/Super-G*`.
 
 ## Troubleshooting
 
 | Symptom | What to do |
 |---|---|
-| A notification says a module was switched off | Check `journalctl --user -b \| grep gnome-plus` for the error, then turn the module back on in Settings → Modules |
+| A notification says a module was switched off | Check `journalctl --user -b \| grep super-g` for the error, then turn the module back on in Settings → Modules |
 | "Log out and back in once to finish switching" | Log out once. An original extension was still loaded in this session. |
 | GTK apps didn't change | Restart the app. GTK4 apps read the theme at start-up. |
-| Theme reverted after using Ubuntu's Appearance panel | GNOME Plus switches it back within a second. Choose colours in GNOME Plus settings instead. |
+| Theme reverted after using Ubuntu's Appearance panel | Super G switches it back within a second. Choose colours in Super G settings instead. |

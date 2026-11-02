@@ -1,0 +1,10 @@
+{
+  "uuid": "super-g@soheil",
+  "name": "Super G",
+  "description": "One extension for the whole desktop: palette, GTK and shell theming, live glass, top bar, dock with magnification, app drawer, window corners, gestures, hot corners and launcher.",
+  "version": 1,
+  "shell-version": ["50", "51"],
+  "session-modes": ["user", "unlock-dialog"],
+  "settings-schema": "org.gnome.shell.extensions.super-g",
+  "url": ""
+}

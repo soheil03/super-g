@@ -1,0 +1,4 @@
+upstream: dash-to-dock@micxgx.gmail.com
+version/url: 110 https://micheleg.github.io/dash-to-dock/
+schema: org.gnome.shell.extensions.dash-to-dock -> org.gnome.shell.extensions.super-g.dock
+dconf: /org/gnome/shell/extensions/dash-to-dock/ -> /org/gnome/shell/extensions/super-g/dock/

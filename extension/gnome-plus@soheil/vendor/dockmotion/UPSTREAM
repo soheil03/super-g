@@ -1,4 +1,0 @@
-upstream: flourish@orsso.github.io
-version/url: 1.2.1 https://github.com/Orsso/flourish
-schema: org.gnome.shell.extensions.flourish -> org.gnome.shell.extensions.gnome-plus.dockmotion
-dconf: /org/gnome/shell/extensions/flourish/ -> /org/gnome/shell/extensions/gnome-plus/dockmotion/

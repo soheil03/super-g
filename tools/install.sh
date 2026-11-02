@@ -4,7 +4,7 @@
 #   tools/install.sh <datadir>  → <datadir>/gnome-shell/extensions (for tests)
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
-uuid=gnome-plus@soheil
+uuid=super-g@soheil
 data=${1:-${XDG_DATA_HOME:-$HOME/.local/share}}
 dest="$data/gnome-shell/extensions/$uuid"
 

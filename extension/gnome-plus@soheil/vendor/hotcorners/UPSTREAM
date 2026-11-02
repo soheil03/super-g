@@ -1,4 +1,0 @@
-upstream: custom-hot-corners-extended@G-dH.github.com
-version/url: 50.0 https://github.com/G-dH/custom-hot-corners
-schema: org.gnome.shell.extensions.custom-hot-corners-extended -> org.gnome.shell.extensions.gnome-plus.hotcorners
-dconf: /org/gnome/shell/extensions/custom-hot-corners-extended/ -> /org/gnome/shell/extensions/gnome-plus/hotcorners/

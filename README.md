@@ -1,21 +1,21 @@
-# GNOME Plus
+# Super G
 
 One GNOME Shell extension and one theme for a clean, consistent Ubuntu desktop.
 Instead of nine separate extensions that each patch the shell their own way,
-GNOME Plus runs everything as modules of a single extension, driven by a
+Super G runs everything as modules of a single extension, driven by a
 single colour and shape palette, with one settings window.
 
-Built for **Ubuntu 26.04 LTS / GNOME 50** (GNOME 51 declared). An independent project, not affiliated with GNOME or Canonical.
+Built for **Ubuntu 26.04 LTS / GNOME 50** (GNOME 51 declared). An independent project, not affiliated with GNOME or Canonical. Dock magnification follows [Dhruva](https://github.com/narkagni/dhruva) by NarkAgni (GPL-3.0).
 
 ## What it does
 
 | Module | What you get | Built on |
 |---|---|---|
-| Appearance | Palette-driven theme for GTK4/libadwaita, GTK3 and Flatpak apps, plus shell menus, quick settings, calendar, dialogs and switchers. Window button styles, floating sidebar card, corner radius, fonts, animation speed. | GNOME Plus |
-| Top bar | Floating, islands or adaptive bar, height, glass, clock format, grouped status pill, hidden accessibility icon, start on the desktop | GNOME Plus |
+| Appearance | Palette-driven theme for GTK4/libadwaita, GTK3 and Flatpak apps, plus shell menus, quick settings, calendar, dialogs and switchers. Window button styles, floating sidebar card, corner radius, fonts, animation speed. | Super G |
+| Top bar | Floating, islands or adaptive bar, height, glass, clock format, grouped status pill, hidden accessibility icon, start on the desktop | Super G |
 | Corners | Rounded window corners with smoothing, borders and shadows | [Rounded Window Corners Reborn](https://github.com/flexagoon/rounded-window-corners) |
-| Glass | Live blur of what is really behind menus, dock, top bar and app drawer, with vibrancy, rim, shadow | GNOME Plus |
-| App drawer | Popup from the dock, fullscreen or GNOME's overview; search, category pills, most used | GNOME Plus |
+| Glass | Live blur of what is really behind menus, dock, top bar and app drawer, in five thicknesses or custom | Super G |
+| App drawer | Popup from the dock, fullscreen or GNOME's overview; search, category pills, most used | Super G |
 | Dock | Dock with autohide, intellihide, previews, trash and mounts | [Dash to Dock](https://micheleg.github.io/dash-to-dock/) |
 | Dock motion | Hover, press, launch and attention motion for dock icons | [Flourish](https://github.com/Orsso/flourish) |
 | Windows | App title in the top bar, minimize to dock, keyboard indicator, calendar layout and more | [Kiwi](https://github.com/kem-a/kiwi-kemma) |
@@ -32,10 +32,10 @@ Four palettes (Graphite, Catppuccin, Warm stone, Cool slate) and seven accents
   changes something it relies on, only that module switches off and you get a
   notification. Everything else keeps working. Turn it back on from Settings → Modules.
 - **Upstream code, kept up to date.** Modules marked *Built on* run the original
-  project's code, with its settings moved under GNOME Plus. When an upstream
+  project's code, with its settings moved under Super G. When an upstream
   project ships a fix for a new GNOME release, `tools/vendor.sh` pulls it in.
 - **Takes over cleanly.** If you already use any of those extensions,
-  GNOME Plus copies their settings and switches them off. Turning a module
+  Super G copies their settings and switches them off. Turning a module
   off switches the original back on.
 - **Theme, not a re-skin.** Colours, radii and fonts are applied on top of
   GNOME's own styles (libadwaita, adw-gtk3, the shell theme). Nothing is
@@ -46,7 +46,7 @@ Four palettes (Graphite, Catppuccin, Warm stone, Cool slate) and seven accents
 See [INSTALL.md](INSTALL.md). Short version:
 
 ```bash
-git clone https://github.com/<you>/gnome-plus.git && cd gnome-plus
+git clone https://github.com/<you>/super-g.git && cd super-g
 tools/install.sh && tools/takeover.sh
 ```
 
@@ -54,7 +54,7 @@ Then log out and back in.
 
 ## Settings
 
-Open **Extensions → GNOME Plus → Settings**. Pages: Appearance, Fonts, Motion,
+Open **Extensions → Super G → Settings**. Pages: Appearance, Fonts, Motion,
 Modules. Each module's full upstream settings are kept too.
 
 ## Limitations
@@ -66,8 +66,8 @@ Modules. Each module's full upstream settings are kept too.
 
 ## Credits and license
 
-GNOME Plus is licensed under **GPL-3.0-or-later** (see [LICENSE](LICENSE)).
+Super G is licensed under **GPL-3.0-or-later** (see [LICENSE](LICENSE)).
 It includes code from the projects listed above, all GPL licensed, and each
-keeps its original license file and copyright in `extension/gnome-plus@soheil/vendor/<module>/`.
-Thanks to their authors. GNOME Plus only adds the glue, the theme and the
+keeps its original license file and copyright in `extension/super-g@soheil/vendor/<module>/`.
+Thanks to their authors. Super G only adds the glue, the theme and the
 settings around their work.

@@ -1,0 +1,6 @@
+{
+  "uuid": "shot@super-g-test",
+  "name": "Super G test camera",
+  "description": "Test-only: screenshots the headless shell, then signals done.",
+  "shell-version": ["50", "51"]
+}

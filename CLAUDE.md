@@ -1,29 +1,30 @@
-# GNOME Plus (formerly Ubuntu Plus) — working notes for edits
+# Super G (formerly Ubuntu Plus, GNOME Plus) — working notes for edits
 
 Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITECTURE.md.
 
 ## Layout
 - `tokens/palette.json` — single source of colours, radii, motion, fonts, panel/drawer choices. Copied to the extension as `tokens.json` at install.
-- `extension/gnome-plus@soheil/`
+- `extension/super-g@soheil/`
   - `extension.js` — module registry (`MODULES`, start order matters: dock before dockmotion/windows/blur), sequential async start/stop, kill switch (`reportError` → `broken-modules`), lock-screen rule, `notePendingLogout`.
   - `lib/module.js` (base: tracked signals, `later()` debounce, `guard()`), `lib/engine.js` (runs vendored upstream extensions, lookup stand-ins, handover, first-run dconf migration), `lib/themeGen.js` (pure CSS generators, also used by tools), `lib/color.js`, `lib/files.js` (managed blocks), `lib/stylesheet.js` (`LiveStylesheet`, `engineSettings`).
-  - `lib/glass.js` + `modules/glass.js` — GNOME Plus glass, truly live: each frame copy the pixels behind from the stage view, Clutter.BlurNode them, one GLSL pass (squircle AA outline, vibrancy, palette tint, rim, fine dark outline, grain) plus a hollow analytic drop shadow. On the top bar (tracked layer under panelBox), dock (child of dash._background), every PopupMenu (bin wrapped on first open) and the drawer. Overview backdrop uses the older static wallpaper blur (`live: false`).
+  - `lib/glass.js` + `modules/glass.js` — Super G glass, truly live: each frame copy the pixels behind from the stage view, Clutter.BlurNode them, one GLSL pass (squircle AA outline, vibrancy, palette tint, rim, fine dark outline, grain) plus a hollow analytic drop shadow. On the top bar (tracked layer under panelBox), dock (child of dash._background), every PopupMenu (bin wrapped on first open) and the drawer. Overview backdrop uses the older static wallpaper blur (`live: false`).
   - `modules/drawer.js` — app drawer (dock popup / fullscreen / GNOME's overview).
-  - `lib/dockStyle.js` (dock CSS, apps-button icon, one-time engine defaults), `lib/dockMagnify.js` (Apple-style magnification: widens item slots + scales the icon's inner widget), `lib/wallpaper.js` (wallpaper strip luminance → automatic top bar text colour), `lib/blurSetup.js` (legacy blur engine pipelines).
-  - `modules/appearance.js` (GTK4 CSS inline in `~/.config/gtk-4.0/gtk.css`, GTK3 themes `GNOME-Plus[-dark]` over adw-gtk3, shell CSS, fonts, `slow_down_factor`, system accent), `modules/panel.js` (top bar).
+  - `lib/dockStyle.js` (dock CSS, apps-button icon, one-time engine defaults), `lib/dockMagnify.js` (per-frame magnification on transforms only, after Dhruva: cosine bell, items translate, inner widget scales, the glass stretches inside its effect), `lib/wallpaper.js` (wallpaper strip luminance → automatic top bar text colour), `lib/blurSetup.js` (legacy blur engine pipelines).
+  - `modules/appearance.js` (GTK4 CSS inline in `~/.config/gtk-4.0/gtk.css`, GTK3 themes `Super-G[-dark]` over adw-gtk3, shell CSS, fonts, `slow_down_factor`, system accent), `modules/panel.js` (top bar).
   - `vendor/<name>/` — upstream code (blur, corners, dock, dockmotion, windows, hotcorners, gestures, launcher). `UPSTREAM` records version and schema/dconf renames.
-  - `schemas/` — ours + one renamed schema per engine (`org.gnome.shell.extensions.gnome-plus.<name>`, dconf `/org/gnome/shell/extensions/gnome-plus/<name>/`).
+  - `schemas/` — ours + one renamed schema per engine (`org.gnome.shell.extensions.super-g.<name>`, dconf `/org/gnome/shell/extensions/super-g/<name>/`).
   - `prefs.js` — Adw prefs (Appearance, Fonts, Motion, Modules).
 - `tools/` — `install.sh`, `takeover.sh`, `vendor.sh` + `vendor-fixups.sh`, `gen.js`, `render.sh`/`render-gtk.py`, `shell-test.sh`.
-- `tests/shot@gnome-plus-test/` — camera extension used by shell-test.sh.
+- `tests/shot@super-g-test/` — camera extension used by shell-test.sh.
 
 ## Verify every visual change (don't guess)
 - GTK: `gjs -m tools/gen.js <out> '{"palette":"stone"}' && tools/render.sh <out> <png-dir>` (broadway, offscreen).
 - Shell: `tools/shell-test.sh <sandbox> light|dark [key=value | engine:key=value ...]`. Headless gnome-shell, own dconf, screenshots in `<sandbox>/shots`.
   - `CLONE=1` copies the real dconf and extensions (minus GSConnect), `TAKEOVER=1` runs takeover first, `EXCLUDE="uuid-prefix ..."` bisects clashes.
   - `SHOTS="desktop quick-settings calendar overview app-grid apps drawer drawer-search notification menu-over-window lock-cycle files settings text-editor disks-gtk3 dock-hover prefs eval"`.
-  - `EVAL='return …'` with `SHOTS=eval` runs async JS inside the shell, output goes to `shots/eval.txt`. `Main.extensionManager.lookup('gnome-plus@soheil').stateObj._active` holds the modules.
-- Headless limits: virtual pointer motion doesn't reach the stage (feed engines directly); Wayland blocks screenshots of the real session.
+  - `EVAL='return …'` with `SHOTS=eval` runs async JS inside the shell, output goes to `shots/eval.txt`. `Main.extensionManager.lookup('super-g@soheil').stateObj._active` holds the modules.
+- Real input works headless: EVAL scripts get `pointer` (`move`, `glide`, `click`), `shot(name)` and `wait(ms)`. Pointer events reach the stage only on a frame and an idle stage draws none, so `makePointer` keeps frames coming; buttons use Clutter numbering (`BUTTON_PRIMARY`), not evdev. Always test dock and drawer behaviour this way.
+- Wayland blocks screenshots of the real session.
 
 ## Gotchas learned
 - libadwaita: user CSS overrides `:root` vars fine, but never force `gtk-theme-name` in a GTK4 harness (GTK's built-in theme then hides everything).
@@ -37,18 +38,24 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - New or renamed extension → logout required (Wayland). Code changes too: a running extension never reloads.
 - Blur my Shell clears dock backgrounds with `!important`; our dock glass uses `!important` too (lib/dockStyle.js).
 - GNOME BaseIcon keeps `createIcon` bound per instance; the apps-button icon is swapped per instance, not on the prototype.
-- Dock magnification is ours (Flourish's hover doesn't track Dash to Dock 110). Flourish resets the AppIcon's own transforms each frame, so scale the icon's inner widget and widen the DashItemContainer. Test it headless via `magnifier.applyAt()` (shell-test dock-hover).
+- Dock magnification is ours (Flourish's hover doesn't track Dash to Dock 110). Never touch layout per frame: DashItemContainer multiplies its preferred size by its scale, so scale the widget inside the icon (Flourish also resets the AppIcon's own transforms) and translate the container. Items live in several places (apps button, `_box`, Kiwi's strips); `_items` finds them.
+- The dock's glass stretches without layout: `GlassLayer.setRoom` fixes the copy size for a hover, `setStretch` per frame. `set_size` on it would grow its parents (feedback loop).
+- Share compiled shaders: copy `shaderTemplates` pipelines, never add a snippet per surface.
 - Glass layers contain a full-monitor wallpaper copy: they must report preferred size 0 or they blow up their parents.
 - Forking vendored engines is allowed (user's call); every change lives in `tools/vendor-fixups.sh` so it survives `vendor.sh` updates (e.g. the dock clip headroom).
 - Turning an engine off hands its original back unless another module replaced it (`noHandBack`, used by blur).
-- Engine defaults GNOME Plus applies once are tracked in `~/.local/state/gnome-plus/tuned.json` (delete a key to re-apply).
+- Engine defaults Super G applies once are tracked in `~/.local/state/super-g/tuned.json` (delete a key to re-apply).
 
 - Shell.Screenshot repaints the stage into its own framebuffer without before-paint, so live glass falls back to the paint context's framebuffer there. Anything that only works in view paints looks broken in screenshots, and things cached under an offscreen parent look fine while being stale. Test liveness: put a colored actor behind, change it, shoot again.
 - BoxPointer has OffscreenRedirect.ALWAYS, which freezes glass inside menus; GlassLayer lifts ALWAYS on its ancestors to AUTOMATIC (fades still use the buffer).
 - St paints box-shadow under a transparent interior too, and glass would blur that into mud. Glass surfaces have no CSS shadow; the shader draws a hollow one (paint volume grown in vfunc_modify_paint_volume; dock clip has side room in vendor-fixups).
 - paintContext.get_stage_view isn't in GI; the painting view is tracked with stage before-paint/after-paint.
 - Locking stops engines without `unlock-dialog` plus `needsDock` modules (glass, drawer), restarting them in order on unlock. Test locks with Main.screenShield.lock/deactivate (scene `lock-cycle`), never sessionMode.pushMode: that leaves the shell in a broken state. The headless shell re-locks itself a few seconds after unlock, so probe quickly.
-- `broken-modules` resets every login and a crashed module doesn't hand its original back. Before this, one bad lock cycle silently put the user on the original Dash to Dock for good. Check `dconf read .../gnome-plus/broken-modules` and the enabled list first when "nothing changed" on the real desktop.
+- `broken-modules` resets every login and a crashed module doesn't hand its original back. Before this, one bad lock cycle silently put the user on the original Dash to Dock for good. Check `dconf read .../super-g/broken-modules` and the enabled list first when "nothing changed" on the real desktop.
+- GTK4 reads gtk.css once at start-up, so open libadwaita apps can't take a new palette live. Prefs applies it to itself with a CssProvider; appearance offers "Restart them" for apps with libgtk-4 mapped.
+- Islands: each is its own GlassLayer tracking an `Island` (union of buttons). Panel margins are in CSS on all sides, so panelBox (and the struts) reserve the same gap under the bar.
+- Top bar text picks by real contrast through the bar's tint, per box; panel glass has `guard: 0` since its text adapts. Other surfaces have a fixed theme text colour, so their tint thickens when the backdrop fights it.
+- Conflicts: `CONFLICTS` in extension.js; auto off by default (`conflicts-auto-off`), a notification asks otherwise. Extensions a switched-off module handed back don't count.
 - Wallpapers can be timed XML (lib/wallpaper.js `currentImage`) and half light, half dark: each top bar box picks its own text colour.
 - A running session keeps the old code: when the user reports a bug, confirm what's actually running (installed version, journal) before debugging.
 
@@ -62,4 +69,3 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Replace the `<you>` placeholders in README/INSTALL; consider a neutral uuid before publishing.
 - Screenshots in README.
 - Delete `tools/migrate-from-ubuntu-plus.sh` once the author's machine has switched.
-- "GNOME" is a GNOME Foundation trademark: check the name against their trademark guidelines before publishing, and state the project is unaffiliated.
