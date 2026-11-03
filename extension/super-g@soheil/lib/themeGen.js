@@ -170,6 +170,8 @@ ${gtk4Vars(dark)}
 }
 :root { --window-radius: ${r(opts.windowRadius)}; }
 headerbar .title, windowtitle > .title { font-weight: ${opts.titleWeight}; }
+/* Title bars the compositor draws for X11 apps. */
+window:not(.csd) headerbar { padding-left: 8px; padding-right: 8px; }
 ${gtk4Buttons(opts.windowButtons, light)}
 @media (prefers-color-scheme: dark) {
 ${gtk4Buttons(opts.windowButtons, dark)}
@@ -391,7 +393,17 @@ ${rule('.spotlight-entry, .spotlight-entry:focus, .spotlight-entry:hover', `back
 ${rule('.spotlight-entry StLabel.hint-text', `color: ${withAlpha(c.fg, 0.55)};`)}
 ${rule('.window-caption', `background-color: ${withAlpha(c.popover, 0.92)}; color: ${c.fg}; border-radius: 999px; box-shadow: inset 0 0 0 1px ${c.hairline};`)}
 ${rule('.search-entry', `background-color: ${withAlpha(c.window, dark ? 0.55 : 0.6)}; color: ${c.fg}; border-radius: 999px; border: none; box-shadow: inset 0 0 0 1px ${c.hairline};`)}
+${rule('.search-entry:focus, .search-entry:hover', `background-color: ${withAlpha(c.window, dark ? 0.7 : 0.78)}; color: ${c.fg};`)}
 ${rule('.search-entry:focus', `box-shadow: inset 0 0 0 2px ${withAlpha(c.accent, 0.6)};`)}
+${rule('.search-entry StLabel, .search-entry .clutter-text', `color: ${c.fg};`)}
+${rule('.search-section-content', `background-color: ${withAlpha(c.window, dark ? 0.62 : 0.72)}; color: ${c.fg}; border-radius: 22px; border: none; box-shadow: inset 0 0 0 1px ${withAlpha(c.fg, 0.08)};`)}
+${rule('.list-search-result, .list-search-result-content, .list-search-result-title, .search-provider-icon, .list-search-provider-details, .list-search-provider-details StLabel', `color: ${c.fg};`)}
+${rule('.list-search-result-description, .list-search-provider-details .list-search-provider-details-count', `color: ${withAlpha(c.fg, 0.68)};`)}
+${rule('.list-search-result:hover, .search-provider-icon:hover', `background-color: ${withAlpha(c.fg, dark ? 0.1 : 0.07)}; color: ${c.fg};`)}
+${rule('.list-search-result:focus, .list-search-result:selected, .search-provider-icon:focus, .search-provider-icon:selected', `background-color: ${withAlpha(c.accent, 0.22)}; color: ${c.fg};`)}
+${rule('.grid-search-result, .grid-search-result StLabel, .grid-search-result:focus StLabel, .grid-search-result:selected StLabel', `color: ${c.fg};`)}
+${rule('.grid-search-result:hover', `background-color: ${withAlpha(c.fg, dark ? 0.1 : 0.08)};`)}
+${rule('.grid-search-result:focus, .grid-search-result:selected', `background-color: ${withAlpha(c.accent, 0.22)};`)}
 ${rule('.search-entry .search-entry-icon, .search-entry StLabel.hint-text', `color: ${c.fgMuted};`)}
 `;
 }

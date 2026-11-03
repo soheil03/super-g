@@ -9,6 +9,7 @@
 #     start from a copy of the real settings and extensions (minus GSConnect),
 #     to catch clashes with other extensions and see real apps.
 #   EVAL="return ..." with SHOTS="eval" runs JS inside the shell, result in shots/eval.txt.
+#   X11_OFF=" " starts Xwayland too, for apps that run as X11 windows (leave unset for none).
 #   TAKEOVER=1 runs tools/takeover.sh first, as a real switch-over would.
 #   EXCLUDE="kiwi@ blur-my-shell@" drops extensions from a clone (prefix match).
 #   SHOTS="desktop quick-settings calendar overview app-grid files ..." limits the scenes.
@@ -21,7 +22,7 @@ run=$(mktemp -d "/run/user/$(id -u)/ust-XXXXXX")
 trap 'rm -rf "$run"' EXIT
 export XDG_DATA_HOME="$sb/data" XDG_CONFIG_HOME="$sb/config" XDG_CACHE_HOME="$sb/cache" \
        XDG_STATE_HOME="$sb/state" XDG_RUNTIME_DIR="$run" SANDBOX="$sb" SHOT_DIR="$sb/shots" \
-       CLONE="${CLONE:-0}" SHOTS="${SHOTS:-}" EXCLUDE="${EXCLUDE:-}" TAKEOVER="${TAKEOVER:-0}" ROOT="$root" EVAL="${EVAL:-}"
+       CLONE="${CLONE:-0}" SHOTS="${SHOTS:-}" EXCLUDE="${EXCLUDE:-}" TAKEOVER="${TAKEOVER:-0}" ROOT="$root" EVAL="${EVAL:-}" X11_OFF="${X11_OFF:---no-x11}"
 unset WAYLAND_DISPLAY DISPLAY
 
 real="$HOME/.local/share"
@@ -65,7 +66,7 @@ print(str(l + [\"super-g@soheil\", \"shot@super-g-test\"]))")
     case $key in *:*) schema="$schema.${key%%:*}"; key=${key#*:} ;; esac
     gsettings --schemadir "$schemadir" set "$schema" "$key" "${kv#*=}"
   done
-  gnome-shell --headless --wayland --no-x11 --mode=ubuntu --virtual-monitor 1600x1000 > "$SANDBOX/shell.log" 2>&1 &
+  gnome-shell --headless --wayland ${X11_OFF:---no-x11} --mode=ubuntu --virtual-monitor 1600x1000 > "$SANDBOX/shell.log" 2>&1 &
   pid=$!
   for i in $(seq 1 240); do [ -f "$SHOT_DIR/done" ] && break; sleep 0.5; done
   kill $pid 2>/dev/null || true; wait $pid 2>/dev/null || true

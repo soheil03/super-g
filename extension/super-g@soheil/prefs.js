@@ -318,7 +318,6 @@ export default class SuperGPrefs extends ExtensionPreferences {
         const launcher = engineSettings(this.path, 'launcher');
         window.add(page('Windows', 'preferences-system-windows-symbolic', [
             group('Corners', [
-                switchRow(s, 'corners-skip-chromium', 'Leave Chrome and Electron apps alone', 'They draw their own corners and shadow'),
                 spinRow(corners, 'border-width', 'Border width', {lower: 0, upper: 4, step: 1}),
                 switchRow(corners, 'keep-shadow-for-maximized-fullscreen', 'Shadow when maximized'),
             ]),

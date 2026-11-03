@@ -87,13 +87,9 @@
       <default>''</default>
       <summary>The page settings should open on, once</summary>
     </key>
-    <key name="corners-skip-chromium" type="b">
-      <default>true</default>
-      <summary>Leave Chrome's and Electron apps' own window corners alone</summary>
-    </key>
-    <key name="corners-skipped-apps" type="as">
+    <key name="corners-chromium-apps" type="as">
       <default>[]</default>
-      <summary>Chromium-based apps found so far</summary>
+      <summary>Chromium-based Wayland apps found so far, whose rounded shape hugs their content</summary>
     </key>
     <key name="dock-launch-bounce" type="b">
       <default>true</default>
