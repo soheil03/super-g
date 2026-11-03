@@ -43,7 +43,7 @@
     "rose":     { "light": "#c94a6a", "dark": "#f38ba8" }
   },
   "radii": { "window": 18, "sidebarCard": 12, "row": 10, "pill": 999, "windowSmoothing": 0.6 },
-  "windowButtons": ["capsule", "mini-dots", "close-emphasized"],
+  "windowButtons": ["capsule", "mini-dots", "close-emphasized", "adwaita"],
   "sidebar": ["floating-card"],
   "dock": { "style": "split-pill", "indicator": "dot" },
   "panel": {
@@ -67,7 +67,7 @@
       "soft":   { "damping": 0.86, "response": 0.38 }
     },
     "curve": "snappy",
-    "speed": 1.15,
+    "speed": 0.9,
     "speedRange": [0.5, 2.0],
     "reduceMotion": false
   },

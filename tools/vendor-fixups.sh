@@ -101,3 +101,51 @@ if 'Super G: helper windows' not in s:
     open(p, 'w').write(s)
 print('corners helper windows patched')
 PY
+
+# Corners: window shadows are ours (lib/softShadow.js). Layered, squircle, dithered,
+# drawn on the GPU with no offscreen buffer and nothing to redo on resize or focus.
+python3 -I - "$v/corners" <<'PY'
+import sys
+root = sys.argv[1]
+p = root + '/utils/constants.js'
+s = open(p).read()
+s = s.replace('export const SHADOW_PADDING = 80;', 'export const SHADOW_PADDING = 120;')
+open(p, 'w').write(s)
+
+p = root + '/manager/event_handlers.js'
+s = open(p).read()
+if 'WindowShadow' not in s:
+    a = s.index('    const shadow = new St.Bin({\n        name: \'Shadow Actor\',')
+    b = s.index('    // Draw the shadow actor below the window actor.')
+    s = s[:a] + "    const shadow = new WindowShadow({ name: 'Shadow Actor' });\n    refreshShadow(actor);\n" + s[b:]
+    s = s.replace("import { ClipShadowEffect } from '../effect/clip_shadow_effect.js';\n",
+                  "import { WindowShadow } from '../../../lib/softShadow.js';\n")
+    s = s.replace('import { CLIP_SHADOW_EFFECT, ', 'import { ')
+    open(p, 'w').write(s)
+
+p = root + '/manager/utils.js'
+s = open(p).read()
+if 'actor.setWindow' not in s:
+    a = s.index('export function updateShadowActorStyle(')
+    b = s.index('\n}\n', a) + 3
+    s = s[:a] + """export function updateShadowActorStyle(win, actor, borderRadius, _shadow, padding) {
+    const { left, right, top, bottom } = padding;
+    actor.setWindow({
+        hidden: !getPref('keep-shadow-for-maximized-fullscreen') &&
+            (win.maximizedHorizontally || win.maximizedVertically || win.fullscreen),
+        focused: win.appears_focused,
+        radius: borderRadius,
+        smoothing: getPref('global-rounded-corner-settings')?.smoothing ?? 0,
+        inset: {
+            left: SHADOW_PADDING + left,
+            right: SHADOW_PADDING + right,
+            top: SHADOW_PADDING + top,
+            bottom: SHADOW_PADDING + bottom,
+        },
+    });
+}
+""" + s[b:]
+    s = s.replace("import { boxShadowCss } from '../utils/box_shadow.js';\n", '')
+    open(p, 'w').write(s)
+print('corners shadows patched')
+PY

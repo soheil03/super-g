@@ -8,6 +8,7 @@ Add a row each time, and copy the newest one into the README.
 
 | Super G | Ubuntu | GNOME Shell | Mutter | GTK 4 | libadwaita | Session | How it was tested |
 |---|---|---|---|---|---|---|---|
+| 1.2.0 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell at 100% scale, 60 and 120 Hz, real keyboard and pointer input. Real-desktop check still to do |
 | 1.1.0 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell at 100% scale, real keyboard and pointer input. Real-desktop check still to do |
 
 `shell-version` in `metadata.json` also lists 51. That is a declaration, not a test.
@@ -71,6 +72,8 @@ One false alarm to rule out first: `disable-user-extensions` set to `true` turns
 | `Main.shellDBusService._extensionsService.GetExtensionInfo` | `lib/engine.js` | Extensions window shows the originals as on |
 | GNOME's `overlay-key` handler, found with `GObject.signal_handler_find` | `modules/drawer.js` | Super key setting does nothing |
 | `Clutter.Effect.vfunc_paint_node`, `Cogl.Framebuffer.blit`, stage `before-paint`/`after-paint` | `lib/glass.js` | Glass is blank or frozen: the hardest one |
+| Corners engine's shadow actor: `createShadow`, `updateShadowActorStyle` | `tools/vendor-fixups.sh`, `lib/softShadow.js` | Windows have no shadow |
+| `MonitorWorkspaceSwitcherPopup._list` as children of the popup | `modules/glass.js` | Workspace popup is solid |
 | `OffscreenRedirect.ALWAYS` on BoxPointer | `lib/glass.js` | Menu glass freezes |
 | `window.csd > .titlebar > headerbar` in `mutter-x11-frames` | `lib/themeGen.js` | X11 title bars lose palette and padding |
 | Yaru name check in libadwaita | theme names | Ubuntu's Yaru styles return if a name starts with `Yaru` |
@@ -113,6 +116,8 @@ Rules that cost us time:
 - `frame(name)` in an `EVAL` script shows what the stage really drew. `shot` repaints everything and hides culling and staleness bugs.
 - To test liveness, put a coloured actor behind a surface, change its colour, and capture again.
 - Set `X11_OFF=" "` to test X11 apps. The X11 frame reads gtk.css once at start, before the extension writes it, so seed it with `GTK4_CSS='...'`.
+- To profile: `SHELL_WRAP="perf record -q -e cpu-clock:u -F 800 -o /tmp/p.data -- /lib64/ld-linux-x86-64.so.2"`. The loader line drops gnome-shell's file capability, which otherwise blocks perf. Call graphs (`-g`) don't work under `perf_event_paranoid=2`.
+- `VIRTUAL_MONITOR=1600x1000@120` tests a high refresh rate. CPU numbers come from `/proc/self/stat`; the sandbox can't see GPU load.
 - Never `pkill` by name inside a test. It reaches the real session too, and Mutter does not restart `mutter-x11-frames` after SIGTERM.
 
 ## Real-desktop list

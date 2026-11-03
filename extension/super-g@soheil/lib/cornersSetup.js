@@ -7,6 +7,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 
+import {setWindowShadowStyle} from './softShadow.js';
+
 const KEY = 'global-rounded-corner-settings';
 const CUSTOM_KEY = 'custom-rounded-corner-settings';
 // Left, right, top, bottom, measured against the engine's own bounds.
@@ -21,6 +23,7 @@ export function configureCorners(module) {
     const known = new Set(module.settings.get_strv('corners-chromium-apps'));
     const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
     const apply = () => {
+        setWindowShadowStyle(module.settings.get_string('shadow-style'), iface.get_string('color-scheme') === 'prefer-dark');
         let text = engine.get_value(KEY).print(true);
         // The one ring around a window: GTK's own is off, it stopped at X11 content.
         const hairline = iface.get_string('color-scheme') === 'prefer-dark' ? '1.0, 1.0, 1.0, 0.08' : '0.0, 0.0, 0.0, 0.10';
@@ -49,6 +52,7 @@ export function configureCorners(module) {
         apply();
     };
     module.connect(module.settings, 'changed::window-radius', apply);
+    module.connect(module.settings, 'changed::shadow-style', apply);
     module.connect(iface, 'changed::color-scheme', apply);
     // Its class and process are known only once it has a first frame.
     module.connect(global.display, 'window-created', (_d, win) => {

@@ -425,8 +425,13 @@ export class DockMagnifier {
             y >= by - (side === St.Side.BOTTOM ? rise : EDGE_ZONE) && y <= by + bh + (side === St.Side.TOP ? rise : EDGE_ZONE);
     }
 
+    // Read per frame while hovering, so kept rather than asked of GSettings.
     _scale() {
-        return this._module.settings.get_double('dock-magnify-scale');
+        return (this._zoomScale ??= this._module.settings.get_double('dock-magnify-scale'));
+    }
+
+    _reach() {
+        return (this._zoomReach ??= this._module.settings.get_double('dock-magnify-reach'));
     }
 
     // The dock, plus the gap to the screen's edge: revealing it means pushing
@@ -542,7 +547,7 @@ export class DockMagnifier {
 
         // Targets: the bell around the pointer, fading past the row's ends.
         const zoom = this._scale() - 1;
-        const radius = state.iconSize * this._module.settings.get_double('dock-magnify-reach');
+        const radius = state.iconSize * this._reach();
         const firstCenter = slots[0].center, lastCenter = slots[slots.length - 1].center;
         const past = Math.max(firstCenter - cursor, cursor - lastCenter, 0) / (state.iconSize * END_FADE);
         let target = inside ? Math.max(0, 1 - past) : 0;
@@ -619,6 +624,10 @@ export class DockMagnifier {
         const drop = state.vertical ? 0 : state.dock._position === St.Side.TOP ? -DOT_DROP : DOT_DROP;
         const {actor, visual} = slot;
         const bouncing = visual?._bouncing;
+        // Most of the row sits still under a small movement.
+        if (slot.lastScale === scale && slot.lastShift === shift && !bouncing && !slot.lastBouncing)
+            return;
+        [slot.lastScale, slot.lastShift, slot.lastBouncing] = [scale, shift, bouncing];
         if (visual) {
             visual.scale_x = scale;
             visual.scale_y = scale;

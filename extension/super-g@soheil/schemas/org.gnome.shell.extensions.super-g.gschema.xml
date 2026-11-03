@@ -232,7 +232,7 @@
     </key>
     <key name="window-buttons" type="s">
       <default>'capsule'</default>
-      <summary>Window button style: capsule, mini-dots or close-emphasized</summary>
+      <summary>Window button style: capsule, mini-dots, close-emphasized or adwaita</summary>
     </key>
     <key name="window-radius" type="i">
       <range min="0" max="28"/>
@@ -242,6 +242,10 @@
     <key name="sidebar-style" type="s">
       <default>'floating-card'</default>
       <summary>Sidebar style: floating-card or stock</summary>
+    </key>
+    <key name="shadow-style" type="s">
+      <default>'standard'</default>
+      <summary>Drop shadows on windows and glass: none, subtle, standard or deep</summary>
     </key>
     <key name="sidebar-radius" type="i">
       <range min="6" max="24"/>
@@ -300,7 +304,7 @@
     </key>
     <key name="animation-speed" type="d">
       <range min="0.5" max="2.0"/>
-      <default>1.15</default>
+      <default>0.9</default>
       <summary>Animation duration multiplier; above 1 is slower</summary>
     </key>
     <key name="reduce-motion" type="b">

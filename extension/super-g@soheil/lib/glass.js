@@ -13,6 +13,7 @@ import Meta from 'gi://Meta';
 import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
+import {ShadowPainter, shadowTemplate, surfaceShadow, uniformLocation} from './softShadow.js';
 import * as Background from 'resource:///org/gnome/shell/ui/background.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
@@ -105,40 +106,7 @@ cogl_color_out = vec4(clamp(rgb, 0.0, 1.0), 1.0) * inside;
 
 // The shadow is drawn by the glass itself, after it copied what's behind: a
 // CSS box-shadow also paints under the transparent middle, and the glass would
-// blur its own shadow into a muddy tint. Hollow, a wide soft layer and a tight
-// contact one.
-const SHADOW_DECLARATIONS = `
-uniform float size_x;
-uniform float size_y;
-uniform float radius;
-uniform float exponent;
-uniform float aa;
-uniform float pad;
-uniform float strength;
-uniform float spread;
-uniform float drop;
-float roundedBox(vec2 p, vec2 half_size, float r, float n) {
-    vec2 q = abs(p) - half_size + r;
-    vec2 c = max(q, 0.0);
-    float corner = pow(pow(c.x, n) + pow(c.y, n), 1.0 / n);
-    return corner + min(max(q.x, q.y), 0.0) - r;
-}
-float falloff(float d, float reach) {
-    float t = clamp(1.0 - d / reach, 0.0, 1.0);
-    return t * t * (3.0 - 2.0 * t);
-}
-`;
-
-const SHADOW_CODE = `
-vec2 size = vec2(size_x, size_y);
-vec2 px = cogl_tex_coord_in[0].st * (size + 2.0 * pad) - pad - size * 0.5;
-float wide = roundedBox(px - vec2(0.0, drop), size * 0.5, radius, exponent);
-float tight = roundedBox(px - vec2(0.0, drop * 0.2), size * 0.5, radius, exponent);
-float shape = roundedBox(px, size * 0.5, radius, exponent);
-float a = strength * (0.7 * falloff(wide, spread) + 0.3 * falloff(tight, spread * 0.22));
-a *= clamp(shape / aa + 0.5, 0.0, 1.0);
-cogl_color_out = vec4(0.0, 0.0, 0.0, a);
-`;
+// blur its own shadow into a muddy tint.
 
 // How far past the surface the blur reads real pixels, in blur sigmas.
 const BLUR_REACH = 2.5;
@@ -146,7 +114,7 @@ const BLUR_REACH = 2.5;
 const NO_ROOM = {left: 0, right: 0, top: 0, bottom: 0};
 
 // Room around the actor the shadow can reach.
-const SHADOW_PAD = 48;
+const SHADOW_PAD = 80;
 
 const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens'];
 
@@ -204,9 +172,7 @@ function shaderTemplates(context) {
     glass.set_layer_wrap_mode(0, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
     glass.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, LIVE_DECLARATIONS,
         `size = vec2(size_x, size_y);\nuv_origin = vec2(uv_x, uv_y);\nuv_size = vec2(uv_w, uv_h);\ntint = vec4(tint_r, tint_g, tint_b, tint_a);\n${CODE}`));
-    const shadow = Cogl.Pipeline.new(context);
-    shadow.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, SHADOW_DECLARATIONS, SHADOW_CODE));
-    templates = {context, glass, shadow};
+    templates = {context, glass, shadow: shadowTemplate(context)};
     return templates;
 }
 
@@ -327,8 +293,11 @@ export const LiveGlassEffect = GObject.registerClass({
             const templates = shaderTemplates(context);
             this._glass = templates.glass.copy();
             this._glass.set_layer_texture(0, this._up[0].texture);
-            this._shadow = templates.shadow.copy();
-            this._shadow.set_layer_texture(0, this._up[0].texture);
+            const shadow = templates.shadow.copy();
+            shadow.set_layer_texture(0, this._up[0].texture);
+            this._shadow = new ShadowPainter(shadow);
+            this._applied = null;
+            this._uv = [];
             this._captured = false;
         }
         if (!fresh)
@@ -394,7 +363,7 @@ export const LiveGlassEffect = GObject.registerClass({
 
     _setUniforms(u) {
         const p = this._glass;
-        const set = (name, v) => p.set_uniform_1f(p.get_uniform_location(name), v);
+        const set = (name, v) => p.set_uniform_1f(uniformLocation(p, name), v);
         set('size_x', u.size[0]);
         set('size_y', u.size[1]);
         set('radius', u.radius);
@@ -465,22 +434,11 @@ export const LiveGlassEffect = GObject.registerClass({
         }
 
         if (u.shadow) {
-            const p = this._shadow;
-            const set = (name, v) => p.set_uniform_1f(p.get_uniform_location(name), v);
-            set('size_x', u.size[0]);
-            set('size_y', u.size[1]);
-            set('radius', u.radius);
-            set('exponent', u.exponent);
-            set('aa', u.aa);
-            set('pad', SHADOW_PAD);
-            set('strength', u.shadow);
-            set('spread', u.shadowSpread);
-            set('drop', u.shadowDrop);
-            const shade = new Clutter.PipelineNode(p);
-            const edge = this._layer.stretch;
-            shade.add_rectangle(new Clutter.ActorBox({x1: -edge.left - SHADOW_PAD, y1: -edge.top - SHADOW_PAD,
-                x2: actor.width + edge.right + SHADOW_PAD, y2: actor.height + edge.bottom + SHADOW_PAD}));
-            node.add_child(shade);
+            const e = this._layer.stretch;
+            this._shadow.paint(node, {x: -e.left - SHADOW_PAD, y: -e.top - SHADOW_PAD,
+                width: actor.width + e.left + e.right + 2 * SHADOW_PAD, height: actor.height + e.top + e.bottom + 2 * SHADOW_PAD,
+                box: {x1: -e.left, y1: -e.top, x2: actor.width + e.right, y2: actor.height + e.bottom},
+                radius: u.radius, exponent: u.exponent, aa: u.aa, layers: u.shadow});
         }
 
         // The shown part of the blurred copy: the actor, plus any stretch.
@@ -490,12 +448,18 @@ export const LiveGlassEffect = GObject.registerClass({
         const uvY1 = (shown.oy - s.top * box.scale) / this._capH;
         const uvX2 = (shown.ox + (actor.width + s.right) * box.scale) / this._capW;
         const uvY2 = (shown.oy + (actor.height + s.bottom) * box.scale) / this._capH;
-        this._setUniforms(u);
-        const set = (name, v) => this._glass.set_uniform_1f(this._glass.get_uniform_location(name), v);
-        set('uv_x', uvX1);
-        set('uv_y', uvY1);
-        set('uv_w', uvX2 - uvX1);
-        set('uv_h', uvY2 - uvY1);
+        // Between changes these stay on the pipeline; only a moving surface resends them.
+        if (this._applied !== u) {
+            this._setUniforms(u);
+            this._applied = u;
+        }
+        const uv = [uvX1, uvY1, uvX2 - uvX1, uvY2 - uvY1];
+        ['uv_x', 'uv_y', 'uv_w', 'uv_h'].forEach((name, i) => {
+            if (this._uv[i] !== uv[i]) {
+                this._uv[i] = uv[i];
+                this._glass.set_uniform_1f(uniformLocation(this._glass, name), uv[i]);
+            }
+        });
         const out = new Clutter.PipelineNode(this._glass);
         out.add_texture_rectangle(new Clutter.ActorBox({x1: -s.left, y1: -s.top,
             x2: actor.width + s.right, y2: actor.height + s.bottom}), uvX1, uvY1, uvX2, uvY2);
@@ -537,7 +501,7 @@ class SuperGGlassLayer extends St.Widget {
         this.stretch = {...NO_ROOM};
         this.active = true;
         this._monitor = -1;
-        this._last = '';
+        this._stale = true;
 
         if (live) {
             this._liveEffect = new LiveGlassEffect(this);
@@ -609,14 +573,14 @@ class SuperGGlassLayer extends St.Widget {
     setRoom(room) {
         this.room = {...NO_ROOM, ...room};
         this.stretch = {...NO_ROOM};
-        this._last = '';
+        this._stale = true;
         this._sync();
         this.queue_redraw();
     }
 
     setStretch(stretch) {
         this.stretch = {...NO_ROOM, ...stretch};
-        this._last = '';
+        this._stale = true;
         this._sync();
     }
 
@@ -624,7 +588,7 @@ class SuperGGlassLayer extends St.Widget {
         this._style = style;
         if (this._blur)
             this._blur.radius = style.blur;
-        this._last = '';
+        this._stale = true;
         this._sync();
     }
 
@@ -657,39 +621,69 @@ class SuperGGlassLayer extends St.Widget {
         this._bgManager.backgroundActor.set_size(geo.width, geo.height);
         this._bgManager.connect('changed', () => {
             this._bgManager?.backgroundActor.set_size(geo.width, geo.height);
-            this._last = '';
+            this._stale = true;
         });
     }
 
+    _shapeRadius() {
+        if (this._fixedRadius !== null)
+            return this._fixedRadius;
+        const source = this._shapeSource;
+        if (!source?.get_theme_node || !source.mapped)
+            return this._cachedRadius ?? 0;
+        if (this._cachedRadius === undefined) {
+            this._cachedRadius = source.get_theme_node().get_border_radius(St.Corner.TOPLEFT);
+            if (!this._radiusWatched) {
+                this._radiusWatched = true;
+                source.connectObject('style-changed', () => (this._cachedRadius = undefined), this);
+            }
+        }
+        return this._cachedRadius;
+    }
+
+    // Runs before every redraw, for every layer: it stays out of the way unless
+    // something really moved.
     _sync() {
         if (this._track) {
             const t = this._track;
             if (t.update && !t.update())
                 return;
-            const [tx, ty] = t.get_transformed_position();
-            const [tw, th] = t.get_transformed_size();
-            this.set_position(Math.round(tx), Math.round(ty));
-            this.set_size(Math.round(tw), Math.round(th));
             // What's fading may be a parent, as with a zooming dialog.
             const opacity = t.get_paint_opacity?.() ?? t.opacity;
-            this.visible = this.active && t.mapped && opacity > 0;
-            this.opacity = opacity;
+            const shown = this.active && t.mapped && opacity > 0;
+            if (this.visible !== shown)
+                this.visible = shown;
+            if (!shown)
+                return;
+            const [tx, ty] = t.get_transformed_position();
+            const [tw, th] = t.get_transformed_size();
+            const [rx, ry, rw, rh] = [Math.round(tx), Math.round(ty), Math.round(tw), Math.round(th)];
+            if (rx !== this._tx || ry !== this._ty) {
+                this.set_position(rx, ry);
+                [this._tx, this._ty] = [rx, ry];
+            }
+            if (rw !== this._tw || rh !== this._th) {
+                this.set_size(rw, rh);
+                [this._tw, this._th] = [rw, rh];
+            }
+            if (this.opacity !== opacity)
+                this.opacity = opacity;
         }
+        const [x, y] = this.get_transformed_position();
+        const w = this.width, h = this.height;
+        const radius = this._shapeRadius();
+        if (!this._stale && x === this._lx && y === this._ly && w === this._lw && h === this._lh && radius === this._lr)
+            return;
         const monitor = Main.layoutManager.findIndexForActor(this._track instanceof Clutter.Actor ? this._track : this);
         if (monitor < 0)
             return;
         if (!this._live)
             this._ensureBackground(monitor);
-
-        const [x, y] = this.get_transformed_position();
-        const w = this.width, h = this.height;
-        const radius = this._fixedRadius ?? this._shapeSource?.get_theme_node?.()
-            ?.get_border_radius(St.Corner.TOPLEFT) ?? 0;
-        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-        const key = `${x}|${y}|${w}|${h}|${radius}|${monitor}`;
-        if (key === this._last || !w || !h)
+        if (!w || !h)
             return;
-        this._last = key;
+        [this._lx, this._ly, this._lw, this._lh, this._lr] = [x, y, w, h, radius];
+        this._stale = false;
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const {left, right, top, bottom} = this.stretch;
 
         if (!this._live) {
@@ -705,7 +699,7 @@ class SuperGGlassLayer extends St.Widget {
         this.uniforms = {
             size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.blur,
             tint: this._thicken ? [s.tint[0], s.tint[1], s.tint[2], s.tint[3] + (1 - s.tint[3]) * this._thicken] : s.tint, saturation: s.saturation, brightness: s.brightness, rim: s.rim, outline: s.outline, grain: s.grain,
-            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, shadow: this._shadowOn ? s.shadow : 0, shadowSpread: s.shadowSpread, shadowDrop: s.shadowDrop,
+            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, shadow: this._shadowOn ? s.shadow : null,
         };
         if (this._effect)
             this._effect.setUniforms(this.uniforms);
@@ -751,9 +745,7 @@ export function glassStyle(c, settings) {
         outline: c.dark ? 0.26 : 0.1,
         lightText: c.dark ? 1 : 0,
         lens: settings.get_double('glass-refraction') * 12,
-        shadow: c.dark ? 0.32 : 0.2,
-        shadowSpread: 34,
-        shadowDrop: 8,
+        shadow: surfaceShadow(settings.get_string('shadow-style'), c.dark),
         grain: 0.012,
         blur,
     };

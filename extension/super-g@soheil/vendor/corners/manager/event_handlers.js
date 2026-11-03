@@ -7,9 +7,9 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
-import { ClipShadowEffect } from '../effect/clip_shadow_effect.js';
+import { WindowShadow } from '../../../lib/softShadow.js';
 import { RoundedCornersEffect } from '../effect/rounded_corners_effect.js';
-import { CLIP_SHADOW_EFFECT, ROUNDED_CORNERS_EFFECT, } from '../utils/constants.js';
+import { ROUNDED_CORNERS_EFFECT, } from '../utils/constants.js';
 import { logDebug } from '../utils/log.js';
 import { getPref } from '../utils/settings.js';
 import { hasMetaWindow } from '../utils/types.js';
@@ -162,18 +162,8 @@ export const onSettingsChanged = refreshAllRoundedCorners;
  * @param actor - The window actor to create the shadow actor for.
  */
 function createShadow(actor) {
-    const shadow = new St.Bin({
-        name: 'Shadow Actor',
-        child: new St.Bin({
-            xExpand: true,
-            yExpand: true,
-        }),
-    });
-    shadow.firstChild.add_style_class_name('shadow');
+    const shadow = new WindowShadow({ name: 'Shadow Actor' });
     refreshShadow(actor);
-    // We have to clip the shadow because of this issue:
-    // https://gitlab.gnome.org/GNOME/gnome-shell/-/issues/4474
-    shadow.add_effect_with_name(CLIP_SHADOW_EFFECT, new ClipShadowEffect());
     // Draw the shadow actor below the window actor.
     global.windowGroup.insert_child_below(shadow, actor);
     // Bind position and size between window and shadow

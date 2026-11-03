@@ -24,7 +24,7 @@ run=$(mktemp -d "/run/user/$(id -u)/ust-XXXXXX")
 trap 'rm -rf "$run"' EXIT
 export XDG_DATA_HOME="$sb/data" XDG_CONFIG_HOME="$sb/config" XDG_CACHE_HOME="$sb/cache" \
        XDG_STATE_HOME="$sb/state" XDG_RUNTIME_DIR="$run" SANDBOX="$sb" SHOT_DIR="$sb/shots" \
-       CLONE="${CLONE:-0}" SHOTS="${SHOTS:-}" EXCLUDE="${EXCLUDE:-}" TAKEOVER="${TAKEOVER:-0}" ROOT="$root" EVAL="${EVAL:-}" X11_OFF="${X11_OFF:---no-x11}"
+       CLONE="${CLONE:-0}" SHOTS="${SHOTS:-}" EXCLUDE="${EXCLUDE:-}" TAKEOVER="${TAKEOVER:-0}" ROOT="$root" VIRTUAL_MONITOR="${VIRTUAL_MONITOR:-}" EVAL="${EVAL:-}" X11_OFF="${X11_OFF:---no-x11}"
 unset WAYLAND_DISPLAY DISPLAY
 
 real="$HOME/.local/share"
@@ -68,7 +68,7 @@ print(str(l + [\"super-g@soheil\", \"shot@super-g-test\"]))")
     case $key in *:*) schema="$schema.${key%%:*}"; key=${key#*:} ;; esac
     gsettings --schemadir "$schemadir" set "$schema" "$key" "${kv#*=}"
   done
-  gnome-shell --headless --wayland ${X11_OFF:---no-x11} --mode=ubuntu --virtual-monitor 1600x1000 > "$SANDBOX/shell.log" 2>&1 &
+  ${SHELL_WRAP:-} "$(command -v gnome-shell)" --headless --wayland ${X11_OFF:---no-x11} --mode=ubuntu --virtual-monitor ${VIRTUAL_MONITOR:-1600x1000} > "$SANDBOX/shell.log" 2>&1 &
   pid=$!
   for i in $(seq 1 240); do [ -f "$SHOT_DIR/done" ] && break; sleep 0.5; done
   # The real unit kills the shell 5 s after SIGTERM, which inside the first 60 s

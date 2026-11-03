@@ -1,7 +1,6 @@
 /** @file Provides various utility functions used withing signal handling code. */
 import Gio from 'gi://Gio';
 import Meta from 'gi://Meta';
-import { boxShadowCss } from '../utils/box_shadow.js';
 import { APP_SHADOWS, ROUNDED_CORNERS_EFFECT, SHADOW_PADDING, } from '../utils/constants.js';
 import { readFile } from '../utils/file.js';
 import { logDebug } from '../utils/log.js';
@@ -112,35 +111,21 @@ export function computeShadowActorOffset([offsetX, offsetY, offsetWidth, offsetH
  * @param shadow - The shadow settings for the window.
  * @param padding - The padding of the shadow actor.
  */
-export function updateShadowActorStyle(win, actor, borderRadius, shadow, padding) {
+export function updateShadowActorStyle(win, actor, borderRadius, _shadow, padding) {
     const { left, right, top, bottom } = padding;
-    // Increase border_radius when smoothing is on.
-    // Read global settings once to avoid repeated GSettings deserializations.
-    let adjustedBorderRadius = borderRadius;
-    const globalCfg = getPref('global-rounded-corner-settings');
-    if (globalCfg !== null) {
-        adjustedBorderRadius *= 1.0 + globalCfg.smoothing;
-    }
-    actor.style = `padding: ${SHADOW_PADDING}px;`;
-    const child = actor.firstChild;
-    const hideShadowForMaximizedFullscreen = !getPref('keep-shadow-for-maximized-fullscreen') &&
-        (win.maximizedHorizontally ||
-            win.maximizedVertically ||
-            win.fullscreen);
-    const newChildStyle = hideShadowForMaximizedFullscreen
-        ? 'opacity: 0;'
-        : `background: white;
-               border-radius: ${adjustedBorderRadius}px;
-               ${boxShadowCss(shadow)};
-               margin: ${top}px
-                       ${right}px
-                       ${bottom}px
-                       ${left}px;`;
-    // Only update style and queue a redraw when the style actually changed.
-    if (child.style !== newChildStyle) {
-        child.style = newChildStyle;
-        child.queue_redraw();
-    }
+    actor.setWindow({
+        hidden: !getPref('keep-shadow-for-maximized-fullscreen') &&
+            (win.maximizedHorizontally || win.maximizedVertically || win.fullscreen),
+        focused: win.appears_focused,
+        radius: borderRadius,
+        smoothing: getPref('global-rounded-corner-settings')?.smoothing ?? 0,
+        inset: {
+            left: SHADOW_PADDING + left,
+            right: SHADOW_PADDING + right,
+            top: SHADOW_PADDING + top,
+            bottom: SHADOW_PADDING + bottom,
+        },
+    });
 }
 /**
  * Check whether a window should have rounded corners.

@@ -51,6 +51,9 @@ const SUPER_IDLE_MS = 3000;
 const SUPER_HOLD_MS = 450;
 const SUPER_DOUBLE_MS = 280;
 const SUPER_SWALLOW_MS = 700;
+const SUPER_HELD_CLEAR_MS = 150;
+const SUPER_OTHERS = Clutter.ModifierType.SHIFT_MASK | Clutter.ModifierType.CONTROL_MASK | Clutter.ModifierType.MOD1_MASK |
+    Clutter.ModifierType.BUTTON1_MASK | Clutter.ModifierType.BUTTON2_MASK | Clutter.ModifierType.BUTTON3_MASK;
 
 function sectionOf(app) {
     const cats = (app.get_app_info()?.get_categories() ?? '').split(';');
@@ -82,13 +85,13 @@ export default class DrawerModule extends Module {
 
     /* ----------------------------------------------------- Super key -- */
 
-    // GNOME's own handler toggles the overview. It's only held back while
-    // something else is chosen, and gets the key straight back otherwise.
+    // GNOME's own handler toggles the overview on release. It only keeps the
+    // key when nothing else is asked of it, a hold included.
     _syncSuper() {
         const s = this.settings;
-        const single = s.get_string('super-key-action');
-        const stock = single === 'overview' && s.get_string('super-double-action') === 'none' &&
-            s.get_string('super-hold-action') === 'overview';
+        const hold = s.get_string('super-hold-action');
+        const stock = s.get_string('super-key-action') === 'overview' && s.get_string('super-double-action') === 'none' &&
+            hold === 'none';
         if (!stock && !this._overviewHandler) {
             const id = GObject.signal_handler_find(global.display, {signalId: 'overlay-key'});
             if (id && id !== this._superId) {
@@ -99,10 +102,10 @@ export default class DrawerModule extends Module {
             GObject.signal_handler_unblock(global.display, this._overviewHandler);
             this._overviewHandler = 0;
         }
-        // The key's press isn't reported, only its release alone, so how long it
-        // was held is read from the modifier state. Only while a hold matters,
-        // and only while the user is active: an idle desktop gets no timer.
-        const watch = s.get_string('super-hold-action') !== single;
+        // The key's press isn't reported, only its release alone, so a hold is
+        // read from the modifier state. Only while the user is active: an idle
+        // desktop gets no timer.
+        const watch = hold !== 'none';
         if (watch && !this._idleMonitor) {
             this._idleMonitor = global.backend.get_core_idle_monitor();
             this._idleWatch = this._idleMonitor.add_idle_watch(SUPER_IDLE_MS, () => this._stopSuperPoll());
@@ -125,13 +128,30 @@ export default class DrawerModule extends Module {
         if (this._superPoll)
             return;
         this._superPoll = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SUPER_POLL_MS, () => {
-            const down = (global.get_pointer()[2] & Clutter.ModifierType.MOD4_MASK) !== 0;
-            if (down && !this._superDownAt)
-                this._superDownAt = Date.now();
-            else if (!down)
-                this._superDownAt = 0;
+            this.guard(() => this._checkHold());
             return GLib.SOURCE_CONTINUE;
         });
+    }
+
+    _checkHold() {
+        const mods = global.get_pointer()[2];
+        if (!(mods & Clutter.ModifierType.MOD4_MASK)) {
+            this._superDownAt = 0;
+            // The state can change just before the release itself arrives.
+            if (this._superHeld)
+                this.later('super-held', SUPER_HELD_CLEAR_MS, () => (this._superHeld = false));
+            return;
+        }
+        if (!this._superDownAt) {
+            this._superDownAt = Date.now();
+            return;
+        }
+        // Another modifier or a button means Super is part of something else.
+        if (this._superHeld || this._superSwallow || (mods & SUPER_OTHERS) || Date.now() - this._superDownAt < SUPER_HOLD_MS)
+            return;
+        this._superHeld = true;
+        this._superFirst = false;
+        this._superAction(this.settings.get_string('super-hold-action'));
     }
 
     _stopSuperPoll() {
@@ -156,15 +176,15 @@ export default class DrawerModule extends Module {
             this._superSwallow = false;
             return;
         }
+        // The hold has already acted; this is its release.
+        if (this._superHeld) {
+            this._superHeld = false;
+            return;
+        }
         if (!this._overviewHandler)
             return;
         const s = this.settings;
-        const held = this._superDownAt ? Date.now() - this._superDownAt : 0;
         this._superDownAt = 0;
-        if (held >= SUPER_HOLD_MS) {
-            this._superAction(s.get_string('super-hold-action'));
-            return;
-        }
         const single = s.get_string('super-key-action');
         const double = s.get_string('super-double-action');
         if (double === 'none') {
@@ -457,9 +477,9 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         const speed = this.settings.get_double('animation-speed');
         drawer.set({opacity: 0, scale_x: 0.92, scale_y: 0.92});
         content.set({opacity: 0, translation_y: 10});
-        content.ease({opacity: 255, translation_y: 0, duration: Math.round(340 * speed), delay: 40,
+        content.ease({opacity: 255, translation_y: 0, duration: Math.round(260 * speed), delay: 20,
             mode: Clutter.AnimationMode.EASE_OUT_QUINT});
-        drawer.ease({opacity: 255, scale_x: 1, scale_y: 1, duration: Math.round(300 * speed),
+        drawer.ease({opacity: 255, scale_x: 1, scale_y: 1, duration: Math.round(230 * speed),
             mode: Clutter.AnimationMode.EASE_OUT_QUINT});
     }
 

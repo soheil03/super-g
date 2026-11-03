@@ -4,7 +4,7 @@ export const ROUNDED_CORNERS_EFFECT = 'Rounded Corners Effect';
 /** Name of the shadow clipping effect  */
 export const CLIP_SHADOW_EFFECT = 'Clip Shadow Effect';
 /** Padding of shadow actors */
-export const SHADOW_PADDING = 80;
+export const SHADOW_PADDING = 120;
 /**
  * Hardcoded shadow size for certain applications that have to be
  * manually clipped

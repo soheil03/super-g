@@ -93,6 +93,9 @@ function gtk4Vars(c) {
 }
 
 function gtk4Buttons(style, c) {
+    // Adwaita's own buttons, at their normal size.
+    if (style === 'adwaita')
+        return '';
     const wc = 'windowcontrols';
     const base = `
 ${wc} > button { min-width: 0; min-height: 0; padding: 0; margin: 0; }
@@ -197,6 +200,8 @@ ${gtk4Sidebar(opts)}
 /* ---------------------------------------------------------------- GTK3 -- */
 
 function gtk3Buttons(style, c) {
+    if (style === 'adwaita')
+        return '';
     const sel = 'headerbar button.titlebutton, .titlebar button.titlebutton';
     const hov = 'headerbar button.titlebutton:hover, .titlebar button.titlebutton:hover';
     const close = 'headerbar button.titlebutton.close:hover, .titlebar button.titlebutton.close:hover';
@@ -396,12 +401,16 @@ ${rule('.events-button, .world-clocks-button, .weather-button', `border-radius: 
 ${rule('.modal-dialog', 'border-radius: 24px;')}
 ${rule('.modal-dialog-linked-button', 'border-radius: 999px;')}
 ${rule('.switcher-list, .workspace-switcher', 'border-radius: 24px;')}
-${rule('.switcher-list .item-box', 'border-radius: 16px;')}
+${rule('.switcher-list .item-box', `border-radius: 16px; background-color: transparent; box-shadow: none; color: ${c.fg};`)}
+${rule('.switcher-list .item-box:hover', `background-color: ${withAlpha(c.fg, dark ? 0.08 : 0.06)};`)}
+${rule('.switcher-list .item-box:outlined', `background-color: transparent; box-shadow: inset 0 0 0 1px ${withAlpha(c.fg, 0.3)} !important;`)}
+${rule('.switcher-list .item-box:selected, .switcher-list .item-box:focus', `background-color: ${withAlpha(c.accent, dark ? 0.42 : 0.3)}; box-shadow: inset 0 0 0 2px ${withAlpha(c.accent, 0.85)} !important; color: ${c.fg};`)}
 ${rule('.osd-window', 'border-radius: 999px;')}
 
 ${opts.overviewGlass ? `${rule('.overview-tile, .grid-search-result, .app-folder, .list-search-result, .search-statustext', `color: ${c.fg}; text-shadow: none;`)}
 ${rule('.overview-tile .overview-icon, .app-folder .overview-icon', `text-shadow: none; icon-shadow: none;`)}
 ${tileStates('.overview-tile')}
+${rule('.overview-tile:focus', `box-shadow: inset 0 0 0 2px ${withAlpha(c.accent, 0.85)} !important;`)}
 ${tileStates('.app-folder')}
 ${rule('.page-indicator .page-indicator-icon', `background-color: ${c.fg};`)}
 ${rule('.page-navigation-arrow', `background-color: ${withAlpha(c.fg, 0.12)}; color: ${c.fg};`)}` : ''}

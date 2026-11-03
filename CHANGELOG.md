@@ -2,6 +2,22 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.2.0 - 2026-11-03
+
+### Added
+- New drop shadows on windows and glass, drawn on the GPU: three layers (ambient, mid, contact), following the true squircle corner, dithered so they don't band on smooth wallpapers. A window's shadow eases when it gains or loses focus.
+- **Shadows** setting: none, subtle, standard or deep.
+- **Adwaita (normal size)** window buttons.
+
+### Changed
+- Holding Super now acts while the key is still down, about half a second in, rather than on release.
+- Default animation duration is 0.9x instead of 1.15x, and the app drawer opens faster. Your own setting is kept if you changed it.
+- Clearer selection in Alt-Tab, and a focus ring on dock and app grid icons.
+
+### Performance
+- Window shadows no longer need a CPU blur on every resize and focus change, or an offscreen buffer per window.
+- Glass sends its shader settings only when they change and does less per frame. CPU use under load did not change measurably in tests.
+
 ## 1.1.1 - 2026-11-03
 
 ### Docs

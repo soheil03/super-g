@@ -17,7 +17,8 @@ const PALETTES = [['graphite', 'Graphite neutral'], ['catppuccin', 'Catppuccin-t
     ['stone', 'Warm stone'], ['slate', 'Cool slate']];
 const ACCENTS = [['auto', 'Palette default'], ['blue', 'Blue'], ['lavender', 'Lavender'],
     ['slate', 'Slate'], ['teal', 'Teal'], ['sage', 'Sage'], ['peach', 'Peach'], ['rose', 'Rose']];
-const BUTTONS = [['capsule', 'Capsule group'], ['mini-dots', 'Mini dots'], ['close-emphasized', 'Close emphasized']];
+const BUTTONS = [['capsule', 'Capsule group'], ['mini-dots', 'Mini dots'], ['close-emphasized', 'Close emphasized'], ['adwaita', 'Adwaita (normal size)']];
+const SHADOWS = [['none', 'None'], ['subtle', 'Subtle'], ['standard', 'Standard'], ['deep', 'Deep']];
 const SIDEBARS = [['floating-card', 'Floating card'], ['stock', 'Stock GNOME']];
 const WEIGHTS = [[500, 'Medium'], [600, 'Semibold'], [700, 'Bold']];
 const CURVES = [['snappy', 'Snappy spring'], ['soft', 'Soft spring']];
@@ -205,6 +206,7 @@ export default class SuperGPrefs extends ExtensionPreferences {
             group('Windows', [
                 comboRow(s, 'window-buttons', 'Window buttons', BUTTONS),
                 spinRow(s, 'window-radius', 'Corner radius', {lower: 0, upper: 28, step: 1}),
+                comboRow(s, 'shadow-style', 'Shadows', SHADOWS),
                 comboRow(s, 'sidebar-style', 'Sidebar', SIDEBARS),
                 spinRow(s, 'sidebar-radius', 'Sidebar corner radius', {lower: 6, upper: 24, step: 1}),
                 switchRow(s, 'sidebar-accent-icons', 'Accent sidebar icons'),

@@ -36,6 +36,7 @@ function isBlank(actor) {
 
 // More than magnification can stretch the dock, at any setting.
 const DOCK_REACH = 420;
+const ISLAND_CHECK_MS = 100;
 
 // The union of some top bar buttons, for a glass layer to follow.
 class Island {
@@ -45,6 +46,11 @@ class Island {
     }
 
     update() {
+        // Walking the buttons each frame adds up; they barely move.
+        const now = Date.now();
+        if (now - (this._checkedAt ?? 0) < ISLAND_CHECK_MS)
+            return true;
+        this._checkedAt = now;
         // The app name fades out rather than hiding when no app is focused.
         const shown = this._actors.filter(a => a.mapped && a.width > 0 && a.opacity > 0 && !isBlank(a));
         this.mapped = shown.length > 0;
