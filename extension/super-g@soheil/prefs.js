@@ -38,10 +38,18 @@ function engineSettings(path, name) {
     return schema ? new Gio.Settings({settings_schema: schema}) : null;
 }
 
+// Every row made by the helpers below registers its setting; page() takes what
+// was made since the last page and offers to put all of it back to default.
+let pageKeys = [];
+const track = (settings, key, row) => {
+    pageKeys.push([settings, key]);
+    return row;
+};
+
 function invertedSwitch(settings, key, title, subtitle = '') {
     const row = new Adw.SwitchRow({title, subtitle});
     settings.bind(key, row, 'active', Gio.SettingsBindFlags.INVERT_BOOLEAN);
-    return row;
+    return track(settings, key, row);
 }
 
 const MODULES = [
@@ -74,7 +82,7 @@ function comboRow(settings, key, title, items, {subtitle = '', int = false} = {}
             int ? settings.set_int(key, id) : settings.set_string(key, id);
     });
     settings.connect(`changed::${key}`, sync);
-    return row;
+    return track(settings, key, row);
 }
 
 // A choice row whose options come from the key's own schema, so nothing here
@@ -88,14 +96,14 @@ function enumRow(settings, key, title, {subtitle = '', labels = {}} = {}) {
 function switchRow(settings, key, title, subtitle = '') {
     const row = new Adw.SwitchRow({title, subtitle});
     settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
-    return row;
+    return track(settings, key, row);
 }
 
 function spinRow(settings, key, title, {lower, upper, step, digits = 0, subtitle = ''}) {
     const row = Adw.SpinRow.new_with_range(lower, upper, step);
     row.set({title, subtitle, digits});
     settings.bind(key, row, 'value', Gio.SettingsBindFlags.DEFAULT);
-    return row;
+    return track(settings, key, row);
 }
 
 function fontRow(settings, key, title) {
@@ -113,7 +121,7 @@ function fontRow(settings, key, title) {
     const row = new Adw.ActionRow({title});
     row.add_suffix(button);
     row.activatable_widget = button;
-    return row;
+    return track(settings, key, row);
 }
 
 function installedThemes() {
@@ -150,6 +158,27 @@ function group(title, rows, description = '') {
 function page(title, icon, groups) {
     const p = new Adw.PreferencesPage({title, icon_name: icon, name: title.toLowerCase().replace(/ /g, '-')});
     groups.forEach(g => p.add(g));
+    const keys = pageKeys;
+    pageKeys = [];
+    if (keys.length) {
+        const button = new Gtk.Button({label: 'Reset this page to defaults', halign: Gtk.Align.CENTER,
+            css_classes: ['destructive-action', 'pill']});
+        button.connect('clicked', () => {
+            const dialog = new Adw.AlertDialog({heading: `Reset ${title}?`,
+                body: 'Every setting on this page goes back to its default.'});
+            dialog.add_response('cancel', 'Cancel');
+            dialog.add_response('reset', 'Reset');
+            dialog.set_response_appearance('reset', Adw.ResponseAppearance.DESTRUCTIVE);
+            dialog.connect('response', (_d, id) => {
+                if (id === 'reset')
+                    keys.forEach(([settings, key]) => settings.reset(key));
+            });
+            dialog.present(button.get_root());
+        });
+        const g = new Adw.PreferencesGroup();
+        g.add(button);
+        p.add(g);
+    }
     return p;
 }
 

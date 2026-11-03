@@ -141,6 +141,10 @@ ${P} .panel-button { color: ${c.fg}; border-radius: 999px; -natural-hpadding: 9p
   margin: ${inset}px 1px; padding-top: 0; padding-bottom: 0; }
 ${P} .panel-button .panel-button { margin: 0; padding: 0; background-color: transparent; box-shadow: none; -natural-hpadding: 0; -minimum-hpadding: 0; spacing: 6px; }
 ${P} .clock-display-box, ${P} .clock { padding: 0; margin: 0; spacing: 0; }
+/* GNOME and Kiwi paint a second pill on the inner clock label; the button's own is the only one. */
+#uiGroup #panel .panel-button.clock-display .clock, #uiGroup #panel .panel-button.clock-display:hover .clock, #uiGroup #panel .panel-button.clock-display:focus .clock,
+#uiGroup #panel .panel-button.clock-display:active .clock, #uiGroup #panel .panel-button.clock-display:checked .clock, #uiGroup #panel .panel-button.clock-display .clock:hover {
+  background-color: transparent !important; box-shadow: none !important; border: none !important; }
 ${P} .panel-status-indicators-box, ${P} .panel-status-menu-box { spacing: 9px; }
 ${P} .power-status { spacing: 3px; }
 ${P} .system-status-icon { icon-size: 16px; padding: 0; margin: 0; }

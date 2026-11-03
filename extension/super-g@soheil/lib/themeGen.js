@@ -391,6 +391,10 @@ ${rule('.events-button .events-title, .world-clocks-button .world-clocks-header,
 ${rule('.events-button, .world-clocks-button, .weather-button', `color: ${c.fg};`)}
 ${rule('.message', `border-radius: 16px; background-color: ${tile}; color: ${c.fg};`)}
 ${rule('.message:hover', `background-color: ${c.controlHover};`)}
+${rule('.message-notification-group .message', `background-color: ${over(tile, c.popover)};`)}
+${rule('.message-notification-group .message:hover', `background-color: ${over(c.controlHover, c.popover)};`)}
+${rule('.message:second-in-stack', `background-color: ${mix(over(tile, c.popover), c.popover, 0.7)}; box-shadow: none;`)}
+${rule('.message:lower-in-stack', `background-color: ${mix(over(tile, c.popover), c.popover, 0.45)}; box-shadow: none;`)}
 ${rule('.notification-banner', 'margin: 8px 14px;')}
 ${rule('.notification-banner, .notification-banner .message', `border-radius: 20px; background-color: ${withAlpha(c.popover, 0.97)}; color: ${c.fg}; border: none; box-shadow: 0 6px 20px rgba(0,0,0,${dark ? 0.3 : 0.12});`)}
 ${opts.glass ? rule('.notification-banner.super-g-glassed, .notification-banner.super-g-glassed .message', 'background-color: transparent; box-shadow: none;') : ''}

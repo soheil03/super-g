@@ -2,6 +2,17 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.2.1 - 2026-11-03
+
+### Added
+- **Reset this page to defaults** at the bottom of every settings page, with a confirmation.
+
+### Fixed
+- Stacked notifications from one app no longer show through each other in the quick settings panel.
+- The clock's hover no longer draws a second, smaller pill inside the first.
+- Chromium and Electron windows get the same edge inset on the left and right, so maximized ones look even.
+- The power menu in quick settings no longer runs its dimming effect, which pushed the live glass through an offscreen pass. This could not be reproduced in the headless test shell, so check it on the real desktop.
+
 ## 1.2.0 - 2026-11-03
 
 ### Added
