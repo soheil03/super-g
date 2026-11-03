@@ -11,6 +11,8 @@ export const DEFAULTS = {
     windowButtons: 'capsule',
     windowRadius: 18,
     sidebarStyle: 'floating-card',
+    sidebarRadius: 14,
+    sidebarAccentIcons: true,
     titleWeight: 600,
 };
 
@@ -34,7 +36,8 @@ export function resolve(tokens, opts, dark) {
         control: m.control,
         controlHover: mix(m.fg, m.window, dark ? 0.16 : 0.13),
         glass: m.glass,
-        sidebar: over(m.sidebarCard, m.window),
+        // A whisper of the accent, so the card reads as colour rather than grey.
+        sidebar: mix(over(m.sidebarCard, m.window), accent, 0.96),
         sidebarBackdrop: over(m.sidebarCard, mix(m.window, '#808080', dark ? 0.97 : 0.985)),
         popover: raised,
         card: dark ? withAlpha(m.fg, 0.06) : m.view,
@@ -120,33 +123,39 @@ ${wc} > button > image { padding: 3px 7px; border-radius: 999px; background-colo
 ${wc} > button:hover > image { background-color: ${c.controlHover}; }`;
 }
 
-function gtk4Sidebar(style, radius) {
+// The X11 frame runs without libadwaita, so it has no colour variables to read.
+const frameTitle = c => `window.csd > .titlebar > headerbar { background: ${c.window}; color: ${c.fg}; }`;
+
+function gtk4Sidebar(opts) {
+    const {sidebarStyle: style, windowRadius: radius, sidebarRadius: card, sidebarAccentIcons: tinted} = opts;
+    // Rows and their selection read the same on any sidebar; only the card is optional.
+    const rows = `
+.navigation-sidebar { padding: 4px 0; background: none; }
+.navigation-sidebar > row { border-radius: 10px; margin: 1px 8px; padding: 0 10px; min-height: 32px; }
+/* Settings builds its rows with roomy margins in code. */
+.navigation-sidebar > row > grid { margin-top: -7px; margin-bottom: -7px; }
+.navigation-sidebar > row:hover { background-color: color-mix(in srgb, var(--sidebar-fg-color) 6%, transparent); }
+.navigation-sidebar > row:active { background-color: color-mix(in srgb, var(--sidebar-fg-color) 10%, transparent); }
+.navigation-sidebar > row:selected { background-color: color-mix(in srgb, var(--accent-bg-color) 20%, transparent); color: var(--sidebar-fg-color); font-weight: 500; }
+.navigation-sidebar > row:selected:hover { background-color: color-mix(in srgb, var(--accent-bg-color) 26%, transparent); }
+.navigation-sidebar > row:selected image { color: var(--accent-color); }
+.navigation-sidebar > separator, .navigation-sidebar > row > separator { margin: 6px 18px; background-color: color-mix(in srgb, var(--sidebar-fg-color) 9%, transparent); }
+${tinted ? `.sidebar-pane .navigation-sidebar > row image, placessidebar row image { color: var(--accent-color); }
+.sidebar-pane .navigation-sidebar > row button image, placessidebar row button image { color: inherit; }` : ''}`;
     if (style !== 'floating-card')
-        return '';
-    const inset = 6;
-    const inner = Math.max(6, radius - inset);
-    // The pane's border is painted in the window colour so the inner box
-    // reads as a card inset in the window; inner radius = outer - border.
+        return rows;
+    const inset = 8;
+    // A margin rather than a window-coloured border, so the card can cast a real shadow.
     return `
-.sidebar-pane:dir(ltr):not(.end), .sidebar-pane.end:dir(rtl) {
-  border-style: solid; border-color: var(--window-bg-color);
-  border-width: ${inset}px 0 ${inset}px ${inset}px;
-  border-radius: ${r(radius)} ${r(inner)} ${r(inner)} ${r(radius)};
-  box-shadow: inset 0 0 0 1px var(--sidebar-border-color);
+.sidebar-pane:dir(ltr):not(.end), .sidebar-pane.end:dir(rtl) { margin: ${inset}px 0 ${inset}px ${inset}px; }
+.sidebar-pane:dir(rtl):not(.end), .sidebar-pane.end:dir(ltr) { margin: ${inset}px ${inset}px ${inset}px 0; }
+.sidebar-pane {
+  border: none; border-radius: ${r(card)};
+  box-shadow: 0 0 0 1px var(--sidebar-border-color), 0 2px 8px var(--sidebar-shade-color);
 }
-.sidebar-pane:dir(rtl):not(.end), .sidebar-pane.end:dir(ltr) {
-  border-style: solid; border-color: var(--window-bg-color);
-  border-width: ${inset}px ${inset}px ${inset}px 0;
-  border-radius: ${r(inner)} ${r(radius)} ${r(radius)} ${r(inner)};
-  box-shadow: inset 0 0 0 1px var(--sidebar-border-color);
-}
-window.maximized .sidebar-pane, window.tiled .sidebar-pane,
-window.tiled-left .sidebar-pane, window.tiled-right .sidebar-pane { border-color: var(--window-bg-color); }
-.sidebar-pane:backdrop { border-color: var(--window-bg-color); }
-.navigation-sidebar > row { border-radius: 10px; }
-.navigation-sidebar > row:selected {
-  background-color: color-mix(in srgb, var(--accent-bg-color) 18%, transparent); color: var(--accent-color); }
-.navigation-sidebar > row:selected:hover { background-color: color-mix(in srgb, var(--accent-bg-color) 24%, transparent); }`;
+.sidebar-pane headerbar { background: none; box-shadow: none; }
+window.maximized .sidebar-pane, window.tiled .sidebar-pane, window.tiled-left .sidebar-pane, window.tiled-right .sidebar-pane { border-radius: ${r(Math.min(card, radius))}; }
+${rows}`;
 }
 
 // Drop rules whose selector mentions any of `words` (used to keep only the
@@ -170,14 +179,18 @@ ${gtk4Vars(dark)}
 }
 :root { --window-radius: ${r(opts.windowRadius)}; }
 headerbar .title, windowtitle > .title { font-weight: ${opts.titleWeight}; }
-/* Title bars the compositor draws for X11 apps. */
-window:not(.csd) headerbar { padding-left: 8px; padding-right: 8px; }
+/* Title bars the compositor draws for X11 apps: their header sits in a .titlebar box. */
+window.csd > .titlebar > headerbar { padding-left: 8px; padding-right: 8px; }
+/* GTK's own ring stops where an X11 app's content starts; the corners engine draws one around everything. */
+window.csd { outline: none; }
 ${gtk4Buttons(opts.windowButtons, light)}
+${frameTitle(light)}
 @media (prefers-color-scheme: dark) {
 ${gtk4Buttons(opts.windowButtons, dark)}
+${frameTitle(dark)}
 }
 ${extraCss}
-${gtk4Sidebar(opts.sidebarStyle, opts.windowRadius)}
+${gtk4Sidebar(opts)}
 `;
 }
 
@@ -314,15 +327,24 @@ export function shellCss(tokens, opts, dark, themeCss = '') {
     const glass = withAlpha(c.popover, dark ? 0.74 : 0.62);
     const tile = c.control;
     const rule = (sel, body) => `${scoped(sel)} { ${body} }`;
+    // Every state GNOME styles, or its dark tile shows through under our dark
+    // text: the first search result is :highlighted, not :selected.
+    const tileStates = sel => {
+        const list = states => states.map(s => `${sel}:${s}`).join(', ');
+        return `${rule(list(['hover']), `background-color: ${withAlpha(c.fg, dark ? 0.1 : 0.08)}; color: ${c.fg};`)}
+${rule(list(['focus', 'selected', 'highlighted', 'checked']), `background-color: ${withAlpha(c.accent, 0.22)}; color: ${c.fg};`)}
+${rule(list(['active']), `background-color: ${withAlpha(c.accent, 0.3)}; color: ${c.fg};`)}`;
+    };
     const glassSel = BLUR_CLASSES.flatMap(k => SURFACES.map(s => `${ROOT}.${k} ${s}`)).join(',\n');
     return `/* Generated by super-g. */
 ${accentOverrides(themeCss, c.accent, c.accentFg)}
 
+${rule(SURFACES.join(', '), `background-color: ${solid}; color: ${c.fg}; border: 1px solid ${c.hairline};`)}
 ${opts.glass
-        // Super G glass draws the surface (blur, tint, rim) underneath.
-        ? rule(SURFACES.join(', '), `background-color: transparent; color: ${c.fg}; border: none; box-shadow: none;`)
-        : `${rule(SURFACES.join(', '), `background-color: ${solid}; color: ${c.fg}; border: 1px solid ${c.hairline};`)}
-${glassSel} { background-color: ${glass}; }`}
+        // Solid until glass is really behind a surface, which the module marks:
+        // not during lock, not if the module died, not on one it doesn't cover.
+        ? rule(SURFACES.map(s => `${s}.super-g-glassed`).join(', '), 'background-color: transparent; border: none; box-shadow: none;')
+        : `${glassSel} { background-color: ${glass}; }`}
 
 ${rule('.popup-menu-content, .candidate-popup-content', 'border-radius: 16px; padding: 6px;')}
 ${rule('.popup-menu-item', 'border-radius: 10px;')}
@@ -364,7 +386,10 @@ ${rule('.events-button .events-title, .world-clocks-button .world-clocks-header,
 ${rule('.events-button, .world-clocks-button, .weather-button', `color: ${c.fg};`)}
 ${rule('.message', `border-radius: 16px; background-color: ${tile}; color: ${c.fg};`)}
 ${rule('.message:hover', `background-color: ${c.controlHover};`)}
+${rule('.notification-banner', 'margin: 8px 14px;')}
 ${rule('.notification-banner, .notification-banner .message', `border-radius: 20px; background-color: ${withAlpha(c.popover, 0.97)}; color: ${c.fg}; border: none; box-shadow: 0 6px 20px rgba(0,0,0,${dark ? 0.3 : 0.12});`)}
+${opts.glass ? rule('.notification-banner.super-g-glassed, .notification-banner.super-g-glassed .message', 'background-color: transparent; box-shadow: none;') : ''}
+${opts.glass ? rule('.notification-banner.super-g-glassed:hover, .notification-banner.super-g-glassed .message:hover', `background-color: ${withAlpha(c.fg, dark ? 0.06 : 0.04)};`) : ''}
 ${rule('.notification-banner .message-title, .notification-banner .message-body', `color: ${c.fg};`)}
 ${rule('.events-button, .world-clocks-button, .weather-button', `border-radius: 16px; background-color: ${tile}; color: ${c.fg};`)}
 
@@ -376,7 +401,8 @@ ${rule('.osd-window', 'border-radius: 999px;')}
 
 ${opts.overviewGlass ? `${rule('.overview-tile, .grid-search-result, .app-folder, .list-search-result, .search-statustext', `color: ${c.fg}; text-shadow: none;`)}
 ${rule('.overview-tile .overview-icon, .app-folder .overview-icon', `text-shadow: none; icon-shadow: none;`)}
-${rule('.overview-tile:hover, .overview-tile:focus, .grid-search-result:hover', `background-color: ${withAlpha(c.fg, dark ? 0.1 : 0.08)};`)}
+${tileStates('.overview-tile')}
+${tileStates('.app-folder')}
 ${rule('.page-indicator .page-indicator-icon', `background-color: ${c.fg};`)}
 ${rule('.page-navigation-arrow', `background-color: ${withAlpha(c.fg, 0.12)}; color: ${c.fg};`)}` : ''}
 ${rule('.app-folder', `background-color: ${withAlpha(c.fg, dark ? 0.1 : 0.07)}; color: ${c.fg}; box-shadow: inset 0 0 0 1px ${withAlpha(c.fg, 0.08)}; border-radius: 26px;`)}
@@ -399,11 +425,10 @@ ${rule('.search-entry StLabel, .search-entry .clutter-text', `color: ${c.fg};`)}
 ${rule('.search-section-content', `background-color: ${withAlpha(c.window, dark ? 0.62 : 0.72)}; color: ${c.fg}; border-radius: 22px; border: none; box-shadow: inset 0 0 0 1px ${withAlpha(c.fg, 0.08)};`)}
 ${rule('.list-search-result, .list-search-result-content, .list-search-result-title, .search-provider-icon, .list-search-provider-details, .list-search-provider-details StLabel', `color: ${c.fg};`)}
 ${rule('.list-search-result-description, .list-search-provider-details .list-search-provider-details-count', `color: ${withAlpha(c.fg, 0.68)};`)}
-${rule('.list-search-result:hover, .search-provider-icon:hover', `background-color: ${withAlpha(c.fg, dark ? 0.1 : 0.07)}; color: ${c.fg};`)}
-${rule('.list-search-result:focus, .list-search-result:selected, .search-provider-icon:focus, .search-provider-icon:selected', `background-color: ${withAlpha(c.accent, 0.22)}; color: ${c.fg};`)}
-${rule('.grid-search-result, .grid-search-result StLabel, .grid-search-result:focus StLabel, .grid-search-result:selected StLabel', `color: ${c.fg};`)}
-${rule('.grid-search-result:hover', `background-color: ${withAlpha(c.fg, dark ? 0.1 : 0.08)};`)}
-${rule('.grid-search-result:focus, .grid-search-result:selected', `background-color: ${withAlpha(c.accent, 0.22)};`)}
+${tileStates('.list-search-result')}
+${tileStates('.search-provider-icon')}
+${tileStates('.grid-search-result')}
+${rule('.grid-search-result, .grid-search-result StLabel', `color: ${c.fg};`)}
 ${rule('.search-entry .search-entry-icon, .search-entry StLabel.hint-text', `color: ${c.fgMuted};`)}
 `;
 }

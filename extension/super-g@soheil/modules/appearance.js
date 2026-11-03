@@ -15,7 +15,7 @@ import * as Gen from '../lib/themeGen.js';
 
 const IFACE = 'org.gnome.desktop.interface';
 // Settings that end up in gtk.css as colours and shapes.
-const RESTART_KEYS = ['palette', 'accent', 'window-buttons', 'window-radius', 'sidebar-style', 'title-weight'];
+const RESTART_KEYS = ['palette', 'accent', 'window-buttons', 'window-radius', 'sidebar-style', 'sidebar-radius', 'sidebar-accent-icons', 'title-weight'];
 const THEME = 'Super-G';
 const THEME_DARK = 'Super-G-dark';
 // Earlier versions wrote a separate file and @imported it; snaps copy only
@@ -138,6 +138,8 @@ export default class AppearanceModule extends Module {
             windowButtons: s.get_string('window-buttons'),
             windowRadius: s.get_int('window-radius'),
             sidebarStyle: s.get_string('sidebar-style'),
+            sidebarRadius: s.get_int('sidebar-radius'),
+            sidebarAccentIcons: s.get_boolean('sidebar-accent-icons'),
             titleWeight: s.get_int('title-weight'),
             glass: s.get_boolean('module-glass') && !s.get_strv('broken-modules').includes('glass'),
             overviewGlass: s.get_boolean('module-glass') && s.get_boolean('glass-overview'),

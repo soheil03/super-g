@@ -93,12 +93,39 @@
     </key>
     <key name="super-key-action" type="s">
       <choices>
+        <choice value="none"/>
         <choice value="overview"/>
+        <choice value="apps"/>
         <choice value="dock"/>
         <choice value="drawer"/>
+        <choice value="launcher"/>
       </choices>
       <default>'overview'</default>
       <summary>What one press of the Super key does</summary>
+    </key>
+    <key name="super-double-action" type="s">
+      <choices>
+        <choice value="none"/>
+        <choice value="overview"/>
+        <choice value="apps"/>
+        <choice value="dock"/>
+        <choice value="drawer"/>
+        <choice value="launcher"/>
+      </choices>
+      <default>'none'</default>
+      <summary>What a double press of the Super key does (any other than none delays a single press slightly)</summary>
+    </key>
+    <key name="super-hold-action" type="s">
+      <choices>
+        <choice value="none"/>
+        <choice value="overview"/>
+        <choice value="apps"/>
+        <choice value="dock"/>
+        <choice value="drawer"/>
+        <choice value="launcher"/>
+      </choices>
+      <default>'overview'</default>
+      <summary>What holding the Super key and letting go does</summary>
     </key>
     <key name="dock-launch-bounce" type="b">
       <default>true</default>
@@ -215,6 +242,15 @@
     <key name="sidebar-style" type="s">
       <default>'floating-card'</default>
       <summary>Sidebar style: floating-card or stock</summary>
+    </key>
+    <key name="sidebar-radius" type="i">
+      <range min="6" max="24"/>
+      <default>14</default>
+      <summary>Corner radius of the sidebar card in pixels</summary>
+    </key>
+    <key name="sidebar-accent-icons" type="b">
+      <default>true</default>
+      <summary>Tint sidebar icons with the accent colour</summary>
     </key>
     <key name="title-weight" type="i">
       <range min="400" max="800"/>

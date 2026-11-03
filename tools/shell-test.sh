@@ -17,6 +17,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)
 sb=$(realpath -m "$1"); scheme=${2:-light}; shift 2 || true
 rm -rf "$sb"; mkdir -p "$sb"/{data/gnome-shell/extensions,data/themes,config,cache,state,shots}
+# GTK4_CSS= reaches clients that read gtk.css once at start, like the X11 frames.
+if [ -n "${GTK4_CSS:-}" ]; then mkdir -p "$sb/config/gtk-4.0"; printf '%s\n' "$GTK4_CSS" > "$sb/config/gtk-4.0/gtk.css"; fi
 # Wayland socket paths must stay under 108 bytes, so the runtime dir is short.
 run=$(mktemp -d "/run/user/$(id -u)/ust-XXXXXX")
 trap 'rm -rf "$run"' EXIT

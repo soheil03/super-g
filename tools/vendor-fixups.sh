@@ -79,3 +79,25 @@ if 'Super G: late signals' not in s:
     open(p, 'w').write(s)
 print('dock locations guard patched')
 PY
+
+# Corners: skip-taskbar normal windows are helpers (Teams keeps an invisible call
+# toast open); a shadow and border around one floats on screen around nothing.
+python3 -I - "$v/corners/manager/utils.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = """    // Skip libhandy/libadwaita applications according to settings.
+"""
+new = """    // Super G: helper windows, not the app's real ones.
+    if (win.windowType === Meta.WindowType.NORMAL && win.is_skip_taskbar() &&
+        !win.get_transient_for()) {
+        return false;
+    }
+    // Skip libhandy/libadwaita applications according to settings.
+"""
+if 'Super G: helper windows' not in s:
+    assert old in s, 'corners enable check changed upstream'
+    s = s.replace(old, new)
+    open(p, 'w').write(s)
+print('corners helper windows patched')
+PY

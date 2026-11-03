@@ -3,6 +3,7 @@
 // the window radius comes from our setting, the border hugs the window (no
 // padding gap, which drew a detached outline) and uses a soft hairline.
 
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 
@@ -18,13 +19,16 @@ export function configureCorners(module) {
     // so their shape is pulled in to hug the content. (As X11 windows they get a
     // frame from the compositor, which fits.)
     const known = new Set(module.settings.get_strv('corners-chromium-apps'));
+    const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
     const apply = () => {
         let text = engine.get_value(KEY).print(true);
+        // The one ring around a window: GTK's own is off, it stopped at X11 content.
+        const hairline = iface.get_string('color-scheme') === 'prefer-dark' ? '1.0, 1.0, 1.0, 0.08' : '0.0, 0.0, 0.0, 0.10';
         const radius = module.settings.get_int('window-radius');
         text = text
             .replace(/'padding': <\{[^}]*\}>/, padding(0, 0, 0, 0))
             .replace(/'borderRadius': <uint32 \d+>/, `'borderRadius': <uint32 ${radius}>`)
-            .replace(/'borderColor': <\([^)]*\)>/, "'borderColor': <(0.0, 0.0, 0.0, 0.10)>");
+            .replace(/'borderColor': <\([^)]*\)>/, `'borderColor': <(${hairline})>`);
         const next = GLib.Variant.parse(engine.get_value(KEY).get_type(), text, null, null);
         if (!next.equal(engine.get_value(KEY)))
             engine.set_value(KEY, next);
@@ -45,6 +49,7 @@ export function configureCorners(module) {
         apply();
     };
     module.connect(module.settings, 'changed::window-radius', apply);
+    module.connect(iface, 'changed::color-scheme', apply);
     // Its class and process are known only once it has a first frame.
     module.connect(global.display, 'window-created', (_d, win) => {
         module.later(`corners-check-${win.get_id()}`, 300, () => check(win));

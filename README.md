@@ -5,7 +5,15 @@ Instead of nine separate extensions that each patch the shell their own way,
 Super G runs everything as modules of a single extension, driven by a
 single colour and shape palette, with one settings window.
 
-Built for **Ubuntu 26.04 LTS / GNOME 50** (GNOME 51 declared). An independent project, not affiliated with GNOME or Canonical. Dock magnification follows [Dhruva](https://github.com/narkagni/dhruva) by NarkAgni (GPL-3.0).
+Built for **Ubuntu 26.04 LTS / GNOME 50**. An independent project, not affiliated with GNOME or Canonical. Dock magnification follows [Dhruva](https://github.com/narkagni/dhruva) by NarkAgni (GPL-3.0).
+
+## Tested on
+
+| Super G | Ubuntu | GNOME Shell | GTK 4 | libadwaita | Session |
+|---|---|---|---|---|---|
+| 1.1.0 | 26.04.1 LTS | 50.1 | 4.22.4 | 1.9.1 | Wayland, with Xwayland for X11 apps |
+
+GNOME 51 is declared in `metadata.json` but not tested yet. See the [changelog](CHANGELOG.md), and [docs/UPGRADING.md](docs/UPGRADING.md) for how we port to new releases.
 
 ## What it does
 

@@ -46,6 +46,11 @@ const COAST_MS = 320;
 const TOUCH_SLOP = 10;
 // How long the Super key keeps a hidden dock out.
 const SUPER_DOCK_MS = 2500;
+const SUPER_POLL_MS = 80;
+const SUPER_IDLE_MS = 3000;
+const SUPER_HOLD_MS = 450;
+const SUPER_DOUBLE_MS = 280;
+const SUPER_SWALLOW_MS = 700;
 
 function sectionOf(app) {
     const cats = (app.get_app_info()?.get_categories() ?? '').split(';');
@@ -70,34 +75,131 @@ export default class DrawerModule extends Module {
         });
         this._hookDocks();
         this._superId = global.display.connect('overlay-key', () => this.guard(() => this._onSuper()));
-        this.connect(this.settings, 'changed::super-key-action', () => this._syncSuper());
+        for (const key of ['super-key-action', 'super-double-action', 'super-hold-action'])
+            this.connect(this.settings, `changed::${key}`, () => this._syncSuper());
         this._syncSuper();
     }
 
     /* ----------------------------------------------------- Super key -- */
 
     // GNOME's own handler toggles the overview. It's only held back while
-    // another action is chosen, and gets the key straight back otherwise.
+    // something else is chosen, and gets the key straight back otherwise.
     _syncSuper() {
-        const ours = this.settings.get_string('super-key-action') !== 'overview';
-        if (ours && !this._overviewHandler) {
+        const s = this.settings;
+        const single = s.get_string('super-key-action');
+        const stock = single === 'overview' && s.get_string('super-double-action') === 'none' &&
+            s.get_string('super-hold-action') === 'overview';
+        if (!stock && !this._overviewHandler) {
             const id = GObject.signal_handler_find(global.display, {signalId: 'overlay-key'});
             if (id && id !== this._superId) {
                 GObject.signal_handler_block(global.display, id);
                 this._overviewHandler = id;
             }
-        } else if (!ours && this._overviewHandler) {
+        } else if (stock && this._overviewHandler) {
             GObject.signal_handler_unblock(global.display, this._overviewHandler);
             this._overviewHandler = 0;
         }
+        // The key's press isn't reported, only its release alone, so how long it
+        // was held is read from the modifier state. Only while a hold matters,
+        // and only while the user is active: an idle desktop gets no timer.
+        const watch = s.get_string('super-hold-action') !== single;
+        if (watch && !this._idleMonitor) {
+            this._idleMonitor = global.backend.get_core_idle_monitor();
+            this._idleWatch = this._idleMonitor.add_idle_watch(SUPER_IDLE_MS, () => this._stopSuperPoll());
+            this._armActiveWatch();
+            this._startSuperPoll();
+        } else if (!watch && this._idleMonitor) {
+            this._dropSuperWatch();
+        }
+    }
+
+    _armActiveWatch() {
+        this._activeWatch = this._idleMonitor.add_user_active_watch(() => {
+            this._activeWatch = 0;
+            this._startSuperPoll();
+            this._armActiveWatch();
+        });
+    }
+
+    _startSuperPoll() {
+        if (this._superPoll)
+            return;
+        this._superPoll = GLib.timeout_add(GLib.PRIORITY_DEFAULT, SUPER_POLL_MS, () => {
+            const down = (global.get_pointer()[2] & Clutter.ModifierType.MOD4_MASK) !== 0;
+            if (down && !this._superDownAt)
+                this._superDownAt = Date.now();
+            else if (!down)
+                this._superDownAt = 0;
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopSuperPoll() {
+        if (this._superPoll)
+            GLib.source_remove(this._superPoll);
+        this._superPoll = 0;
+    }
+
+    _dropSuperWatch() {
+        this._stopSuperPoll();
+        if (this._idleWatch)
+            this._idleMonitor.remove_watch(this._idleWatch);
+        if (this._activeWatch)
+            this._idleMonitor.remove_watch(this._activeWatch);
+        this._idleWatch = this._activeWatch = 0;
+        this._idleMonitor = null;
     }
 
     _onSuper() {
-        const action = this.settings.get_string('super-key-action');
-        if (action === 'overview')
+        // The press that closed the drawer; this is its release.
+        if (this._superSwallow) {
+            this._superSwallow = false;
             return;
+        }
+        if (!this._overviewHandler)
+            return;
+        const s = this.settings;
+        const held = this._superDownAt ? Date.now() - this._superDownAt : 0;
+        this._superDownAt = 0;
+        if (held >= SUPER_HOLD_MS) {
+            this._superAction(s.get_string('super-hold-action'));
+            return;
+        }
+        const single = s.get_string('super-key-action');
+        const double = s.get_string('super-double-action');
+        if (double === 'none') {
+            this._superAction(single);
+        } else if (this._superFirst) {
+            this._superFirst = false;
+            this._superAction(double);
+        } else {
+            this._superFirst = true;
+            this.later('super-double', SUPER_DOUBLE_MS, () => {
+                if (!this._superFirst)
+                    return;
+                this._superFirst = false;
+                this._superAction(single);
+            });
+        }
+    }
+
+    _superAction(action) {
+        if (action === 'none')
+            return;
+        if (action === 'overview') {
+            Main.overview.toggle();
+            return;
+        }
         if (Main.overview.visible) {
             Main.overview.hide();
+            return;
+        }
+        if (action === 'apps') {
+            Main.overview.showApps();
+            return;
+        }
+        if (action === 'launcher') {
+            this._launcher()?._toggleSearch();
             return;
         }
         const dock = this._dockExt?.dockManager?._allDocks?.[0];
@@ -134,6 +236,8 @@ export default class DrawerModule extends Module {
         this.cleanup();
         this.close(true);
         global.display.disconnect(this._superId);
+        if (this._idleMonitor)
+            this._dropSuperWatch();
         if (this._overviewHandler)
             GObject.signal_handler_unblock(global.display, this._overviewHandler);
         this._overviewHandler = 0;
@@ -512,8 +616,12 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
     // anywhere goes back to search.
     _onKey(event) {
         const key = event.get_key_symbol();
-        // Menus hold back the shell's Super handling, so the drawer closes itself.
+        // The drawer has the keyboard, so Super reaches it here. Closing on the
+        // press leaves the release to arrive as a fresh press of the key, which
+        // would open it right back up.
         if (key === Clutter.KEY_Super_L || key === Clutter.KEY_Super_R) {
+            this._superSwallow = true;
+            this.later('super-swallow', SUPER_SWALLOW_MS, () => (this._superSwallow = false));
             this.close();
             return Clutter.EVENT_STOP;
         }

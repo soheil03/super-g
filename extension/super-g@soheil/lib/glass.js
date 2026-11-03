@@ -10,7 +10,6 @@ import GLib from 'gi://GLib';
 import Cogl from 'gi://Cogl';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
-import Graphene from 'gi://Graphene';
 import Mtk from 'gi://Mtk';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -285,6 +284,16 @@ export const LiveGlassEffect = GObject.registerClass({
         this._uniforms = null;
     }
 
+    // Closed menus shouldn't sit on GPU memory; the next open makes them again.
+    release() {
+        this._context = null;
+        this._down = this._up = this._downPass = this._upPass = [];
+        this._regions = null;
+        this._glass = this._shadow = null;
+        this._applied = null;
+        this._drawn = null;
+    }
+
     // One target per blur level, kept while they still fit: copies change size
     // as surfaces move near the screen's edges.
     _ensure(context, width, height, passes) {
@@ -507,8 +516,9 @@ class SuperGGlassLayer extends St.Widget {
     // guard: how much the contrast guard may thicken the tint; surfaces whose
     // text picks its colour from the backdrop (the top bar) want none.
     // reach: the most setRoom will ever ask for.
+    // thicken: 0-1, how far the tint goes towards solid, for what sits over a dim.
     _init({style, shapeSource = null, radius = null, track = null, smoothing = 0.5, live = true, shadow = true, guard = 1,
-        reach = NO_ROOM}) {
+        reach = NO_ROOM, thicken = 0}) {
         // Only the wallpaper copy is larger than the layer and needs clipping.
         super._init({x_expand: true, y_expand: true, clip_to_allocation: !live, reactive: false});
         this._live = live;
@@ -522,6 +532,7 @@ class SuperGGlassLayer extends St.Widget {
         this.wantsShadow = shadow;
         this.reach = {...NO_ROOM, ...reach};
         this._guard = guard;
+        this._thicken = thicken;
         this.room = {...NO_ROOM};
         this.stretch = {...NO_ROOM};
         this.active = true;
@@ -529,7 +540,8 @@ class SuperGGlassLayer extends St.Widget {
         this._last = '';
 
         if (live) {
-            this.add_effect_with_name('super-g-glass', new LiveGlassEffect(this));
+            this._liveEffect = new LiveGlassEffect(this);
+            this.add_effect_with_name('super-g-glass', this._liveEffect);
         } else {
             this._bgGroup = new Meta.BackgroundGroup();
             this.add_child(this._bgGroup);
@@ -547,7 +559,12 @@ class SuperGGlassLayer extends St.Widget {
             return true;
         });
         if (live)
-            this.connect('notify::mapped', () => this.mapped && this._liftOffscreen());
+            this.connect('notify::mapped', () => {
+                if (this.mapped)
+                    this._liftOffscreen();
+                else
+                    this._liveEffect?.release();
+            });
         this.connect('destroy', () => this._teardown());
     }
 
@@ -687,7 +704,7 @@ class SuperGGlassLayer extends St.Widget {
         const s = this._style;
         this.uniforms = {
             size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.blur,
-            tint: s.tint, saturation: s.saturation, brightness: s.brightness, rim: s.rim, outline: s.outline, grain: s.grain,
+            tint: this._thicken ? [s.tint[0], s.tint[1], s.tint[2], s.tint[3] + (1 - s.tint[3]) * this._thicken] : s.tint, saturation: s.saturation, brightness: s.brightness, rim: s.rim, outline: s.outline, grain: s.grain,
             guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, shadow: this._shadowOn ? s.shadow : 0, shadowSpread: s.shadowSpread, shadowDrop: s.shadowDrop,
         };
         if (this._effect)

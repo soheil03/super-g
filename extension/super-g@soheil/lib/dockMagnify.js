@@ -223,6 +223,9 @@ export class DockMagnifier {
         if (!visual || visual._bouncing || !s.get_boolean('dock-launch-bounce') || !this._enabled)
             return;
         visual._bouncing = true;
+        // Clear of whatever clips the row, for as long as it's in the air.
+        this._unclip(state);
+        state.hops = (state.hops ?? 0) + 1;
         const side = state.dock._position;
         const [axis, sign] = {
             [St.Side.LEFT]: ['translation_x', 1], [St.Side.RIGHT]: ['translation_x', -1],
@@ -254,6 +257,9 @@ export class DockMagnifier {
             timeline.stop();
             place(0);
             this._bounces.delete(timeline);
+            state.hops--;
+            if (!state.active && !state.gone)
+                this._reclip(state);
         };
         timeline.connect('new-frame', (_t, ms) => {
             const t = ms / BOUNCE_MS;
@@ -300,6 +306,8 @@ export class DockMagnifier {
     }
 
     _reclip(state) {
+        if (state.hops > 0)
+            return;
         for (const [a, alloc, view] of state.clipped ?? []) {
             a.clip_to_allocation = alloc;
             if (view !== null)

@@ -9,6 +9,8 @@ import Pango from 'gi://Pango';
 import {gtk4Css} from './lib/themeGen.js';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+const SUPER_ACTIONS = [['none', 'Nothing'], ['overview', 'Activities overview'], ['apps', "GNOME's app grid"],
+    ['dock', 'Dock, then app drawer'], ['drawer', 'App drawer'], ['launcher', 'Launcher']];
 const GLASS_MATERIALS = [['ultra-thin', 'Ultra thin'], ['thin', 'Thin'], ['regular', 'Regular'],
     ['thick', 'Thick'], ['ultra-thick', 'Ultra thick'], ['custom', 'Custom']];
 const PALETTES = [['graphite', 'Graphite neutral'], ['catppuccin', 'Catppuccin-tuned'],
@@ -161,7 +163,8 @@ export default class SuperGPrefs extends ExtensionPreferences {
         const apply = () => provider.load_from_string(gtk4Css(tokens, {
             palette: s.get_string('palette'), accent: s.get_string('accent'),
             windowButtons: s.get_string('window-buttons'), windowRadius: s.get_int('window-radius'),
-            sidebarStyle: s.get_string('sidebar-style'), titleWeight: s.get_int('title-weight'),
+            sidebarStyle: s.get_string('sidebar-style'), sidebarRadius: s.get_int('sidebar-radius'),
+            sidebarAccentIcons: s.get_boolean('sidebar-accent-icons'), titleWeight: s.get_int('title-weight'),
         }));
         // A provider of our own doesn't follow the session's light or dark on
         // its own, unlike the user's gtk.css.
@@ -203,6 +206,8 @@ export default class SuperGPrefs extends ExtensionPreferences {
                 comboRow(s, 'window-buttons', 'Window buttons', BUTTONS),
                 spinRow(s, 'window-radius', 'Corner radius', {lower: 0, upper: 28, step: 1}),
                 comboRow(s, 'sidebar-style', 'Sidebar', SIDEBARS),
+                spinRow(s, 'sidebar-radius', 'Sidebar corner radius', {lower: 6, upper: 24, step: 1}),
+                switchRow(s, 'sidebar-accent-icons', 'Accent sidebar icons'),
                 comboRow(s, 'title-weight', 'Title weight', WEIGHTS, {int: true}),
             ], 'Open apps pick up window changes after a restart.'),
             group('Glass', [
@@ -263,10 +268,15 @@ export default class SuperGPrefs extends ExtensionPreferences {
                     spinRow(s, 'app-drawer-columns', 'Columns', {lower: 4, upper: 10, step: 1}),
                     switchRow(s, 'app-drawer-suggestions', 'Most-used apps first'),
                 ]),
+                group('Super key', [
+                    comboRow(s, 'super-key-action', 'Press', SUPER_ACTIONS,
+                        {subtitle: 'With "Dock, then app drawer", a dock already showing opens the drawer. Pressing again closes it'}),
+                    comboRow(s, 'super-double-action', 'Double press', SUPER_ACTIONS,
+                        {subtitle: 'Anything but Nothing makes a single press wait a moment, to tell them apart'}),
+                    comboRow(s, 'super-hold-action', 'Hold', SUPER_ACTIONS,
+                        {subtitle: 'Acts when you let go, so shortcuts like Super+A never trigger it'}),
+                ]),
                 group('Behaviour', [
-                    comboRow(s, 'super-key-action', 'Super key', [['overview', 'Activities overview'],
-                        ['dock', 'Dock, then app drawer'], ['drawer', 'App drawer']],
-                    {subtitle: 'One press. With the dock option, a dock already showing opens the drawer'}),
                     comboRow(dock, 'dock-position', 'Position', DOCK_POSITIONS),
                     invertedSwitch(dock, 'dock-fixed', 'Auto-hide'),
                     switchRow(dock, 'intellihide', 'Hide only when a window overlaps'),

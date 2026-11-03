@@ -172,6 +172,11 @@ export async function shouldEnableEffect(win) {
         win.windowType !== Meta.WindowType.MODAL_DIALOG) {
         return false;
     }
+    // Super G: helper windows, not the app's real ones.
+    if (win.windowType === Meta.WindowType.NORMAL && win.is_skip_taskbar() &&
+        !win.get_transient_for()) {
+        return false;
+    }
     // Skip libhandy/libadwaita applications according to settings.
     const appType = win._appType ?? (await getAppType(win));
     win._appType = appType; // Cache the result.

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Glass everywhere: the top bar, the dock, every popup menu (quick settings,
-// calendar, app and context menus) and the overview backdrop get Super G
-// glass (lib/glass.js). Replaces the Blur my Shell engine for all of these.
+// calendar, app and context menus), dialogs, notifications, the switchers, the
+// OSD and the overview backdrop get Super G glass (lib/glass.js). Replaces the
+// Blur my Shell engine for all of these.
 
 import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
@@ -10,7 +11,11 @@ import St from 'gi://St';
 import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
+import * as OsdWindow from 'resource:///org/gnome/shell/ui/osdWindow.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as SwitcherPopup from 'resource:///org/gnome/shell/ui/switcherPopup.js';
+import * as WorkspaceSwitcherPopup from 'resource:///org/gnome/shell/ui/workspaceSwitcherPopup.js';
 
 import {Module} from '../lib/module.js';
 import * as Files from '../lib/files.js';
@@ -98,6 +103,7 @@ export default class GlassModule extends Module {
         this._tokens = JSON.parse(Files.readText(`${this.ext.path}/tokens.json`));
         this._menus = new Map();
         this._docks = new Map();
+        trackPaintingView();
         this._style = this._computeStyle();
 
         this.connect(this._iface, 'changed::color-scheme', () => this._restyle());
@@ -139,6 +145,16 @@ export default class GlassModule extends Module {
             return self._origPopup.call(this, ...args);
         };
 
+        this._surfaces = new Map();
+        this._hooks = [];
+        this.connect(Main.messageTray._bannerBin, 'child-added', (_bin, banner) => this.guard(() => this._ensureTracked(Main.messageTray, banner)));
+        this._after(ModalDialog.ModalDialog.prototype, 'open', dialog => this._ensureDialog(dialog));
+        this._after(OsdWindow.OsdWindow.prototype, 'show', osd => this._ensureTracked(osd, osd._hbox));
+        this._after(SwitcherPopup.SwitcherPopup.prototype, 'show', popup => this._ensureSwitcher(popup));
+        this._after(WorkspaceSwitcherPopup.WorkspaceSwitcherPopup.prototype, 'display', popup => {
+            for (const monitor of popup.get_children())
+                this._ensureTracked(popup, monitor._list);
+        });
         this.connect(Main.overview, 'showing', () => this._overviewIn());
         this.connect(Main.overview, 'hidden', () => this._overviewOut());
 
@@ -168,12 +184,22 @@ export default class GlassModule extends Module {
         if (this._origPointerOpen)
             BoxPointer.BoxPointer.prototype.open = this._origPointerOpen;
         this._origPointerOpen = null;
-        for (const entry of this._menus.values())
+        for (const entry of this._menus.values()) {
+            entry.child?.remove_style_class_name?.('super-g-glassed');
             unwrap(entry);
+        }
         this._menus.clear();
         for (const glass of this._docks.values())
             glass.destroy();
         this._docks.clear();
+        for (const restore of this._hooks)
+            restore();
+        this._hooks = [];
+        for (const [surface, glass] of this._surfaces) {
+            surface.remove_style_class_name('super-g-glassed');
+            glass.destroy();
+        }
+        this._surfaces.clear();
         if (this._origPopup)
             AppDisplay.AppFolderDialog.prototype.popup = this._origPopup;
         this._origPopup = null;
@@ -188,6 +214,7 @@ export default class GlassModule extends Module {
         this._islands.forEach(glass => glass.destroy());
         this._islands = [];
         this._overviewOut(true);
+        untrackPaintingView();
     }
 
     _computeStyle() {
@@ -201,7 +228,7 @@ export default class GlassModule extends Module {
     _restyle() {
         this._style = this._computeStyle();
         const all = [this._panelGlass, this._launcherGlass, ...this._islands, ...this._folders.values(), ...[...this._menus.values()].map(e => e.glass),
-            ...this._docks.values(), ...(this._overview ?? [])];
+            ...this._docks.values(), ...this._surfaces.values(), ...(this._overview ?? [])];
         for (const glass of all.filter(Boolean))
             glass.setStyle(this._style);
         this._syncPanelGlass();
@@ -260,15 +287,70 @@ export default class GlassModule extends Module {
         });
     }
 
+    _after(proto, name, ensure) {
+        const orig = proto[name];
+        const self = this;
+        proto[name] = function (...args) {
+            const result = orig.apply(this, args);
+            self.guard(() => ensure(this));
+            return result;
+        };
+        this._hooks.push(() => (proto[name] = orig));
+    }
+
+    _addSurface(surface, glass) {
+        this._surfaces.set(surface, glass);
+        surface.add_style_class_name('super-g-glassed');
+        surface.connect('destroy', () => {
+            this._surfaces.delete(surface);
+            glass.destroy();
+        });
+    }
+
+    // For owners that place their children by hand: the glass sits just below
+    // the owner and follows the surface.
+    _ensureTracked(owner, surface) {
+        if (!surface || this._surfaces.has(surface))
+            return;
+        const glass = new GlassLayer({style: this._style, shapeSource: surface, track: surface});
+        owner.get_parent().insert_child_below(glass, owner);
+        this._addSurface(surface, glass);
+    }
+
+    // Inside the dialog: below it, the dialog's own dim would lie over the glass.
+    _ensureDialog(dialog) {
+        const layout = dialog.dialogLayout;
+        const surface = layout?._dialog;
+        if (!surface || this._surfaces.has(surface))
+            return;
+        const glass = new GlassLayer({style: this._style, shapeSource: surface, thicken: 0.6});
+        layout.insert_child_below(glass, surface);
+        this._addSurface(surface, glass);
+    }
+
+    // Alt-Tab adds a second list, the app's windows, while it's open.
+    _ensureSwitcher(popup) {
+        this._ensureTracked(popup, popup._switcherList);
+        if (popup._glassWatched)
+            return;
+        popup._glassWatched = true;
+        popup.connect('child-added', (_p, child) => this.guard(() => {
+            if (child.has_style_class_name?.('switcher-list'))
+                this._ensureTracked(popup, child);
+        }));
+    }
+
     _ensureBox(box) {
         if (this._menus.has(box) || !box.bin)
             return;
         // Menus only, not other things that point at something.
-        if (!box.bin.get_child()?.has_style_class_name?.('popup-menu-content'))
+        const content = box.bin.get_child();
+        if (!content?.has_style_class_name?.('popup-menu-content') && !content?.has_style_class_name?.('candidate-popup-content'))
             return;
         const entry = wrapWithGlass(box.bin, this._style);
         if (!entry)
             return;
+        content.add_style_class_name('super-g-glassed');
         this._menus.set(box, entry);
         box.connect('destroy', () => this._menus.delete(box));
     }

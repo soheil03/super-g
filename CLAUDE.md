@@ -76,11 +76,22 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 
 - Super key: `super-key-action` blocks GNOME's `overlay-key` handler (found with `GObject.signal_handler_find`) rather than disconnecting it, so it can go back. Test by emitting `overlay-key`.
 
+- Super gestures (press, double, hold) are in `modules/drawer.js`. Hold reads MOD4 on a timer that stops after 3 s without input (`Meta.IdleMonitor`), so an idle desktop gets no wakeups.
+- Helper windows (`NORMAL`, skip-taskbar, no parent, e.g. Teams' call toast) get no corners effect: it drew a stray outline. A launch hop keeps the dock unclipped through `state.hops`.
+- The first search result is `:highlighted`, not `:selected`; GNOME's dark tile shows through any state we don't style (`tileStates` in themeGen).
+- The X11 frame (`mutter-x11-frames`) is `window.csd > .titlebar > headerbar`, has no libadwaita colour variables, and reads gtk.css once at start. Probe it with `GTK4_CSS='...'` in shell-test.sh, since the block appearance writes comes too late for a sandbox's frame. Mutter doesn't respawn it after SIGTERM: X11 windows stop appearing until the next login. Never `pkill` by name in a test: it reaches the real session too.
+- The window rim is the corners engine's border, following the colour scheme; GTK's outline is off because it stopped where X11 content starts.
+- Sidebar card is a margin, not a window-coloured border, so it casts a real shadow. Settings' rows have margins set in code; `row > grid` takes them back with negative CSS margins.
+- Shell surfaces are solid by default; the glass module adds `super-g-glassed` once glass is behind one (lock, a crashed module and uncovered surfaces stay readable). Dialog glass lives inside `dialogLayout` because the dialog's lightbox moves later siblings under its dim; it's thickened (`thicken`) so it doesn't turn grey over that dim.
+- Notification banners get tracked glass from `child-added` on `messageTray._bannerBin`. Run `lock-cycle` last or alone: the headless shell re-locks afterwards and later scenes come out black or mid-fade.
+
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.
 - Every user-facing choice becomes a setting (user's rule). Show options before building visual pieces.
 - Commit messages end with the Co-Authored-By line the session provides.
 
 ## Release checklist (GitHub)
+- Every job ends with a version bump (`metadata.json`), a `CHANGELOG.md` entry and a commit, without asking. Tested versions live in `docs/UPGRADING.md` and the README.
+- Porting to a new GNOME or Ubuntu: follow `docs/UPGRADING.md`, and add any new private shell name you depend on to its table.
 - Public at github.com/soheil03/super-g. README shots in `docs/screenshots/` come from a sandbox without CLONE, so they hold no personal data: keep it that way.
 - Before an extensions.gnome.org submission: a neutral uuid, and review its rules on bundled code.
