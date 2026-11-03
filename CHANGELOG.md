@@ -2,6 +2,12 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.2.7 - 2026-11-03
+
+### Fixed
+- The whole of a magnified dock icon can be clicked. Clicks on the part that rises above the dock used to go through to the window behind it. Right-click and dragging work there too. A dock with too many icons to fit, which has to scroll, keeps the old behaviour.
+- A running dot no longer jumps up to the icon after a hover or when its app starts.
+
 ## 1.2.6 - 2026-11-03
 
 ### Fixed

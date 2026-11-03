@@ -8,6 +8,8 @@
 // The approach follows Dhruva's magnifier by NarkAgni (GPL-3.0).
 
 import Clutter from 'gi://Clutter';
+import GObject from 'gi://GObject';
+import Graphene from 'gi://Graphene';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -48,6 +50,25 @@ const approach = (from, to, factor) =>
 const isItem = actor =>
     actor.has_style_class_name?.('dash-item-container') || actor.has_style_class_name?.('dash-separator');
 
+// Picking skips whatever lies outside an actor's paint volume, and the scroll
+// view reports its own box, so nothing that rose out of it could be clicked.
+const RaisedVolume = GObject.registerClass(
+class SuperGRaisedVolume extends Clutter.Effect {
+    _init(room) {
+        super._init();
+        this._room = room;
+    }
+
+    vfunc_modify_paint_volume(volume) {
+        const {width, height} = this.get_actor();
+        const {left, right, top, bottom} = this._room;
+        volume.set_origin(new Graphene.Point3D({x: -left, y: -top, z: 0}));
+        volume.set_width(width + left + right);
+        volume.set_height(height + top + bottom);
+        return true;
+    }
+});
+
 export class DockMagnifier {
     constructor(module, dockExt) {
         this._module = module;
@@ -87,7 +108,7 @@ export class DockMagnifier {
             if (type === Clutter.EventType.BUTTON_RELEASE || type === Clutter.EventType.TOUCH_END) {
                 const [x, y] = event.get_coords();
                 for (const state of this._docks.values()) {
-                    if (state.active && this._overDock(state, x, y))
+                    if (state.active && this._inside(state, x, y))
                         this._seat(state, x, y);
                     this._wake(state);
                 }
@@ -236,6 +257,15 @@ export class DockMagnifier {
                     dot.opacity = 0;
                     dot.ease({opacity: 255, duration: DOT_FADE_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
                 });
+                // The engine puts it back at every style change, a hover included.
+                dot.connect('notify::translation-y', () => {
+                    const visual = this._visual(item);
+                    if (!visual || visual._bouncing)
+                        return;
+                    const place = this._dotDrop(state) / visual.scale_y;
+                    if (Math.abs(dot.translation_y - place) > 0.01)
+                        dot.translation_y = place;
+                });
             }
         }
     }
@@ -348,6 +378,34 @@ export class DockMagnifier {
             if ('clip_to_view' in a)
                 a.clip_to_view = false;
         }
+        const icon = state.iconSize ?? 64;
+        const along = (this._scale() - 1) * icon * this._reach() + icon / 2;
+        const across = (this._scale() - 1 + BOUNCE_HEIGHT) * icon;
+        const side = state.dock._position;
+        state.raised = new RaisedVolume({
+            left: state.vertical ? (side === St.Side.LEFT ? 0 : across) : along,
+            right: state.vertical ? (side === St.Side.LEFT ? across : 0) : along,
+            top: state.vertical ? along : (side === St.Side.TOP ? 0 : across),
+            bottom: state.vertical ? along : (side === St.Side.TOP ? across : 0),
+        });
+        state.dash._scrollView.add_effect(state.raised);
+        // A viewport also clips picking while it has adjustments. A row that
+        // scrolls needs them, so it keeps to its view.
+        const viewport = state.dash._boxContainer;
+        const {hadjustment, vadjustment} = viewport;
+        const scrolls = adjustment => adjustment && adjustment.upper > adjustment.page_size;
+        if (!scrolls(hadjustment) && !scrolls(vadjustment)) {
+            state.adjustments = {hadjustment, vadjustment};
+            viewport.hadjustment = null;
+            viewport.vadjustment = null;
+        }
+        this._refreshVolumes(state);
+    }
+
+    // Ancestors keep their volumes cached through an effect's coming and going.
+    _refreshVolumes(state) {
+        for (let a = state.dash._box; a; a = a.get_parent())
+            a.invalidate_paint_volume();
     }
 
     _reclip(state) {
@@ -357,6 +415,14 @@ export class DockMagnifier {
             a.clip_to_allocation = alloc;
             if (view !== null)
                 a.clip_to_view = view;
+        }
+        if (state.raised) {
+            state.dash._scrollView.remove_effect(state.raised);
+            state.raised = null;
+            if (state.adjustments)
+                Object.assign(state.dash._boxContainer, state.adjustments);
+            state.adjustments = null;
+            this._refreshVolumes(state);
         }
         state.clipped = null;
     }
@@ -397,6 +463,10 @@ export class DockMagnifier {
                 value: {scale: 1, shift: 0},
             };
             actor.connect('destroy', () => (fresh.dead = true));
+            // The button keeps its resting size, so what grew past it would let
+            // clicks through to the window below. Events bubble up to the button.
+            if (fresh.zooms && fresh.visual)
+                fresh.visual.reactive = true;
             actor.remove_all_transitions();
             fresh.visual?.remove_all_transitions();
             fresh.visual?.set_pivot_point(
@@ -722,8 +792,11 @@ export class DockMagnifier {
     _restAll(state) {
         state.timeline?.stop();
         for (const slot of state.slots ?? []) {
-            if (!slot.dead)
-                this._apply(state, slot, {scale: 1, shift: 0});
+            if (slot.dead)
+                continue;
+            this._apply(state, slot, {scale: 1, shift: 0});
+            if (slot.visual)
+                slot.visual.reactive = false;
         }
         state.dash._background?._glassLayer?.setRoom({});
         state.active = false;
