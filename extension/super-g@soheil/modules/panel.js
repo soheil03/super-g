@@ -7,6 +7,7 @@
 import Gio from 'gi://Gio';
 import Meta from 'gi://Meta';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {PopupAnimation} from 'resource:///org/gnome/shell/ui/boxpointer.js';
 
 import {Module} from '../lib/module.js';
 import * as Files from '../lib/files.js';
@@ -24,6 +25,9 @@ const SAVED = `${Files.STATE}/panel-original.json`;
 // the desktop) are covered here.
 const REPLACES = ['just-perfection-desktop@just-perfection'];
 const GAP = 6;
+// GNOME grows a quick settings submenu for 200 ms with nothing in it, then fades
+// the content in for another 200.
+const QUICK_MENU_MS = 150;
 const SOLID_CLASS = 'super-g-panel-solid';
 const WALLPAPER_CHECK_MS = 5 * 60 * 1000;
 // The bar's boxes and the part of its width each covers.
@@ -49,6 +53,7 @@ export default class PanelModule extends Module {
         this._windowSignals = new Map();
         handOver(this.name, REPLACES);
         this._save();
+        this._quickenMenus();
 
         this.connect(this.settings, 'changed', () => this.later('apply', 120, () => this._apply()));
         this.connect(this._iface, 'changed::color-scheme', () => this._apply());
@@ -78,11 +83,45 @@ export default class PanelModule extends Module {
         this.cleanup();
         this._stopTracking();
         this._sheet.clear();
+        if (this._quickMenuProto)
+            this._quickMenuProto.open = this._quickMenuOpen;
+        this._quickMenuProto = null;
         Main.panel.remove_style_class_name(SOLID_CLASS);
         Main.panel.statusArea.quickSettings?.remove_style_class_name(STATUS_CLASS);
         this._setA11yVisible(true);
         this._restore();
         handBack(this.name, REPLACES);
+    }
+
+    // The class isn't exported, so it's found through the power menu. Quick
+    // settings may still be loading its indicators when this module starts.
+    _quickenMenus() {
+        const proto = Main.panel.statusArea.quickSettings?._system?._systemItem?.menu;
+        if (!proto) {
+            this.later('quick-menus', 1000, () => this._quickenMenus());
+            return;
+        }
+        this._quickMenuProto = Object.getPrototypeOf(proto);
+        this._quickMenuOpen = this._quickMenuProto.open;
+        this._quickMenuProto.open = function (animate) {
+            if (this.isOpen)
+                return;
+            this.actor.show();
+            this.isOpen = true;
+            const previous = this.actor.height;
+            this.actor.height = -1;
+            const [target] = this.actor.get_preferred_height(-1);
+            this.actor.height = previous;
+            const duration = animate !== PopupAnimation.NONE ? QUICK_MENU_MS : 0;
+            this.box.opacity = 0;
+            this.box.ease({duration, opacity: 255});
+            this.actor.ease({
+                duration: duration * (Math.abs(target - previous) / target),
+                height: target,
+                onComplete: () => (this.actor.height = -1),
+            });
+            this.emit('open-state-changed', true);
+        };
     }
 
     /* ---------------------------------------------------- applying -- */
@@ -158,8 +197,10 @@ ${P} .kiwi-input-en StLabel { background-color: ${c.fg}; color: ${onColor(c.fg)}
 ${P} #panelActivities { background-color: transparent; }
 ${P} #panelActivities:checked, ${P} #panelActivities:hover { background-color: ${pillHover}; }`;
 
+        // GNOME's resting inset shadow makes St keep the fill inside the button's
+        // 3 px transparent border, so the pill would grow on hover, which has none.
         const statusCss = status === 'grouped'
-            ? `${P} .panel-button.${STATUS_CLASS} { background-color: ${pill}; }
+            ? `${P} .panel-button.${STATUS_CLASS} { background-color: ${pill};${style === 'islands' ? '' : ' box-shadow: none;'} }
 ${P} .panel-button.${STATUS_CLASS}:hover, ${P} .panel-button.${STATUS_CLASS}:checked { background-color: ${pillHover}; }`
             : `${P} .panel-button.${STATUS_CLASS} { background-color: transparent; }`;
 

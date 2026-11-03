@@ -86,6 +86,9 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Notification banners get tracked glass from `child-added` on `messageTray._bannerBin`. Run `lock-cycle` last or alone: the headless shell re-locks afterwards and later scenes come out black or mid-fade.
 - "Effects gone, extension INITIALIZED, `broken-modules` empty": check `disable-user-extensions` first. GNOME sets it when the shell is killed for not exiting in 5 s during its first 60 s after login, so a restart right after login does it with no crash. `stop-time` in a sandbox shows our exit time (about 170 ms).
 - Drop shadows are `lib/softShadow.js`: one shader for glass and windows, the corners engine's actor patched in `vendor-fixups.sh`. Cogl only blends a pipeline it knows has alpha and can't see into a snippet, so a pipeline with no real texture needs a 1x1 RGBA one or it paints opaque black. `get_uniform_location` is per context, cached by name.
+- An EVAL timing is only real with `pointer.click`: `menu.open(true)` skips the click path and shows a different animation.
+- St keeps a fill inside a transparent border only while a box-shadow is set: GNOME's resting inset shadow on `.panel-button` made a pill 3 px smaller than its hover.
+- Maximized Chromium and Electron frames overshoot the screen by 1 px on the right and bottom, so per-app insets are dropped when maximized (vendor-fixups).
 - Tried and removed: re-blurring glass at half rate on 120 Hz. CPU went up (19.5% to 25.5%), since a skipped frame must force another redraw.
 - Super hold fires from the timer in `_checkHold`, so a Super combo pressed more than 450 ms in fires it first: key presses to clients aren't visible to the shell.
 

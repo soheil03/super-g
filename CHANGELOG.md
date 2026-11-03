@@ -2,6 +2,16 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.2.2 - 2026-11-03
+
+### Changed
+- Quick settings submenus (power, Wi-Fi and the rest) open in about 150 ms instead of 370 ms: the content fades in while the menu grows, not after it.
+
+### Fixed
+- The status pill keeps its size on hover. At rest it was painted 3 px smaller on every side.
+- Maximized Chromium and Electron windows have no stray rim along some screen edges. The inset now applies only to floating windows, and is back to its earlier value, since the even one from 1.2.1 left artifacts.
+- The dim behind quick settings submenus is back. Removing it in 1.2.1 didn't help the power menu.
+
 ## 1.2.1 - 2026-11-03
 
 ### Added

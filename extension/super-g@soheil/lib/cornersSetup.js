@@ -12,7 +12,7 @@ import {setWindowShadowStyle} from './softShadow.js';
 const KEY = 'global-rounded-corner-settings';
 const CUSTOM_KEY = 'custom-rounded-corner-settings';
 // Left, right, top, bottom, measured against the engine's own bounds.
-const CHROMIUM_INSET = [1, 1, 0, 2];
+const CHROMIUM_INSET = [1, 2, 0, 2];
 
 export function configureCorners(module) {
     const engine = module.instance.getSettings();

@@ -80,6 +80,35 @@ if 'Super G: late signals' not in s:
 print('dock locations guard patched')
 PY
 
+# Corners: no per-app inset on maximized windows.
+python3 -I - "$v/corners/manager/event_handlers.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = """    const cfg = getRoundedCornersCfg(win);
+"""
+new = """    let cfg = getRoundedCornersCfg(win);
+    // Super G: a per-app inset hugs what a floating window draws. Against the
+    // screen's edges it would pull the rim on screen on some sides only.
+    if (win.maximizedHorizontally || win.maximizedVertically) {
+        const { left, right, top, bottom } = cfg.padding;
+        cfg = { ...cfg, padding: {
+            left: win.maximizedHorizontally ? 0 : left,
+            right: win.maximizedHorizontally ? 0 : right,
+            top: win.maximizedVertically ? 0 : top,
+            bottom: win.maximizedVertically ? 0 : bottom,
+        } };
+    }
+"""
+if 'Super G: a per-app inset' not in s:
+    i = s.index('function updateEffect') if 'function updateEffect' in s else s.rindex(old)
+    j = s.index(old, i)
+    assert 'updateUniforms' in s[j:j+300], 'corners updateEffect changed upstream'
+    s = s[:j] + new + s[j+len(old):]
+    open(p, 'w').write(s)
+print('corners maximized inset patched')
+PY
+
 # Corners: skip-taskbar normal windows are helpers (Teams keeps an invisible call
 # toast open); a shadow and border around one floats on screen around nothing.
 python3 -I - "$v/corners/manager/utils.js" <<'PY'

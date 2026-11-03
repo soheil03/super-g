@@ -5,6 +5,7 @@
 // Blur my Shell engine for all of these.
 
 import Clutter from 'gi://Clutter';
+import Cogl from 'gi://Cogl';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
@@ -363,12 +364,18 @@ export default class GlassModule extends Module {
     _ensureMenu(menu) {
         if (menu._boxPointer)
             this._ensureBox(menu._boxPointer);
-        // Quick settings dims itself behind a submenu; that effect puts the whole
-        // menu through an offscreen pass with the live glass inside it, which
-        // made the power menu crawl, and full strength turns glass dull grey.
+        // Quick settings dims itself behind a submenu; full strength turns glass
+        // to dull grey.
         if (menu._setDimmed && menu._dimEffect) {
-            menu._dimEffect.enabled = false;
-            menu._setDimmed = () => {};
+            menu._setDimmed = dim => {
+                const val = 127 * (dim ? 0.86 : 1);
+                menu._boxPointer.ease_property('@effects.dim.brightness',
+                    new Cogl.Color({red: val, green: val, blue: val, alpha: 255}), {
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD, duration: 200,
+                        onStopped: () => (menu._dimEffect.enabled = dim),
+                    });
+                menu._dimEffect.enabled = true;
+            };
         }
         menu.connect('destroy', () => this._menus.delete(menu));
     }

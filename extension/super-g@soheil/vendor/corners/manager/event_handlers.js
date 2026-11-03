@@ -240,7 +240,18 @@ function updateEffect(actor) {
     if (!effect.enabled) {
         effect.enabled = true;
     }
-    const cfg = getRoundedCornersCfg(win);
+    let cfg = getRoundedCornersCfg(win);
+    // Super G: a per-app inset hugs what a floating window draws. Against the
+    // screen's edges it would pull the rim on screen on some sides only.
+    if (win.maximizedHorizontally || win.maximizedVertically) {
+        const { left, right, top, bottom } = cfg.padding;
+        cfg = { ...cfg, padding: {
+            left: win.maximizedHorizontally ? 0 : left,
+            right: win.maximizedHorizontally ? 0 : right,
+            top: win.maximizedVertically ? 0 : top,
+            bottom: win.maximizedVertically ? 0 : bottom,
+        } };
+    }
     const windowContentOffset = computeWindowContentsOffset(win);
     effect.updateUniforms(cfg, computeBounds(actor, windowContentOffset));
     const shadow = windowInfo.shadow;

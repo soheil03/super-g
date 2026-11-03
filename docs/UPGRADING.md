@@ -8,7 +8,7 @@ Add a row each time, and copy the newest one into the README.
 
 | Super G | Ubuntu | GNOME Shell | Mutter | GTK 4 | libadwaita | Session | How it was tested |
 |---|---|---|---|---|---|---|---|
-| 1.2.1 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell at 100% scale, 60 and 120 Hz, real keyboard and pointer input. Real-desktop check still to do |
+| 1.2.2 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell at 100% scale, 60 and 120 Hz, real keyboard and pointer input. Real-desktop check still to do |
 | 1.1.0 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell at 100% scale, real keyboard and pointer input. Real-desktop check still to do |
 
 `shell-version` in `metadata.json` also lists 51. That is a declaration, not a test.
@@ -60,6 +60,7 @@ One false alarm to rule out first: `disable-user-extensions` set to `true` turns
 | Name | Used in | If it changes |
 |---|---|---|
 | `PopupMenu.prototype.open`, `BoxPointer.prototype.open`, `bin` | `modules/glass.js` | Menus are solid, no glass |
+| `quickSettings._system._systemItem.menu` and its `open`, `actor`, `box`, `isOpen` | `modules/panel.js` | Quick settings submenus open at GNOME's slower speed, or the module needs its copy of `open` updated |
 | `ModalDialog.prototype.open`, `dialogLayout._dialog` | `modules/glass.js` | Dialogs are solid, no glass |
 | `SwitcherPopup.prototype.show`, `_switcherList` | `modules/glass.js` | Alt-Tab is solid |
 | `OsdWindow.prototype.show`, `_hbox` | `modules/glass.js` | Volume and brightness popups are solid |
