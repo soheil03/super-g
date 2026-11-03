@@ -2,6 +2,21 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.2.3 - 2026-11-03
+
+### Fixed
+- Quick settings submenus no longer stutter when opening or closing. Their drop shadow was blurred on the CPU again on every frame the submenu changed size: about 100 ms a frame in tests, now 3-9 ms. The submenu card has a thin outline instead.
+- Submenu text stays inside its card while it animates.
+- Glass no longer loses its background in a screenshot when it is inside a parent's offscreen pass.
+
+### Changed
+- The panel behind a quick settings submenu is no longer dimmed. The dim redrew the whole panel through an offscreen pass.
+
+### Performance
+- Blur shaders are shared. They used to compile again each time a menu reopened or a surface outgrew its textures.
+- Menus blur once while they open, close or resize, then show that copy until the motion ends.
+- Something small moving on glass, like the Wi-Fi spinner, redoes the blur at most 20 times a second rather than on every frame.
+
 ## 1.2.2 - 2026-11-03
 
 ### Changed

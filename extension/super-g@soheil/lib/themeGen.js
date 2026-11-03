@@ -365,7 +365,7 @@ ${rule('.quick-toggle-has-menu .quick-toggle-menu-button:ltr', 'border-radius: 0
 ${rule('.quick-toggle-has-menu .quick-toggle-menu-button:rtl', 'border-radius: 999px 0 0 999px;')}
 ${rule('.quick-toggle:hover', `background-color: ${c.controlHover};`)}
 ${rule('.quick-menu-toggle .quick-toggle-arrow', 'border-radius: 0 999px 999px 0;')}
-${rule('.quick-toggle-menu', `border-radius: 22px; background-color: ${withAlpha(c.popover, 0.98)}; color: ${c.fg}; box-shadow: 0 8px 26px rgba(0,0,0,${dark ? 0.4 : 0.18}), inset 0 0 0 1px ${c.hairline};`)}
+${rule('.quick-toggle-menu', `border-radius: 22px; background-color: ${withAlpha(c.popover, 0.98)}; color: ${c.fg}; box-shadow: inset 0 0 0 1px ${c.hairline};`)}
 ${rule('.quick-toggle-menu .header .title, .quick-toggle-menu .popup-menu-item', `color: ${c.fg};`)}
 ${rule('.quick-toggle-menu .header .subtitle, .quick-toggle-menu .popup-inactive-menu-item, .quick-toggle-menu .popup-menu-item:insensitive', `color: ${withAlpha(c.fg, 0.72)};`)}
 ${rule('.quick-toggle-menu .header .icon', `background-color: ${tile}; color: ${c.fg};`)}

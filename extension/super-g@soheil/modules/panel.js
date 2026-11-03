@@ -28,6 +28,8 @@ const GAP = 6;
 // GNOME grows a quick settings submenu for 200 ms with nothing in it, then fades
 // the content in for another 200.
 const QUICK_MENU_MS = 150;
+// A submenu also adds its own margins to the panel's height.
+const QUICK_MENU_MARGIN = 32;
 const SOLID_CLASS = 'super-g-panel-solid';
 const WALLPAPER_CHECK_MS = 5 * 60 * 1000;
 // The bar's boxes and the part of its width each covers.
@@ -83,8 +85,10 @@ export default class PanelModule extends Module {
         this.cleanup();
         this._stopTracking();
         this._sheet.clear();
-        if (this._quickMenuProto)
+        if (this._quickMenuProto) {
             this._quickMenuProto.open = this._quickMenuOpen;
+            this._quickMenuProto.close = this._quickMenuClose;
+        }
         this._quickMenuProto = null;
         Main.panel.remove_style_class_name(SOLID_CLASS);
         Main.panel.statusArea.quickSettings?.remove_style_class_name(STATUS_CLASS);
@@ -103,6 +107,10 @@ export default class PanelModule extends Module {
         }
         this._quickMenuProto = Object.getPrototypeOf(proto);
         this._quickMenuOpen = this._quickMenuProto.open;
+        this._quickMenuClose = this._quickMenuProto.close;
+        const hold = (ms, room) => this.ext._active?.get('glass')
+            ?.holdMenu(Main.panel.statusArea.quickSettings.menu._boxPointer, ms, room);
+        const time = animate => (animate !== PopupAnimation.NONE ? QUICK_MENU_MS : 0);
         this._quickMenuProto.open = function (animate) {
             if (this.isOpen)
                 return;
@@ -112,7 +120,11 @@ export default class PanelModule extends Module {
             this.actor.height = -1;
             const [target] = this.actor.get_preferred_height(-1);
             this.actor.height = previous;
-            const duration = animate !== PopupAnimation.NONE ? QUICK_MENU_MS : 0;
+            const duration = time(animate);
+            if (duration)
+                hold(duration, {bottom: target - previous + QUICK_MENU_MARGIN});
+            // It grows and fades together, so the content must stay inside the card.
+            this.box.clip_to_allocation = true;
             this.box.opacity = 0;
             this.box.ease({duration, opacity: 255});
             this.actor.ease({
@@ -121,6 +133,24 @@ export default class PanelModule extends Module {
                 onComplete: () => (this.actor.height = -1),
             });
             this.emit('open-state-changed', true);
+        };
+        this._quickMenuProto.close = function (animate) {
+            if (!this.isOpen)
+                return;
+            const duration = time(animate);
+            if (duration)
+                hold(duration);
+            this.box.ease({duration, opacity: 0});
+            this.actor.ease({
+                duration,
+                height: 0,
+                onComplete: () => {
+                    this.actor.hide();
+                    this.emit('menu-closed');
+                },
+            });
+            this.isOpen = false;
+            this.emit('open-state-changed', false);
         };
     }
 

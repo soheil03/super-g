@@ -3,7 +3,7 @@
   "name": "Super G",
   "description": "One extension for the whole desktop: palette, GTK and shell theming, live glass, top bar, dock with magnification, app drawer, window corners, gestures, hot corners and launcher.",
   "version": 4,
-  "version-name": "1.2.2",
+  "version-name": "1.2.3",
   "shell-version": ["50", "51"],
   "session-modes": ["user", "unlock-dialog"],
   "settings-schema": "org.gnome.shell.extensions.super-g",

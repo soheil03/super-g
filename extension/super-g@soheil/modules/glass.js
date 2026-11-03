@@ -5,7 +5,6 @@
 // Blur my Shell engine for all of these.
 
 import Clutter from 'gi://Clutter';
-import Cogl from 'gi://Cogl';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
 import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
@@ -129,8 +128,20 @@ export default class GlassModule extends Module {
         const pointerProto = BoxPointer.BoxPointer.prototype;
         this._origPointerOpen = pointerProto.open;
         pointerProto.open = function (...args) {
-            self.guard(() => self._ensureBox(this));
+            self.guard(() => {
+                self._ensureBox(this);
+                if (args[0])
+                    self._menus.get(this)?.glass.holdFor(BoxPointer.POPUP_ANIMATION_TIME, {});
+            });
             return self._origPointerOpen.call(this, ...args);
+        };
+        this._origPointerClose = pointerProto.close;
+        pointerProto.close = function (...args) {
+            self.guard(() => {
+                if (args[0])
+                    self._menus.get(this)?.glass.holdFor(BoxPointer.POPUP_ANIMATION_TIME);
+            });
+            return self._origPointerClose.call(this, ...args);
         };
 
         this._panelGlass = new GlassLayer({style: this._style, shapeSource: Main.panel, track: Main.panel, smoothing: 0, shadow: false, guard: 0});
@@ -190,11 +201,16 @@ export default class GlassModule extends Module {
         if (this._origPointerOpen)
             BoxPointer.BoxPointer.prototype.open = this._origPointerOpen;
         this._origPointerOpen = null;
+        if (this._origPointerClose)
+            BoxPointer.BoxPointer.prototype.close = this._origPointerClose;
+        this._origPointerClose = null;
         for (const entry of this._menus.values()) {
             entry.child?.remove_style_class_name?.('super-g-glassed');
             unwrap(entry);
         }
         this._menus.clear();
+        delete this._undimmed?._setDimmed;
+        this._undimmed = null;
         for (const glass of this._docks.values())
             glass.destroy();
         this._docks.clear();
@@ -361,21 +377,20 @@ export default class GlassModule extends Module {
         box.connect('destroy', () => this._menus.delete(box));
     }
 
+    // For what resizes a menu from outside, like a quick settings submenu.
+    holdMenu(box, ms, room = null) {
+        this._menus.get(box)?.glass.holdFor(ms, room);
+    }
+
     _ensureMenu(menu) {
         if (menu._boxPointer)
             this._ensureBox(menu._boxPointer);
-        // Quick settings dims itself behind a submenu; full strength turns glass
-        // to dull grey.
+        // Quick settings dims itself behind a submenu, redrawing all of itself and
+        // its live glass through an offscreen pass, resized on every frame it grows.
         if (menu._setDimmed && menu._dimEffect) {
-            menu._setDimmed = dim => {
-                const val = 127 * (dim ? 0.86 : 1);
-                menu._boxPointer.ease_property('@effects.dim.brightness',
-                    new Cogl.Color({red: val, green: val, blue: val, alpha: 255}), {
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD, duration: 200,
-                        onStopped: () => (menu._dimEffect.enabled = dim),
-                    });
-                menu._dimEffect.enabled = true;
-            };
+            menu._dimEffect.enabled = false;
+            menu._setDimmed = () => {};
+            this._undimmed = menu;
         }
         menu.connect('destroy', () => this._menus.delete(menu));
     }

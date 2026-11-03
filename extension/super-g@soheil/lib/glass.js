@@ -152,6 +152,10 @@ class SuperGGlassEffect extends Shell.GLSLEffect {
 
 /* ---------------------------------------------------------- live glass -- */
 
+// The fewest milliseconds between full copies when only part of a surface changed.
+const PARTIAL_COPY_MS = 50;
+const HOLD_MARGIN_MS = 30;
+
 // Live glass: each frame, copy the stage pixels behind the actor, blur them
 // with Clutter's native BlurNode and draw the result through the glass
 // shader. Shows whatever is really behind (windows, video), not just the
@@ -172,7 +176,7 @@ function shaderTemplates(context) {
     glass.set_layer_wrap_mode(0, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
     glass.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, LIVE_DECLARATIONS,
         `size = vec2(size_x, size_y);\nuv_origin = vec2(uv_x, uv_y);\nuv_size = vec2(uv_w, uv_h);\ntint = vec4(tint_r, tint_g, tint_b, tint_a);\n${CODE}`));
-    templates = {context, glass, shadow: shadowTemplate(context)};
+    templates = {context, glass, shadow: shadowTemplate(context), passes: new Map()};
     return templates;
 }
 
@@ -208,7 +212,11 @@ function paintSource(context) {
         return {fb: paintingView.get_framebuffer(), x, y, scale: paintingView.get_scale()};
     }
     const fb = context.get_framebuffer();
-    return {fb, x: 0, y: 0, scale: fb.get_width() / global.stage.width};
+    // A screenshot's framebuffer has the stage's shape. Anything else is an
+    // offscreen pass of a parent, with nothing behind us in it.
+    const stage = global.stage;
+    const borrowed = Math.abs(fb.get_height() / fb.get_width() - stage.height / stage.width) > 0.01;
+    return {fb, x: 0, y: 0, scale: fb.get_width() / stage.width, borrowed};
 }
 
 // What to copy: the actor's box grown by `room` and by `pad`, in the source
@@ -266,8 +274,10 @@ export const LiveGlassEffect = GObject.registerClass({
         if (this._context !== context || !textureFits(width, this._capW) || !textureFits(height, this._capH)) {
             const limit = largestViewSize();
             const sameContext = this._context === context;
-            this._capW = sameContext ? getTextureCapacity(width, this._capW, limit.width) : width;
-            this._capH = sameContext ? getTextureCapacity(height, this._capH, limit.height) : height;
+            // A surface that outgrew its copy is likely still growing (a menu
+            // opening): take all the room at once rather than a step per frame.
+            this._capW = !sameContext ? width : width > this._capW ? limit.width : getTextureCapacity(width, this._capW, limit.width);
+            this._capH = !sameContext ? height : height > this._capH ? limit.height : getTextureCapacity(height, this._capH, limit.height);
             this._context = context;
             this._down = [];
             this._up = [];
@@ -318,7 +328,13 @@ export const LiveGlassEffect = GObject.registerClass({
     }
 
     _pass(context, source, declarations, code, original = null) {
-        const pipeline = createPassPipeline(context, source.texture, declarations, code);
+        // A snippet of its own would compile again, a frame's stall on a real GPU,
+        // each time a surface grows or a menu reopens.
+        const {passes} = shaderTemplates(context);
+        if (!passes.has(code))
+            passes.set(code, createPassPipeline(context, source.texture, declarations, code));
+        const pipeline = passes.get(code).copy();
+        pipeline.set_layer_texture(0, source.texture);
         const level = this._down.indexOf(source) + (original ? -1 : 1);
         this._regions.set(pipeline, {
             source: new TextureRegion(pipeline, SOURCE_REGION),
@@ -387,12 +403,53 @@ export const LiveGlassEffect = GObject.registerClass({
         if (!u || actor.is_in_clone_paint() || !actor.width || !actor.height)
             return;
         const source = paintSource(paintContext);
+        const box = source.borrowed ? this._drawn : this._refresh(node, paintContext, source, actor, u);
+        if (!box)
+            return;
+
+        if (u.shadow) {
+            const e = this._layer.stretch;
+            this._shadow.paint(node, {x: -e.left - SHADOW_PAD, y: -e.top - SHADOW_PAD,
+                width: actor.width + e.left + e.right + 2 * SHADOW_PAD, height: actor.height + e.top + e.bottom + 2 * SHADOW_PAD,
+                box: {x1: -e.left, y1: -e.top, x2: actor.width + e.right, y2: actor.height + e.bottom},
+                radius: u.radius, exponent: u.exponent, aa: u.aa, layers: u.shadow});
+        }
+
+        // The shown part of the blurred copy: the actor, plus any stretch.
+        const s = this._layer.stretch;
+        const shown = this._drawn ?? box;
+        const uvX1 = (shown.ox - s.left * box.scale) / this._capW;
+        const uvY1 = (shown.oy - s.top * box.scale) / this._capH;
+        const uvX2 = (shown.ox + (actor.width + s.right) * box.scale) / this._capW;
+        const uvY2 = (shown.oy + (actor.height + s.bottom) * box.scale) / this._capH;
+        // Between changes these stay on the pipeline; only a moving surface resends them.
+        if (this._applied !== u) {
+            this._setUniforms(u);
+            this._applied = u;
+        }
+        const uv = [uvX1, uvY1, uvX2 - uvX1, uvY2 - uvY1];
+        ['uv_x', 'uv_y', 'uv_w', 'uv_h'].forEach((name, i) => {
+            if (this._uv[i] !== uv[i]) {
+                this._uv[i] = uv[i];
+                this._glass.set_uniform_1f(uniformLocation(this._glass, name), uv[i]);
+            }
+        });
+        const out = new Clutter.PipelineNode(this._glass);
+        out.add_texture_rectangle(new Clutter.ActorBox({x1: -s.left, y1: -s.top,
+            x2: actor.width + s.right, y2: actor.height + s.bottom}), uvX1, uvY1, uvX2, uvY2);
+        node.add_child(out);
+    }
+
+    // A new copy of what's behind, blurred. Returns its box, or null off screen.
+    _refresh(node, paintContext, source, actor, u) {
+        if (this._layer.holding && this.holdReady && this._drawn)
+            return this._drawn;
         const fb = source.fb;
         const sigma = u.blur * source.scale;
         const {passes, blend} = getKawaseConfiguration(sigma * 4);
         const box = sourceBox(actor, source, this._layer.room, Math.ceil(sigma * BLUR_REACH), 2 ** passes);
         if (box.ax2 <= box.ax1 || box.ay2 <= box.ay1)
-            return;
+            return null;
         this._ensure(fb.get_context(), box.width, box.height, passes);
         this._sampling(passes, blend);
 
@@ -431,39 +488,10 @@ export const LiveGlassEffect = GObject.registerClass({
                 addPassNode(node, this._up[level], this._upPass[level], bounds, `glass up ${level}`);
             this._captured = clean;
             this._drawn = box;
+            this.holdReady ||= clean;
+            this._layer.lastCopy = GLib.get_monotonic_time();
         }
-
-        if (u.shadow) {
-            const e = this._layer.stretch;
-            this._shadow.paint(node, {x: -e.left - SHADOW_PAD, y: -e.top - SHADOW_PAD,
-                width: actor.width + e.left + e.right + 2 * SHADOW_PAD, height: actor.height + e.top + e.bottom + 2 * SHADOW_PAD,
-                box: {x1: -e.left, y1: -e.top, x2: actor.width + e.right, y2: actor.height + e.bottom},
-                radius: u.radius, exponent: u.exponent, aa: u.aa, layers: u.shadow});
-        }
-
-        // The shown part of the blurred copy: the actor, plus any stretch.
-        const s = this._layer.stretch;
-        const shown = this._drawn ?? box;
-        const uvX1 = (shown.ox - s.left * box.scale) / this._capW;
-        const uvY1 = (shown.oy - s.top * box.scale) / this._capH;
-        const uvX2 = (shown.ox + (actor.width + s.right) * box.scale) / this._capW;
-        const uvY2 = (shown.oy + (actor.height + s.bottom) * box.scale) / this._capH;
-        // Between changes these stay on the pipeline; only a moving surface resends them.
-        if (this._applied !== u) {
-            this._setUniforms(u);
-            this._applied = u;
-        }
-        const uv = [uvX1, uvY1, uvX2 - uvX1, uvY2 - uvY1];
-        ['uv_x', 'uv_y', 'uv_w', 'uv_h'].forEach((name, i) => {
-            if (this._uv[i] !== uv[i]) {
-                this._uv[i] = uv[i];
-                this._glass.set_uniform_1f(uniformLocation(this._glass, name), uv[i]);
-            }
-        });
-        const out = new Clutter.PipelineNode(this._glass);
-        out.add_texture_rectangle(new Clutter.ActorBox({x1: -s.left, y1: -s.top,
-            x2: actor.width + s.right, y2: actor.height + s.bottom}), uvX1, uvY1, uvX2, uvY2);
-        node.add_child(out);
+        return box;
     }
 });
 
@@ -556,12 +584,43 @@ class SuperGGlassLayer extends St.Widget {
         return [0, 0];
     }
 
-    // Called by the live effect during paint; the redraw itself must wait.
+    // Called by the live effect during paint; the redraw itself must wait. Something
+    // small moving on the surface (a spinner, a hover) asks for this every frame,
+    // and redoing the whole blur that often is the most expensive thing glass does.
     queueFullRedraw() {
         if (this._redrawId)
             return;
-        this._redrawId = GLib.idle_add(GLib.PRIORITY_HIGH, () => {
+        const run = () => {
             this._redrawId = 0;
+            this.queue_redraw();
+            return GLib.SOURCE_REMOVE;
+        };
+        const wait = Math.ceil(PARTIAL_COPY_MS - (GLib.get_monotonic_time() - (this.lastCopy ?? 0)) / 1000);
+        this._redrawId = wait > 0
+            ? GLib.timeout_add(GLib.PRIORITY_DEFAULT, wait, run)
+            : GLib.idle_add(GLib.PRIORITY_HIGH, run);
+    }
+
+    // While a surface moves or changes size, what's behind it doesn't: blur once
+    // and show that copy for `ms`, so an animation costs only the final pass.
+    // room: how far it will grow, for that one copy. Without it, the last copy
+    // is good enough (a surface about to shrink or leave).
+    holdFor(ms, room = null) {
+        if (!this._liveEffect)
+            return;
+        this.holding = true;
+        if (room) {
+            this.room = {...NO_ROOM, ...room};
+            this._liveEffect.holdReady = false;
+        } else {
+            this._liveEffect.holdReady = true;
+        }
+        if (this._holdId)
+            GLib.source_remove(this._holdId);
+        this._holdId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms * St.Settings.get().slow_down_factor + HOLD_MARGIN_MS, () => {
+            this._holdId = 0;
+            this.holding = false;
+            this.room = {...NO_ROOM};
             this.queue_redraw();
             return GLib.SOURCE_REMOVE;
         });
@@ -599,6 +658,9 @@ class SuperGGlassLayer extends St.Widget {
         if (this._redrawId)
             GLib.source_remove(this._redrawId);
         this._redrawId = 0;
+        if (this._holdId)
+            GLib.source_remove(this._holdId);
+        this._holdId = 0;
         for (const [actor, redirect] of this._lifted ?? [])
             actor.set_offscreen_redirect(redirect);
         this._lifted = null;

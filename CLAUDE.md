@@ -89,6 +89,11 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - An EVAL timing is only real with `pointer.click`: `menu.open(true)` skips the click path and shows a different animation.
 - St keeps a fill inside a transparent border only while a box-shadow is set: GNOME's resting inset shadow on `.panel-button` made a pill 3 px smaller than its hover.
 - Maximized Chromium and Electron frames overshoot the screen by 1 px on the right and bottom, so per-app insets are dropped when maximized (vendor-fixups).
+- St blurs a CSS drop shadow on the CPU, again on every size change. On a surface that animates its size (a quick settings submenu) that was 100 ms a frame. Only `inset` shadows there, and check `box-shadow` first when something stutters while resizing.
+- Headless paint timings show CPU costs well, but say little about the real GPU. To find a stall, time `before-paint` to `after-paint` per frame during the animation, then switch suspects off inside the EVAL.
+- `GlassLayer.holdFor(ms, room)` shows one blurred copy while a surface moves. Pass `room` when it will grow, none when it shrinks or leaves.
+- Blur pass shaders are shared through `shaderTemplates().passes`: `createPassPipeline` makes a new snippet, which compiles again.
+- `ext._active.get(name)` is the module itself; `.instance` exists only on engine modules.
 - Tried and removed: re-blurring glass at half rate on 120 Hz. CPU went up (19.5% to 25.5%), since a skipped frame must force another redraw.
 - Super hold fires from the timer in `_checkHold`, so a Super combo pressed more than 450 ms in fires it first: key presses to clients aren't visible to the shell.
 
