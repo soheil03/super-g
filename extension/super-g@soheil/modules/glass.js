@@ -7,6 +7,8 @@ import Clutter from 'gi://Clutter';
 import Cogl from 'gi://Cogl';
 import Gio from 'gi://Gio';
 import St from 'gi://St';
+import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
+import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
@@ -110,6 +112,14 @@ export default class GlassModule extends Module {
             self.guard(() => self._ensureMenu(this));
             return self._origOpen.call(this, ...args);
         };
+        // Not everything comes through there (Kiwi keeps its own reference to
+        // the app menu's open); every menu does end up opening a BoxPointer.
+        const pointerProto = BoxPointer.BoxPointer.prototype;
+        this._origPointerOpen = pointerProto.open;
+        pointerProto.open = function (...args) {
+            self.guard(() => self._ensureBox(this));
+            return self._origPointerOpen.call(this, ...args);
+        };
 
         this._panelGlass = new GlassLayer({style: this._style, shapeSource: Main.panel, track: Main.panel, smoothing: 0, shadow: false, guard: 0});
         Main.layoutManager.uiGroup.insert_child_below(this._panelGlass, Main.layoutManager.panelBox);
@@ -119,6 +129,15 @@ export default class GlassModule extends Module {
             this.connect(box, 'child-added', () => this.later('islands', 100, () => this._syncPanelGlass()));
             this.connect(box, 'child-removed', () => this.later('islands', 100, () => this._syncPanelGlass()));
         }
+
+        // App folders: a dialog per folder, built on first open.
+        this._folders = new Map();
+        const folderProto = AppDisplay.AppFolderDialog.prototype;
+        this._origPopup = folderProto.popup;
+        folderProto.popup = function (...args) {
+            self.guard(() => self._ensureFolder(this));
+            return self._origPopup.call(this, ...args);
+        };
 
         this.connect(Main.overview, 'showing', () => this._overviewIn());
         this.connect(Main.overview, 'hidden', () => this._overviewOut());
@@ -146,12 +165,21 @@ export default class GlassModule extends Module {
         if (this._origOpen)
             PopupMenu.PopupMenu.prototype.open = this._origOpen;
         this._origOpen = null;
+        if (this._origPointerOpen)
+            BoxPointer.BoxPointer.prototype.open = this._origPointerOpen;
+        this._origPointerOpen = null;
         for (const entry of this._menus.values())
             unwrap(entry);
         this._menus.clear();
         for (const glass of this._docks.values())
             glass.destroy();
         this._docks.clear();
+        if (this._origPopup)
+            AppDisplay.AppFolderDialog.prototype.popup = this._origPopup;
+        this._origPopup = null;
+        for (const glass of this._folders.values())
+            glass.destroy();
+        this._folders.clear();
         if (this._dockReadyId)
             this._dockExt?.dockManager?.disconnect(this._dockReadyId);
         this._panelGlass?.destroy();
@@ -172,7 +200,7 @@ export default class GlassModule extends Module {
 
     _restyle() {
         this._style = this._computeStyle();
-        const all = [this._panelGlass, this._launcherGlass, ...this._islands, ...[...this._menus.values()].map(e => e.glass),
+        const all = [this._panelGlass, this._launcherGlass, ...this._islands, ...this._folders.values(), ...[...this._menus.values()].map(e => e.glass),
             ...this._docks.values(), ...(this._overview ?? [])];
         for (const glass of all.filter(Boolean))
             glass.setStyle(this._style);
@@ -203,13 +231,51 @@ export default class GlassModule extends Module {
         }
     }
 
-    _ensureMenu(menu) {
-        if (this._menus.has(menu) || !menu._boxPointer?.bin)
+    // The dialog zooms out of the folder's icon, so its glass follows the box
+    // on screen rather than sitting inside it.
+    _ensureFolder(dialog) {
+        if (this._folders.has(dialog))
             return;
-        const entry = wrapWithGlass(menu._boxPointer.bin, this._style);
+        const box = dialog._viewBox;
+        const glass = new GlassLayer({style: this._style, shapeSource: box, track: box, smoothing: 0.5});
+        dialog.get_parent().insert_child_below(glass, dialog);
+        this._folders.set(dialog, glass);
+        // GNOME's dim is the dialog's own background colour, eased when it opens,
+        // and would lie over the glass; ours goes under, a soft wash of the theme.
+        dialog.ease = params => {
+            const {background_color: _shade, ...rest} = params;
+            return Clutter.Actor.prototype.ease.call(dialog, rest);
+        };
+        const monitor = Main.layoutManager.primaryMonitor;
+        const wash = new St.Widget({x: monitor.x, y: monitor.y, width: monitor.width, height: monitor.height, opacity: 0,
+            style: `background-color: ${this._style.lightText ? 'rgba(0,0,0,0.38)' : 'rgba(255,255,255,0.28)'};`});
+        dialog.get_parent().insert_child_below(wash, glass);
+        const show = open => wash.ease({opacity: open ? 255 : 0, duration: 200, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+        show(true);
+        dialog.connect('open-state-changed', (_d, open) => show(open));
+        dialog.connect('destroy', () => {
+            this._folders.delete(dialog);
+            glass.destroy();
+            wash.destroy();
+        });
+    }
+
+    _ensureBox(box) {
+        if (this._menus.has(box) || !box.bin)
+            return;
+        // Menus only, not other things that point at something.
+        if (!box.bin.get_child()?.has_style_class_name?.('popup-menu-content'))
+            return;
+        const entry = wrapWithGlass(box.bin, this._style);
         if (!entry)
             return;
-        this._menus.set(menu, entry);
+        this._menus.set(box, entry);
+        box.connect('destroy', () => this._menus.delete(box));
+    }
+
+    _ensureMenu(menu) {
+        if (menu._boxPointer)
+            this._ensureBox(menu._boxPointer);
         // Quick settings dims itself behind a submenu; full strength turns glass
         // to dull grey.
         if (menu._setDimmed && menu._dimEffect) {

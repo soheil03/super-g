@@ -6,5 +6,5 @@
   "shell-version": ["50", "51"],
   "session-modes": ["user", "unlock-dialog"],
   "settings-schema": "org.gnome.shell.extensions.super-g",
-  "url": ""
+  "url": "https://github.com/soheil03/super-g"
 }

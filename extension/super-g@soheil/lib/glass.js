@@ -653,8 +653,10 @@ class SuperGGlassLayer extends St.Widget {
             const [tw, th] = t.get_transformed_size();
             this.set_position(Math.round(tx), Math.round(ty));
             this.set_size(Math.round(tw), Math.round(th));
-            this.visible = this.active && t.mapped && t.opacity > 0;
-            this.opacity = t.opacity;
+            // What's fading may be a parent, as with a zooming dialog.
+            const opacity = t.get_paint_opacity?.() ?? t.opacity;
+            this.visible = this.active && t.mapped && opacity > 0;
+            this.opacity = opacity;
         }
         const monitor = Main.layoutManager.findIndexForActor(this._track instanceof Clutter.Actor ? this._track : this);
         if (monitor < 0)

@@ -15,7 +15,7 @@ import {DockMagnifier} from './dockMagnify.js';
 
 const TUNED = `${Files.STATE}/tuned.json`;
 
-function onceOnly(name, apply) {
+export function onceOnly(name, apply) {
     const done = JSON.parse(Files.readText(TUNED) ?? '{}');
     if (done[name])
         return;
@@ -34,6 +34,11 @@ function setIf(settings, key, value) {
 
 export function configureDock(module) {
     const dtd = module.instance.getSettings();
+    // The dock's Settings item asks its extension, which isn't a real one here.
+    module.instance.openPreferences = () => {
+        module.settings.set_string('prefs-open-page', 'dock');
+        module.ext.openPreferences();
+    };
     // Dash to Dock paints its own background inline when its custom theme
     // or alpha options are on; that would cover our glass.
     setIf(dtd, 'apply-custom-theme', false);
@@ -41,6 +46,11 @@ export function configureDock(module) {
     setIf(dtd, 'customize-alphas', false);
     setIf(dtd, 'transparency-mode', 'DEFAULT');
     onceOnly('dock', () => {
+        setIf(dtd, 'dock-position', 'BOTTOM');
+        setIf(dtd, 'show-apps-at-top', true);
+        setIf(dtd, 'extend-height', false);
+        setIf(dtd, 'dock-fixed', false);
+        setIf(dtd, 'intellihide', true);
         setIf(dtd, 'running-indicator-style', 'DOT');
         setIf(dtd, 'hide-tooltip', true);
         setIf(dtd, 'show-show-apps-button', true);

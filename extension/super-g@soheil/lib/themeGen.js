@@ -247,6 +247,8 @@ headerbar.titlebar, .titlebar:not(headerbar) {
   border-top-left-radius: ${r(opts.windowRadius)}; border-top-right-radius: ${r(opts.windowRadius)}; }
 .maximized headerbar.titlebar, .tiled headerbar.titlebar, .maximized decoration, .tiled decoration { border-radius: 0; }
 headerbar .title { font-weight: ${opts.titleWeight}; }
+/* Chromium and Electron take their title bar's edge spacing from this. */
+headerbar.titlebar { padding-left: 12px; padding-right: 12px; }
 ${extraCss}
 button.suggested-action, button.suggested-action label { color: ${c.accentFg}; }
 .sidebar, .sidebar list, .sidebar row:not(:selected), placessidebar, stacksidebar,
@@ -377,7 +379,13 @@ ${rule('.page-indicator .page-indicator-icon', `background-color: ${c.fg};`)}
 ${rule('.page-navigation-arrow', `background-color: ${withAlpha(c.fg, 0.12)}; color: ${c.fg};`)}` : ''}
 ${rule('.app-folder', `background-color: ${withAlpha(c.fg, dark ? 0.1 : 0.07)}; color: ${c.fg}; box-shadow: inset 0 0 0 1px ${withAlpha(c.fg, 0.08)}; border-radius: 26px;`)}
 ${rule('.app-folder:hover, .app-folder:focus', `background-color: ${withAlpha(c.fg, dark ? 0.16 : 0.12)};`)}
-${rule('.app-folder-dialog', `background-color: ${withAlpha(c.window, 0.94)}; color: ${c.fg}; border-radius: 32px; border: none; box-shadow: inset 0 0 0 1px ${withAlpha(c.fg, 0.08)};`)}
+${rule('.app-folder-dialog', `background-color: ${opts.glass ? 'transparent' : withAlpha(c.window, 0.94)}; color: ${c.fg}; border-radius: 32px; border: none; box-shadow: ${opts.glass ? 'none' : `inset 0 0 0 1px ${withAlpha(c.fg, 0.08)}`};`)}
+${opts.glass ? rule('.app-folder-dialog-container', 'background-color: transparent;') : ''}
+${rule('.app-folder-dialog .icon-button, .app-folder-dialog .icon-button StIcon', `color: ${c.fg};`)}
+${rule('.app-folder-dialog .icon-button', `background-color: ${tile}; border: none; box-shadow: none;`)}
+${rule('.app-folder-dialog .icon-button:hover, .app-folder-dialog .icon-button:focus', `background-color: ${c.controlHover}; box-shadow: none !important;`)}
+${rule('.app-folder-dialog .icon-button:checked', `background-color: ${c.accent}; color: ${c.accentFg};`)}
+${rule('.app-folder-dialog .folder-name-entry', `color: ${c.fg}; background-color: ${tile};`)}
 ${rule('.app-folder-dialog .overview-tile, .app-folder-dialog .folder-name-label', `color: ${c.fg}; text-shadow: none;`)}
 ${rule('.spotlight-entry, .spotlight-entry:focus, .spotlight-entry:hover', `background-color: transparent; border: none; box-shadow: none; color: ${c.fg};`)}
 ${rule('.spotlight-entry StLabel.hint-text', `color: ${withAlpha(c.fg, 0.55)};`)}

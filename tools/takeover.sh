@@ -32,7 +32,7 @@ state_path, dry, vendor, *rows = sys.argv[1:]
 dry = dry == '--dry-run'
 state = json.load(open(state_path)) if os.path.exists(state_path) else {}
 state.setdefault('migrated', {})
-enabled = ast.literal_eval(subprocess.check_output(['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions'], text=True))
+enabled = ast.literal_eval(subprocess.check_output(['gsettings', 'get', 'org.gnome.shell', 'enabled-extensions'], text=True).replace('@as ', ''))
 
 for row in rows:
     module, *uuids = row.split()
@@ -54,6 +54,15 @@ for row in rows:
             print(f'{module}: switch off {uuid}')
             enabled.remove(uuid)
             state[uuid] = module
+
+# Ubuntu's own dock is on by session default, not through the enabled list.
+disabled = ast.literal_eval(subprocess.check_output(['gsettings', 'get', 'org.gnome.shell', 'disabled-extensions'], text=True).replace('@as ', ''))
+if 'ubuntu-dock@ubuntu.com' not in disabled:
+    print('dock: switch off ubuntu-dock@ubuntu.com')
+    disabled.append('ubuntu-dock@ubuntu.com')
+    state['ubuntu-dock@ubuntu.com'] = 'dock'
+    if not dry:
+        subprocess.check_call(['gsettings', 'set', 'org.gnome.shell', 'disabled-extensions', str(disabled)])
 
 if 'super-g@soheil' not in enabled:
     enabled.append('super-g@soheil')

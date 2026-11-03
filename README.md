@@ -42,12 +42,17 @@ Four palettes (Graphite, Catppuccin, Warm stone, Cool slate) and seven accents
   GNOME's own styles (libadwaita, adw-gtk3, the shell theme). Nothing is
   rewritten, so GNOME updates don't break the look.
 
+## Screenshots
+
+![App drawer](docs/screenshots/drawer-light.png)
+![Dark, with magnification](docs/screenshots/dock-dark.png)
+
 ## Install
 
 See [INSTALL.md](INSTALL.md). Short version:
 
 ```bash
-git clone https://github.com/<you>/super-g.git && cd super-g
+git clone https://github.com/soheil03/super-g.git && cd super-g
 tools/install.sh && tools/takeover.sh
 ```
 

@@ -44,6 +44,7 @@ export class DockMagnifier {
     constructor(module, dockExt) {
         this._module = module;
         this._dockExt = dockExt;
+        this._dockSettings = module.instance.getSettings();
         this._docks = new Map();
     }
 
@@ -166,6 +167,28 @@ export class DockMagnifier {
             icon._superGLaunch = true;
             icon.animateLaunch = () => this._module.guard(() => this._bounce(state, item));
         }
+        for (const item of this._items(state))
+            this._hookLabel(item);
+    }
+
+    // A label goes over the dock and clear of the grown icon, or not at all.
+    _hookLabel(item) {
+        if (!item.showLabel || item._superGLabel)
+            return;
+        item._superGLabel = true;
+        const show = item.showLabel;
+        item.showLabel = () => {
+            if (this._dockSettings?.get_boolean('hide-tooltip'))
+                return;
+            show.call(item);
+            const {label} = item;
+            if (label?.get_parent()) {
+                label.get_parent().set_child_above_sibling(label, null);
+                const visual = this._visual(item);
+                const grown = visual ? (visual.scale_y - 1) * visual.height : 0;
+                label.translation_y = -grown;
+            }
+        };
     }
 
     _bounce(state, item) {
@@ -393,7 +416,9 @@ export class DockMagnifier {
             if (!state.active || state.timeline?.is_playing())
                 return;
             const [x, y] = global.get_pointer();
-            if (x !== px || y !== py)
+            // An opening menu grabs the pointer, so no event says it happened.
+            const menuOpen = state.slots?.some(slot => slot.actor.child?._menu?.isOpen);
+            if (x !== px || y !== py || menuOpen)
                 this._wake(state);
             else
                 this._module.later(`dock-idle-${state.id}`, IDLE_POLL_MS, check);

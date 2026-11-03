@@ -13,7 +13,7 @@ import PanelModule from './modules/panel.js';
 import GlassModule from './modules/glass.js';
 import DrawerModule from './modules/drawer.js';
 import {engine} from './lib/engine.js';
-import {configureDock, configureDockMotion} from './lib/dockStyle.js';
+import {configureDock, configureDockMotion, onceOnly} from './lib/dockStyle.js';
 import {configureBlur} from './lib/blurSetup.js';
 import {configureCorners} from './lib/cornersSetup.js';
 
@@ -65,6 +65,17 @@ export const MODULES = {
     launcher: engine('launcher', 'superbar@Furkan-rgb.github.io', ['superbar@Furkan-rgb.github.io'], {
         configure() {
             this.ext._active.get('glass')?.attachLauncher();
+            // Its shortcut clashes with one GNOME sets by default, and it asks
+            // with a dialog at first login. Take it, as that dialog's default
+            // does; its own preferences can put the old one back.
+            onceOnly('launcher-shortcut', () => {
+                const engineSettings = this.instance.getSettings();
+                const [accel] = engineSettings.get_strv('toggle-shortcut');
+                if (!engineSettings.get_string('conflict-prompt-accel') && accel) {
+                    engineSettings.set_string('conflict-prompt-accel', accel);
+                    this.instance._claimShortcut?.();
+                }
+            });
         },
     }),
 };

@@ -83,6 +83,18 @@
       <default>'regular'</default>
       <summary>Glass thickness: ultra-thin, thin, regular, thick, ultra-thick, or custom (uses tint, vibrancy and blur)</summary>
     </key>
+    <key name="prefs-open-page" type="s">
+      <default>''</default>
+      <summary>The page settings should open on, once</summary>
+    </key>
+    <key name="corners-skip-chromium" type="b">
+      <default>true</default>
+      <summary>Leave Chrome's and Electron apps' own window corners alone</summary>
+    </key>
+    <key name="corners-skipped-apps" type="as">
+      <default>[]</default>
+      <summary>Chromium-based apps found so far</summary>
+    </key>
     <key name="dock-launch-bounce" type="b">
       <default>true</default>
       <summary>Bounce a dock icon while its app starts</summary>

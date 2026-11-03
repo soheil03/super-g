@@ -74,6 +74,14 @@ function comboRow(settings, key, title, items, {subtitle = '', int = false} = {}
     return row;
 }
 
+// A choice row whose options come from the key's own schema, so nothing here
+// goes stale when an engine updates.
+function enumRow(settings, key, title, {subtitle = '', labels = {}} = {}) {
+    const range = settings.settings_schema.get_key(key).get_range().deepUnpack()[1].deepUnpack();
+    const pretty = nick => labels[nick] ?? nick.toLowerCase().replace(/[-_]/g, ' ').replace(/^./, c => c.toUpperCase());
+    return comboRow(settings, key, title, range.map(nick => [nick, pretty(nick)]), {subtitle});
+}
+
 function switchRow(settings, key, title, subtitle = '') {
     const row = new Adw.SwitchRow({title, subtitle});
     settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
@@ -137,7 +145,7 @@ function group(title, rows, description = '') {
 }
 
 function page(title, icon, groups) {
-    const p = new Adw.PreferencesPage({title, icon_name: icon});
+    const p = new Adw.PreferencesPage({title, icon_name: icon, name: title.toLowerCase().replace(/ /g, '-')});
     groups.forEach(g => p.add(g));
     return p;
 }
@@ -259,7 +267,19 @@ export default class SuperGPrefs extends ExtensionPreferences {
                     comboRow(dock, 'dock-position', 'Position', DOCK_POSITIONS),
                     invertedSwitch(dock, 'dock-fixed', 'Auto-hide'),
                     switchRow(dock, 'intellihide', 'Hide only when a window overlaps'),
+                    enumRow(dock, 'intellihide-mode', 'Windows that make it hide'),
+                    enumRow(dock, 'click-action', 'Click on a running app'),
+                    enumRow(dock, 'scroll-action', 'Scroll on an app'),
                     switchRow(dock, 'show-show-apps-button', 'Apps button'),
+                    switchRow(dock, 'show-favorites', 'Pinned apps'),
+                    switchRow(dock, 'show-running', 'Running apps'),
+                    switchRow(dock, 'show-trash', 'Trash'),
+                    switchRow(dock, 'show-mounts', 'Drives'),
+                    switchRow(dock, 'show-windows-preview', 'Window previews'),
+                    switchRow(dock, 'show-icons-notifications-counter', 'Notification badges'),
+                    switchRow(dock, 'isolate-workspaces', 'Only apps on this workspace'),
+                    switchRow(dock, 'isolate-monitors', 'Only apps on this monitor'),
+                    switchRow(dock, 'multi-monitor', 'On every monitor'),
                     switchRow(dock, 'show-trash', 'Trash'),
                     switchRow(dock, 'show-mounts', 'Drives and mounts'),
                 ]),
@@ -292,14 +312,89 @@ export default class SuperGPrefs extends ExtensionPreferences {
             ]),
         ]));
 
+        const windows = engineSettings(this.path, 'windows');
+        const corners = engineSettings(this.path, 'corners');
+        const gestures = engineSettings(this.path, 'gestures');
+        const launcher = engineSettings(this.path, 'launcher');
+        window.add(page('Windows', 'preferences-system-windows-symbolic', [
+            group('Corners', [
+                switchRow(s, 'corners-skip-chromium', 'Leave Chrome and Electron apps alone', 'They draw their own corners and shadow'),
+                spinRow(corners, 'border-width', 'Border width', {lower: 0, upper: 4, step: 1}),
+                switchRow(corners, 'keep-shadow-for-maximized-fullscreen', 'Shadow when maximized'),
+            ]),
+            group('Top bar title', [
+                switchRow(windows, 'show-window-title', 'Focused window in the top bar'),
+                switchRow(windows, 'show-window-title-icon', 'With its app icon'),
+                switchRow(windows, 'show-window-subtitle', 'With the window name', 'Next to the app name'),
+                switchRow(windows, 'show-tiling-title-menu', 'Tiling in its menu'),
+            ]),
+            group('Behaviour', [
+                switchRow(windows, 'minimize-to-dock', 'Minimize into the dock'),
+                switchRow(windows, 'downloads-in-dock', 'Downloads stack in the dock'),
+                switchRow(windows, 'move-window-to-new-workspace', 'Fullscreen windows get their own workspace'),
+                switchRow(windows, 'focus-new-windows', 'Focus new windows'),
+                switchRow(windows, 'hide-minimized-windows', 'Hide minimized windows in the overview'),
+                switchRow(windows, 'reduce-window-animations', 'Shorter open and close animations'),
+                switchRow(windows, 'transparent-move', 'See-through while moving'),
+                switchRow(windows, 'overview-seamless-zoom', 'Seamless overview zoom'),
+                switchRow(windows, 'battery-percentage', 'Battery percentage'),
+                switchRow(windows, 'hide-keyboard-indicator', 'Hide the keyboard layout chip'),
+            ]),
+        ]));
+        window.add(page('Touchpad', 'input-touchpad-symbolic', [
+            group('Three fingers', [
+                enumRow(gestures, 'horizontal-swipe-3-fingers-gesture', 'Swipe sideways'),
+                enumRow(gestures, 'vertical-swipe-3-fingers-gesture', 'Swipe up and down'),
+                enumRow(gestures, 'pinch-3-finger-gesture', 'Pinch'),
+                enumRow(gestures, 'tap-3-finger-gesture', 'Tap'),
+            ]),
+            group('Four fingers', [
+                enumRow(gestures, 'horizontal-swipe-4-fingers-gesture', 'Swipe sideways'),
+                enumRow(gestures, 'vertical-swipe-4-fingers-gesture', 'Swipe up and down'),
+                enumRow(gestures, 'pinch-4-finger-gesture', 'Pinch'),
+                enumRow(gestures, 'tap-4-finger-gesture', 'Tap'),
+            ]),
+            group('Speed', [
+                spinRow(gestures, 'touchpad-speed-scale', 'Swipe speed', {lower: 0.5, upper: 3, step: 0.1, digits: 1}),
+                spinRow(gestures, 'touchpad-pinch-speed', 'Pinch speed', {lower: 0.5, upper: 3, step: 0.1, digits: 1}),
+            ]),
+        ]));
+        window.add(page('Launcher', 'system-search-symbolic', [
+            group('Search in', [
+                switchRow(launcher, 'applications-search-enabled', 'Apps'),
+                switchRow(launcher, 'windows-search-enabled', 'Open windows'),
+                switchRow(launcher, 'files-search-enabled', 'Files and folders'),
+                switchRow(launcher, 'clipboard-search-enabled', 'Clipboard history'),
+                switchRow(launcher, 'calculator-search-enabled', 'Calculator'),
+                switchRow(launcher, 'currency-search-enabled', 'Currency'),
+                switchRow(launcher, 'weather-search-enabled', 'Weather'),
+                switchRow(launcher, 'dictionary-search-enabled', 'Dictionary'),
+                switchRow(launcher, 'web-search-enabled', 'The web'),
+                switchRow(launcher, 'system-actions-search-enabled', 'System actions'),
+            ]),
+            group('Results', [
+                spinRow(launcher, 'max-results', 'Results shown', {lower: 3, upper: 20, step: 1}),
+                spinRow(launcher, 'bar-width', 'Width', {lower: 400, upper: 1200, step: 20}),
+                switchRow(launcher, 'clipboard-monitor-enabled', 'Remember what I copy'),
+            ]),
+        ]));
         window.add(page('Lock screen', 'system-lock-screen-symbolic', [
             group('Style', [
                 comboRow(lock, 'lockscreen-mode', 'Style', [['cupertino', 'Sonoma'], ['wack', 'WACK classic']]),
+                enumRow(lock, 'clock-animation', 'Clock animation'),
+                enumRow(lock, 'prompt-animation', 'Password field animation'),
+                enumRow(lock, 'date-style', 'Date'),
                 switchRow(lock, 'cupertino-always-show-user', 'Always show the user'),
                 switchRow(lock, 'cursor-blink', 'Blinking cursor in the password field'),
             ]),
         ]));
         window.add(this._modulesPage(s));
+        // Asked for by name, e.g. from the dock's menu.
+        const opening = s.get_string('prefs-open-page');
+        if (opening) {
+            window.set_visible_page_name(opening);
+            s.reset('prefs-open-page');
+        }
     }
 
     _modulesPage(s) {

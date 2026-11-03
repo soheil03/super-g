@@ -12,7 +12,7 @@
 ## Install
 
 ```bash
-git clone https://github.com/<you>/super-g.git
+git clone https://github.com/soheil03/super-g.git
 cd super-g
 tools/install.sh
 ```

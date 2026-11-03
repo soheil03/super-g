@@ -13,7 +13,7 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
   - `modules/appearance.js` (GTK4 CSS inline in `~/.config/gtk-4.0/gtk.css`, GTK3 themes `Super-G[-dark]` over adw-gtk3, shell CSS, fonts, `slow_down_factor`, system accent), `modules/panel.js` (top bar).
   - `vendor/<name>/` — upstream code (blur, corners, dock, dockmotion, windows, hotcorners, gestures, launcher, lockscreen). `UPSTREAM` records version and schema/dconf renames.
   - `schemas/` — ours + one renamed schema per engine (`org.gnome.shell.extensions.super-g.<name>`, dconf `/org/gnome/shell/extensions/super-g/<name>/`).
-  - `prefs.js` — Adw prefs (Appearance, Fonts, Motion, Modules).
+  - `prefs.js` — Adw prefs. `enumRow` builds choices from a key's own schema, for engine settings that are safe to expose. Never expose keys our modules force (Kiwi's panel and button styling, the dock's theme keys).
 - `tools/` — `install.sh`, `takeover.sh`, `vendor.sh` + `vendor-fixups.sh`, `gen.js`, `render.sh`/`render-gtk.py`, `shell-test.sh`.
 - `tests/shot@super-g-test/` — camera extension used by shell-test.sh.
 
@@ -64,6 +64,9 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 
 - Launch motion is ours on the icon itself (`_bounce`, hooked per instance over Flourish's `animateLaunch`, setting `dock-launch-bounce`). Flourish flies a clone in its own layer, which slips away from a settling row: the "ghost going down".
 - Drawer scrolling only moves a target, eased per frame (wheel, touchpad with coast, touch drag). Real inputs in tests: `seat.create_virtual_device` with `notify_discrete_scroll`, `notify_scroll_continuous`, `notify_touch_*`.
+- Menus get glass from a hook on `BoxPointer.open`: some openers keep their own reference to `PopupMenu.open` (Kiwi's app menu).
+- The folder dialog's dim is the dialog's own `background_color`, eased in `_zoomAndFadeIn`, and lies over anything below it. `dialog.ease` drops that property; our wash goes under the glass.
+- Chromium and Electron windows draw their own corners and shadow: `corners-skip-chromium` puts them on the engine's blacklist by detecting Chromium's files next to the executable. Their title bar spacing comes from GTK3's `headerbar.titlebar`.
 - `vendor/dock` ships no stylesheet.css: anything its code expects from one (notification badge) is styled in `dockStyle.js`.
 - A click on the dock seats the row (`seatedAt`): it eases home and stays until the pointer moves. Timelines stop when nothing moves (`_sleep`); a running timeline redraws the glass every frame.
 - Running dots are pushed below the icon with translation (`DOT_DROP`), compensated for the inner widget's scale.
@@ -75,6 +78,5 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Commit messages end with the Co-Authored-By line the session provides.
 
 ## Release checklist (GitHub)
-- Confirm licenses of `corners` and `gestures` upstream repos (no LICENSE file shipped in their packages) and add their license files to vendor/.
-- Replace the `<you>` placeholders in README/INSTALL; consider a neutral uuid before publishing.
-- Screenshots in README.
+- Public at github.com/soheil03/super-g. README shots in `docs/screenshots/` come from a sandbox without CLONE, so they hold no personal data: keep it that way.
+- Before an extensions.gnome.org submission: a neutral uuid, and review its rules on bundled code.
