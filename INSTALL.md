@@ -66,3 +66,21 @@ Then log out and back in.
 | "Log out and back in once to finish switching" | Log out once. An original extension was still loaded in this session. |
 | GTK apps didn't change | Restart the app. GTK4 apps read the theme at start-up. |
 | Theme reverted after using Ubuntu's Appearance panel | Super G switches it back within a second. Choose colours in Super G settings instead. |
+
+## Troubleshooting
+
+### All effects are gone after a restart
+
+GNOME may have turned off every extension. Check:
+
+```bash
+gsettings get org.gnome.shell disable-user-extensions
+```
+
+If it says `true`, turn extensions back on. There is no need to log out:
+
+```bash
+gsettings set org.gnome.shell disable-user-extensions false
+```
+
+GNOME does this when the shell fails during its first 60 seconds after login, and it counts a slow exit as a failure: if the shell takes more than 5 seconds to stop, systemd kills it. So restarting within a minute of logging in can trigger it, even though nothing crashed.

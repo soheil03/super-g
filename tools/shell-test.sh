@@ -71,7 +71,10 @@ print(str(l + [\"super-g@soheil\", \"shot@super-g-test\"]))")
   gnome-shell --headless --wayland ${X11_OFF:---no-x11} --mode=ubuntu --virtual-monitor 1600x1000 > "$SANDBOX/shell.log" 2>&1 &
   pid=$!
   for i in $(seq 1 240); do [ -f "$SHOT_DIR/done" ] && break; sleep 0.5; done
-  kill $pid 2>/dev/null || true; wait $pid 2>/dev/null || true
+  # The real unit kills the shell 5 s after SIGTERM, which inside the first 60 s
+  # counts as a crash and turns every extension off.
+  t0=$(date +%s%N); kill $pid 2>/dev/null || true; wait $pid 2>/dev/null || true
+  echo "$(( ($(date +%s%N) - t0) / 1000000 )) ms" > "$SANDBOX/stop-time"
 ' "$scheme" "$@" >/dev/null 2>&1
 
 ls "$sb/shots"

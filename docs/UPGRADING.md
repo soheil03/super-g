@@ -24,6 +24,8 @@ dconf read /org/gnome/shell/extensions/super-g/broken-modules
 journalctl --user -b | grep -i super-g
 ```
 
+One false alarm to rule out first: `disable-user-extensions` set to `true` turns off everything, Super G included. `org.gnome.Shell@ubuntu.service` has `TimeoutStopSec=5` and `OnFailure=org.gnome.Shell-disable-extensions.service`, and the shell keeps a guard file for its first 60 s. A slow exit during that window, such as a restart right after login, sets the flag with no crash at all. It happened on 2026-10-21 and 10-28, and again on 11-03. To tell it apart from a real crash, look for `State 'stop-sigterm' timed out` and check `coredumpctl`.
+
 ## Steps
 
 1. **Don't upgrade the real machine first.** Run the tests below on the new release in a VM or a spare install.

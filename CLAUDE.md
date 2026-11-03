@@ -84,6 +84,7 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Sidebar card is a margin, not a window-coloured border, so it casts a real shadow. Settings' rows have margins set in code; `row > grid` takes them back with negative CSS margins.
 - Shell surfaces are solid by default; the glass module adds `super-g-glassed` once glass is behind one (lock, a crashed module and uncovered surfaces stay readable). Dialog glass lives inside `dialogLayout` because the dialog's lightbox moves later siblings under its dim; it's thickened (`thicken`) so it doesn't turn grey over that dim.
 - Notification banners get tracked glass from `child-added` on `messageTray._bannerBin`. Run `lock-cycle` last or alone: the headless shell re-locks afterwards and later scenes come out black or mid-fade.
+- "Effects gone, extension INITIALIZED, `broken-modules` empty": check `disable-user-extensions` first. GNOME sets it when the shell is killed for not exiting in 5 s during its first 60 s after login, so a restart right after login does it with no crash. `stop-time` in a sandbox shows our exit time (about 170 ms).
 
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.

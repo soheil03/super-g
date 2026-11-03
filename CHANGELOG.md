@@ -2,6 +2,14 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.1.1 - 2026-11-03
+
+### Docs
+- Troubleshooting for GNOME turning all extensions off after a restart soon after login. No code change in the extension.
+
+### Tools
+- `tools/shell-test.sh` records how long the shell takes to exit, in `<sandbox>/stop-time`.
+
 ## 1.1.0 - 2026-11-03
 
 ### Added
