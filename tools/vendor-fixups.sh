@@ -227,3 +227,54 @@ if 'actor.setWindow' not in s:
     open(p, 'w').write(s)
 print('corners shadows patched')
 PY
+
+# Corners: the shadow follows the window through a minimize. Its opacity wasn't
+# bound, and the window's pivot, copied as is, scaled the shadow around its own
+# corner, leaving it its full padding away from a shrunken window.
+python3 -I - "$v/corners/manager/event_handlers.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = """        'pivot-point',
+        'translation-x',
+"""
+new = """        'opacity',
+        'translation-x',
+"""
+if "'opacity'," not in s:
+    assert old in s, 'corners shadow bindings changed upstream'
+    s = s.replace(old, new)
+old = """    // Store shadow, app type, visible binding, so that we can access them later
+    actor.rwcCustomData = {
+        shadow,
+"""
+new = """    // Super G: the same point of the window, in the shadow's own coordinates.
+    const syncPivot = () => {
+        const [offsetX, offsetY] = shadow.get_constraints().map(constraint => constraint.offset);
+        if (shadow.width && shadow.height) {
+            shadow.set_pivot_point(
+                (actor.pivot_point.x * actor.width - offsetX) / shadow.width,
+                (actor.pivot_point.y * actor.height - offsetY) / shadow.height);
+        }
+    };
+    actor.connectObject('notify::pivot-point', syncPivot, shadow);
+    shadow.connect('notify::allocation', syncPivot);
+    // Store shadow, app type, visible binding, so that we can access them later
+    actor.rwcCustomData = {
+        shadow,
+        syncPivot,
+"""
+if 'syncPivot' not in s:
+    assert old in s, 'corners shadow data changed upstream'
+    s = s.replace(old, new)
+    old = """            constraint.offset = offsets[i];
+        }
+    });
+"""
+    new = old + """    windowInfo.syncPivot();
+"""
+    assert old in s, 'corners shadow offsets changed upstream'
+    s = s.replace(old, new)
+open(p, 'w').write(s)
+print('corners shadow follows the window')
+PY

@@ -2,6 +2,14 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.2.6 - 2026-11-03
+
+### Fixed
+- The dock stays still after you open an app and move the pointer away. The icons used to rise again for a moment on the way up. They now only return when the pointer reaches another icon, or comes back to the dock after leaving it.
+- Minimizing no longer leaves a dark rectangle flying ahead of the window. The window's shadow kept its full strength while the window faded, and drifted away from it as it shrank. It now fades and shrinks with the window, on restore and close too.
+- The dock's dividers match. At fractional scales one could come out twice as thick as the other, depending on where it landed, and the one before the stack and minimized windows had wider gaps.
+- A running dot no longer ends up too high when the dock settles while a slow app is still bouncing.
+
 ## 1.2.5 - 2026-11-03
 
 ### Fixed

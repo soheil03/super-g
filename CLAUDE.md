@@ -70,7 +70,7 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Stand-ins answer `manager.lookup`, which GNOME's D-Bus listing also calls: without the `GetExtensionInfo` wrap in engine.js, the Extensions window shows every engine's original as on. Check with `gnome-extensions info <uuid>`.
 - Clutter.Timeline freezes silently in two ways, leaving what it animated stuck (a dock icon in the air): its actor leaves every monitor (an autohiding dock), or nothing references it. Bind dock timelines to `global.stage` and keep a reference.
 - `vendor/dock` ships no stylesheet.css: anything its code expects from one (notification badge) is styled in `dockStyle.js`.
-- A click on the dock seats the row (`seatedAt`): it eases home and stays until the pointer moves. Timelines stop when nothing moves (`_sleep`); a running timeline redraws the glass every frame.
+- A click on the dock seats the row (`state.seated`, with the icon under it): it eases home and stays until the pointer reaches another icon on the dock, or leaves the dock (then a fresh wave starts on return). Timelines stop when nothing moves (`_sleep`); a running timeline redraws the glass every frame.
 - Running dots are pushed below the icon with translation (`DOT_DROP`), compensated for the inner widget's scale.
 - Drawer tiles are cached for the module's life; detach them before destroying their rows.
 
@@ -100,6 +100,10 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - `ext._active.get(name)` is the module itself; `.instance` exists only on engine modules.
 - Tried and removed: re-blurring glass at half rate on 120 Hz. CPU went up (19.5% to 25.5%), since a skipped frame must force another redraw.
 - Super hold fires from the timer in `_checkHold`, so a Super combo pressed more than 450 ms in fires it first: key presses to clients aren't visible to the shell.
+- The window shadow takes opacity by hand (`fade` in `lib/softShadow.js`): a snippet writing `cogl_color_out` ignores the actor's opacity. Its pivot is the window's pivot in its own coordinates (`syncPivot`, vendor-fixups), or it keeps its full padding away from a shrinking window. To see this, slow down with `St.Settings.get().slow_down_factor` and use `frame`.
+- A 1 px line at a fractional scale covers 1 or 2 device pixels depending on its position. Dock dividers are scaled to a whole number of device pixels (`_evenDividers`). Test at 133%: `VIRTUAL_MONITOR=2400x1600` plus `ApplyMonitorsConfig`, then read the pixels.
+- The raised part of a magnified icon has no input: above the dock, clicks and motion go to the window or desktop below, since shell chrome only takes the dock's own rectangle.
+- In a sandbox the dock only shows with `CLONE=1` (otherwise Ubuntu's own dock takes over), and intellihide can leave it off screen: set `dock-fixed` in the EVAL, then read the dock state after, since it's rebuilt. Only click safe apps there: a clone sees the real ones.
 
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.

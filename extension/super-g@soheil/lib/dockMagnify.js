@@ -24,6 +24,9 @@ const EDGE_ZONE = 48;
 const RESETTLE_MS = 350;
 // A press on the dock that hasn't moved this far since keeps the row settled.
 const SEATED_SLOP = 6;
+// Share of an icon, from its centre, that counts as the pointer having reached
+// it: drifting over the line while heading up and away doesn't.
+const ICON_CORE = 0.4;
 // While nothing moves, frames stop and this watches the pointer instead.
 const IDLE_POLL_MS = 80;
 // The running dot's distance below the icon's edge.
@@ -85,7 +88,7 @@ export class DockMagnifier {
                 const [x, y] = event.get_coords();
                 for (const state of this._docks.values()) {
                     if (state.active && this._overDock(state, x, y))
-                        state.seatedAt = [x, y];
+                        this._seat(state, x, y);
                     this._wake(state);
                 }
             }
@@ -123,7 +126,7 @@ export class DockMagnifier {
     _attach(dock) {
         const dash = dock.dash;
         const state = {
-            dock, dash, active: false, slots: null, presence: 0, watched: [], id: this._docks.size,
+            dock, dash, active: false, slots: null, presence: 0, watched: [], strips: new Set(), id: this._docks.size,
             vertical: !(dash._isHorizontal ?? true),
             // On the stage: an autohidden dock is on no monitor, which would
             // freeze a timeline bound to it with the row still spread.
@@ -141,6 +144,8 @@ export class DockMagnifier {
         // and motion there goes to the app, not the shell. So look for it.
         state.watched.push([dock, dock.connect('showing', () => this._watchReveal(state))]);
         this._docks.set(dock, state);
+        this._watchStrips(state);
+        this._evenDividers(state);
         this._placeDots(state);
         this._hookLaunches(state);
     }
@@ -150,6 +155,8 @@ export class DockMagnifier {
             return;
         state.dirty = true;
         this._wake(state);
+        this._watchStrips(state);
+        this._evenDividers(state);
         this._module.later('dock-dots', RESETTLE_MS, () => {
             this._placeDots(state);
             if (!state.gone)
@@ -157,16 +164,52 @@ export class DockMagnifier {
         });
     }
 
+    // Strips beside the row hold items too (minimized windows, the stack, Trash).
+    _watchStrips(state) {
+        for (const strip of state.dash._box.get_parent()?.get_children() ?? []) {
+            if (strip === state.dash._box || !(strip instanceof St.BoxLayout) || state.strips.has(strip))
+                continue;
+            state.strips.add(strip);
+            strip.connectObject(
+                'child-added', () => this._rowChanged(state),
+                'child-removed', () => this._rowChanged(state),
+                'destroy', () => state.strips.delete(strip), state.dash);
+        }
+    }
+
+    // At a fractional scale a 1 px line covers one device pixel or two, depending
+    // on where it lands, so two dividers came out different. A whole number of
+    // device pixels is the same anywhere. Scaled, as the row's layout stays put.
+    _evenDividers(state) {
+        const monitorScale = global.display.get_monitor_scale(state.dash._monitorIndex ?? 0);
+        const thickness = Math.max(1, Math.round(monitorScale)) / monitorScale;
+        for (const item of this._items(state)) {
+            if (!item.has_style_class_name('dash-separator'))
+                continue;
+            item.set_pivot_point(0.5, 0.5);
+            if (state.vertical)
+                item.scale_y = thickness;
+            else
+                item.scale_x = thickness;
+        }
+    }
+
     // The icon fills its box, so the box's own bottom edge is inside the art;
     // the dot belongs below it, in the dock's padding.
     _placeDots(state) {
         if (state.vertical || !this._docks.has(state.dock) || state.gone)
             return;
-        const drop = state.dock._position === St.Side.TOP ? -DOT_DROP : DOT_DROP;
+        const drop = this._dotDrop(state);
         for (const item of this._items(state)) {
             for (const dot of this._dots(item))
                 dot.translation_y = drop;
         }
+    }
+
+    _dotDrop(state) {
+        if (state.vertical)
+            return 0;
+        return state.dock._position === St.Side.TOP ? -DOT_DROP : DOT_DROP;
     }
 
     // The launch is the icon itself hopping: Flourish's launch flies a clone in
@@ -243,12 +286,12 @@ export class DockMagnifier {
         this._bounces.add(timeline);
         const place = lift => {
             visual[axis] = lift * sign;
-            // The dot stays on the dock.
+            // The dot stays on the dock, at the place for the icon's scale now:
+            // the row may well come to rest while this hops.
+            const rest = axis === 'translation_y' ? this._dotDrop(state) / visual.scale_y : 0;
             for (const dot of dots)
-                dot[axis] = (axis === 'translation_y' ? (dot._dockDrop ?? 0) : 0) - lift * sign;
+                dot[axis] = rest - lift * sign;
         };
-        for (const dot of dots)
-            dot._dockDrop = dot.translation_y;
         const stop = () => {
             if (!visual._bouncing)
                 return;
@@ -287,6 +330,8 @@ export class DockMagnifier {
         }
         for (const [obj, id] of state.watched)
             obj.disconnect(id);
+        for (const strip of state.strips)
+            strip.disconnectObject(state.dash);
         this._restAll(state);
         state.timeline = null;
         this._docks.delete(state.dock);
@@ -512,7 +557,7 @@ export class DockMagnifier {
             state.iconSize / 2;
         state.dash._background?._glassLayer?.setRoom(state.vertical
             ? {top: most, bottom: most} : {left: most, right: most});
-        state.seatedAt = null;
+        state.seated = null;
         state.active = true;
         state.lastFrame = Date.now();
         state.presence = 0;
@@ -532,14 +577,17 @@ export class DockMagnifier {
         }
         const [x, y] = global.get_pointer();
         // A click seats the row: everything eases home while the app opens, and
-        // the wave only returns when the pointer moves on.
-        if (state.seatedAt && Math.hypot(x - state.seatedAt[0], y - state.seatedAt[1]) > SEATED_SLOP)
-            state.seatedAt = null;
+        // the wave only returns on another icon or once the pointer has left.
+        if (state.seated && this._reachedAnother(state, x, y))
+            state.seated = null;
         // An icon being dragged has the row to itself, and an open context menu
         // shouldn't sit on a raised icon.
         const menuOpen = slots.some(slot => slot.actor.child?._menu?.isOpen);
-        const over = this._enabled && !menuOpen && !state.dash._dragPlaceholder && this._inside(state, x, y);
-        const inside = over && !state.seatedAt;
+        // A seated row has nothing risen, so the dock alone counts: past it, the
+        // row goes to rest and coming back starts a fresh wave.
+        const on = state.seated ? this._overDock(state, x, y) : this._inside(state, x, y);
+        const over = this._enabled && !menuOpen && !state.dash._dragPlaceholder && on;
+        const inside = over && !state.seated;
         const cursor = state.vertical ? y : x;
 
         const follow = 1 - (1 - FOLLOW) ** (dt / FRAME_MS);
@@ -605,6 +653,32 @@ export class DockMagnifier {
             this._restAll(state);
     }
 
+    _seat(state, x, y) {
+        this._locate(state);
+        state.seated = {x, y, icon: this._nearestIcon(state, state.vertical ? y : x)};
+    }
+
+    // The wave keeps a pointer between the same two icons when it spreads them,
+    // so the nearest at rest is the one that was under the click.
+    _nearestIcon(state, cursor) {
+        let nearest = null;
+        for (const slot of state.slots) {
+            if (slot.zooms && !slot.dead && slot.size > 0 &&
+                (!nearest || Math.abs(cursor - slot.center) < Math.abs(cursor - nearest.center)))
+                nearest = slot;
+        }
+        return nearest;
+    }
+
+    _reachedAnother(state, x, y) {
+        const {seated} = state;
+        if (Math.hypot(x - seated.x, y - seated.y) <= SEATED_SLOP || !this._overDock(state, x, y))
+            return false;
+        const cursor = state.vertical ? y : x;
+        const icon = this._nearestIcon(state, cursor);
+        return icon && icon !== seated.icon && Math.abs(cursor - icon.center) <= icon.size * ICON_CORE;
+    }
+
     _mapThrough(rest, moved, value) {
         const n = rest.length;
         if (value <= rest[0])
@@ -621,7 +695,7 @@ export class DockMagnifier {
     }
 
     _apply(state, slot, {scale, shift}) {
-        const drop = state.vertical ? 0 : state.dock._position === St.Side.TOP ? -DOT_DROP : DOT_DROP;
+        const drop = this._dotDrop(state);
         const {actor, visual} = slot;
         const bouncing = visual?._bouncing;
         // Most of the row sits still under a small movement.
@@ -653,7 +727,7 @@ export class DockMagnifier {
         }
         state.dash._background?._glassLayer?.setRoom({});
         state.active = false;
-        state.seatedAt = null;
+        state.seated = null;
         // Fresh at the next hover; the row may have changed by then.
         state.slots = null;
         this._reclip(state);

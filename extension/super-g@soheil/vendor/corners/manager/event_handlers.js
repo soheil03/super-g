@@ -50,7 +50,7 @@ function createEffect(actor) {
     // Bind properties of the window to the shadow actor.
     const propertyBindings = [];
     for (const prop of [
-        'pivot-point',
+        'opacity',
         'translation-x',
         'translation-y',
         'scale-x',
@@ -60,9 +60,21 @@ function createEffect(actor) {
         const binding = actor.bind_property(prop, shadow, prop, GObject.BindingFlags.SYNC_CREATE);
         propertyBindings.push(binding);
     }
+    // Super G: the same point of the window, in the shadow's own coordinates.
+    const syncPivot = () => {
+        const [offsetX, offsetY] = shadow.get_constraints().map(constraint => constraint.offset);
+        if (shadow.width && shadow.height) {
+            shadow.set_pivot_point(
+                (actor.pivot_point.x * actor.width - offsetX) / shadow.width,
+                (actor.pivot_point.y * actor.height - offsetY) / shadow.height);
+        }
+    };
+    actor.connectObject('notify::pivot-point', syncPivot, shadow);
+    shadow.connect('notify::allocation', syncPivot);
     // Store shadow, app type, visible binding, so that we can access them later
     actor.rwcCustomData = {
         shadow,
+        syncPivot,
         unminimizedTimeoutId: 0,
         propertyBindings,
     };
@@ -263,6 +275,7 @@ function updateEffect(actor) {
             constraint.offset = offsets[i];
         }
     });
+    windowInfo.syncPivot();
     refreshShadow(actor);
 }
 /** Refresh rounded corners settings for all windows. */

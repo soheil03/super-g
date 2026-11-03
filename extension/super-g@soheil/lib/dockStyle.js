@@ -218,6 +218,12 @@ ${D} .dash-separator { background-color: ${dark ? 'rgba(255,255,255,0.18)' : 'rg
 /* The engine sizes its length; the margins must leave the dock's height alone. */
 ${D}.bottom .dash-separator, ${D}.top .dash-separator { width: 1px; margin: 7px 5px; }
 ${D}.left .dash-separator, ${D}.right .dash-separator { height: 1px; margin: 5px 7px; }
+/* The minimized strip's own padding and spacing would widen its divider's gaps
+   past the dock's, so they're counted in. */
+${D}.bottom #kiwi-minimized-strip, ${D}.top #kiwi-minimized-strip { padding: 0 3px 0 0; }
+${D}.left #kiwi-minimized-strip, ${D}.right #kiwi-minimized-strip { padding: 0 0 3px 0; }
+${D}.bottom #kiwi-minimized-strip .dash-separator, ${D}.top #kiwi-minimized-strip .dash-separator { margin: 7px 3px 7px 5px; }
+${D}.left #kiwi-minimized-strip .dash-separator, ${D}.right #kiwi-minimized-strip .dash-separator { margin: 5px 7px 3px 7px; }
 ${D} .dash-label, #uiGroup .dash-label {
   background-color: ${withAlpha(c.popover, 0.92)}; color: ${c.fg}; border-radius: 999px;
   border: none; box-shadow: inset 0 0 0 1px ${c.hairline}; padding: 4px 12px; }
