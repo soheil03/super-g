@@ -264,6 +264,9 @@ export default class SuperGPrefs extends ExtensionPreferences {
                     switchRow(s, 'app-drawer-suggestions', 'Most-used apps first'),
                 ]),
                 group('Behaviour', [
+                    comboRow(s, 'super-key-action', 'Super key', [['overview', 'Activities overview'],
+                        ['dock', 'Dock, then app drawer'], ['drawer', 'App drawer']],
+                    {subtitle: 'One press. With the dock option, a dock already showing opens the drawer'}),
                     comboRow(dock, 'dock-position', 'Position', DOCK_POSITIONS),
                     invertedSwitch(dock, 'dock-fixed', 'Auto-hide'),
                     switchRow(dock, 'intellihide', 'Hide only when a window overlaps'),

@@ -18,6 +18,8 @@ const FRAME_MS = 1000 / 60;
 const DONE = 0.002;
 // How far past the row's ends the wave fades out, in slots.
 const END_FADE = 0.9;
+// How far past the dock, towards the screen's edge, still counts as on it.
+const EDGE_ZONE = 48;
 // How long a changed row gets to finish animating before it's measured again.
 const RESETTLE_MS = 350;
 // A press on the dock that hasn't moved this far since keeps the row settled.
@@ -26,12 +28,13 @@ const SEATED_SLOP = 6;
 const IDLE_POLL_MS = 80;
 // The running dot's distance below the icon's edge.
 const DOT_DROP = 7;
+const DOT_FADE_MS = 220;
 // A launch: hops of this share of the icon, each lower than the last, repeating
 // while the app starts, as on a Mac.
 const BOUNCE_HEIGHT = 0.42;
 const BOUNCE_MS = 420;
 const DAMPING = 0.82;
-const BOUNCE_MIN = 2;
+const BOUNCE_MIN = 1;
 const BOUNCE_MAX = 12;
 
 const approach = (from, to, factor) =>
@@ -46,6 +49,7 @@ export class DockMagnifier {
         this._dockExt = dockExt;
         this._dockSettings = module.instance.getSettings();
         this._docks = new Map();
+        this._bounces = new Set();
     }
 
     get _enabled() {
@@ -96,6 +100,8 @@ export class DockMagnifier {
         if (this._readyId)
             this._dockExt.dockManager?.disconnect(this._readyId);
         this._readyId = 0;
+        for (const timeline of [...this._bounces])
+            timeline.stop();
         this._detachAll();
     }
 
@@ -117,7 +123,9 @@ export class DockMagnifier {
         const state = {
             dock, dash, active: false, slots: null, presence: 0, watched: [], id: this._docks.size,
             vertical: !(dash._isHorizontal ?? true),
-            timeline: new Clutter.Timeline({actor: dash, duration: 1000, repeat_count: -1}),
+            // On the stage: an autohidden dock is on no monitor, which would
+            // freeze a timeline bound to it with the row still spread.
+            timeline: new Clutter.Timeline({actor: global.stage, duration: 1000, repeat_count: -1}),
         };
         state.timeline.connect('new-frame', () => this._module.guard(() => this._frame(state)));
         // Icons come and go (a launch, a minimize) while the wave runs.
@@ -167,8 +175,21 @@ export class DockMagnifier {
             icon._superGLaunch = true;
             icon.animateLaunch = () => this._module.guard(() => this._bounce(state, item));
         }
-        for (const item of this._items(state))
+        for (const item of this._items(state)) {
             this._hookLabel(item);
+            for (const dot of this._dots(item)) {
+                if (dot._superGFade)
+                    continue;
+                dot._superGFade = true;
+                // A running dot arrives softly instead of popping in.
+                dot.connect('notify::visible', () => {
+                    if (!dot.visible)
+                        return;
+                    dot.opacity = 0;
+                    dot.ease({opacity: 255, duration: DOT_FADE_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+                });
+            }
+        }
     }
 
     // A label goes over the dock and clear of the grown icon, or not at all.
@@ -206,7 +227,12 @@ export class DockMagnifier {
         const dots = this._dots(item);
         const app = item.child.app;
         let hop = 0;
-        const timeline = new Clutter.Timeline({actor: visual, duration: BOUNCE_MS, repeat_count: BOUNCE_MAX - 1});
+        // On the stage, not the icon: a dock sliding away for the new window is on
+        // no monitor, and a timeline on it freezes mid-hop for good. Held here,
+        // as a collected timeline would just as silently stop; a property on the
+        // actor isn't enough, its wrapper can go first.
+        const timeline = new Clutter.Timeline({actor: global.stage, duration: BOUNCE_MS, repeat_count: BOUNCE_MAX - 1});
+        this._bounces.add(timeline);
         const place = lift => {
             visual[axis] = lift * sign;
             // The dot stays on the dock.
@@ -216,24 +242,30 @@ export class DockMagnifier {
         for (const dot of dots)
             dot._dockDrop = dot.translation_y;
         const stop = () => {
+            if (!visual._bouncing)
+                return;
+            visual._bouncing = false;
+            visual.disconnectObject(timeline);
             timeline.stop();
             place(0);
-            visual._bouncing = false;
+            this._bounces.delete(timeline);
         };
         timeline.connect('new-frame', (_t, ms) => {
             const t = ms / BOUNCE_MS;
             place(height * DAMPING ** hop * 4 * t * (1 - t));
         });
-        timeline.connect('stopped', () => {
-            if (visual._bouncing)
-                stop();
-        });
+        timeline.connect('stopped', stop);
         // A hop always lands; only then is the app asked whether it's up.
         timeline.connect('completed', () => {
             hop++;
-            if (hop >= BOUNCE_MIN && app?.state !== Shell.AppState.STARTING)
+            if (hop >= BOUNCE_MAX || (hop >= BOUNCE_MIN && app?.state !== Shell.AppState.STARTING))
                 stop();
         });
+        // A hidden dock's frames stop too, so never leave one waiting up there.
+        visual.connectObject('notify::mapped', () => {
+            if (!visual.mapped)
+                stop();
+        }, timeline);
         timeline.start();
     }
 
@@ -374,23 +406,29 @@ export class DockMagnifier {
         const rise = state.active ? (this._scale() - 1) * (state.iconSize ?? 64) : 0;
         if (state.vertical) {
             return y >= by - pad && y <= by + bh + pad &&
-                x >= bx - (side === St.Side.RIGHT ? rise : 0) && x <= bx + bw + (side === St.Side.LEFT ? rise : 0);
+                x >= bx - (side === St.Side.RIGHT ? rise : EDGE_ZONE) && x <= bx + bw + (side === St.Side.LEFT ? rise : EDGE_ZONE);
         }
         return x >= bx - pad && x <= bx + bw + pad &&
-            y >= by - (side === St.Side.BOTTOM ? rise : 0) && y <= by + bh + (side === St.Side.TOP ? rise : 0);
+            y >= by - (side === St.Side.BOTTOM ? rise : EDGE_ZONE) && y <= by + bh + (side === St.Side.TOP ? rise : EDGE_ZONE);
     }
 
     _scale() {
         return this._module.settings.get_double('dock-magnify-scale');
     }
 
+    // The dock, plus the gap to the screen's edge: revealing it means pushing
+    // the pointer past it, and the wave has to be underway as it comes back up.
     _overDock(state, x, y) {
         const bg = state.dash._background ?? state.dash;
         if (!bg.mapped)
             return false;
         const [bx, by] = bg.get_transformed_position();
         const [bw, bh] = bg.get_transformed_size();
-        return x >= bx && x <= bx + bw && y >= by && y <= by + bh;
+        const side = state.dock._position;
+        return x >= bx - (side === St.Side.LEFT ? EDGE_ZONE : 0) &&
+            x <= bx + bw + (side === St.Side.RIGHT ? EDGE_ZONE : 0) &&
+            y >= by - (side === St.Side.TOP ? EDGE_ZONE : 0) &&
+            y <= by + bh + (side === St.Side.BOTTOM ? EDGE_ZONE : 0);
     }
 
     _onMotion(state, x, y) {

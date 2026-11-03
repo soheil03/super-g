@@ -91,6 +91,15 @@
       <default>[]</default>
       <summary>Chromium-based Wayland apps found so far, whose rounded shape hugs their content</summary>
     </key>
+    <key name="super-key-action" type="s">
+      <choices>
+        <choice value="overview"/>
+        <choice value="dock"/>
+        <choice value="drawer"/>
+      </choices>
+      <default>'overview'</default>
+      <summary>What one press of the Super key does</summary>
+    </key>
     <key name="dock-launch-bounce" type="b">
       <default>true</default>
       <summary>Bounce a dock icon while its app starts</summary>

@@ -25,6 +25,12 @@ const HANDOVER = `${Files.STATE}/handover.json`;
 const standIns = new Map();
 let originalLookup = null;
 
+// GNOME's D-Bus listing asks the same lookup, so the Extensions window would
+// show every stand-in as a running extension. That one caller gets the truth.
+let reportingToDBus = false;
+let dbusService = null;
+let originalInfo = null;
+
 function installLookup() {
     if (originalLookup)
         return;
@@ -32,10 +38,22 @@ function installLookup() {
     originalLookup = manager.lookup;
     manager.lookup = function (uuid) {
         const real = originalLookup.call(this, uuid);
-        if (real?.state === ExtensionState.ACTIVE)
+        if (reportingToDBus || real?.state === ExtensionState.ACTIVE)
             return real;
         return standIns.get(uuid) ?? real;
     };
+    dbusService = Main.shellDBusService?._extensionsService ?? null;
+    if (dbusService?.GetExtensionInfo) {
+        originalInfo = dbusService.GetExtensionInfo;
+        dbusService.GetExtensionInfo = function (...args) {
+            reportingToDBus = true;
+            try {
+                return originalInfo.apply(this, args);
+            } finally {
+                reportingToDBus = false;
+            }
+        };
+    }
 }
 
 function uninstallLookup() {
@@ -43,6 +61,9 @@ function uninstallLookup() {
         return;
     Main.extensionManager.lookup = originalLookup;
     originalLookup = null;
+    if (dbusService && originalInfo)
+        delete dbusService.GetExtensionInfo;
+    dbusService = originalInfo = null;
 }
 
 const LOADED = [ExtensionState.ACTIVE, ExtensionState.INACTIVE, ExtensionState.ERROR,

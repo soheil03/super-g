@@ -317,6 +317,10 @@ export default class GlassModule extends Module {
                 // The magnifier stretches the surface with the row of icons.
                 bg._glassLayer = glass;
                 glass.connect('destroy', () => delete bg._glassLayer);
+                glass.connect('destroy', () => {
+                    if (this._docks.get(dock) === glass)
+                        this._docks.delete(dock);
+                });
                 this._docks.set(dock, glass);
             }
         };

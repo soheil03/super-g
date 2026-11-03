@@ -67,10 +67,14 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Menus get glass from a hook on `BoxPointer.open`: some openers keep their own reference to `PopupMenu.open` (Kiwi's app menu).
 - The folder dialog's dim is the dialog's own `background_color`, eased in `_zoomAndFadeIn`, and lies over anything below it. `dialog.ease` drops that property; our wash goes under the glass.
 - Wayland Chromium and Electron windows draw 1-2 px short of the frame they report, which left a thin arc past the rounded corner. `cornersSetup.js` detects them (Chromium's files beside the executable) and gives each a custom config with `CHROMIUM_INSET` padding. Don't exclude them from rounding: their bottom corners go square. X11 ones (Teams) get a compositor frame styled by GTK4's CSS and need nothing. Test both: `X11_OFF=" "` in shell-test.sh starts Xwayland; launch with `--password-store=basic` to avoid the keyring prompt.
+- Stand-ins answer `manager.lookup`, which GNOME's D-Bus listing also calls: without the `GetExtensionInfo` wrap in engine.js, the Extensions window shows every engine's original as on. Check with `gnome-extensions info <uuid>`.
+- Clutter.Timeline freezes silently in two ways, leaving what it animated stuck (a dock icon in the air): its actor leaves every monitor (an autohiding dock), or nothing references it. Bind dock timelines to `global.stage` and keep a reference.
 - `vendor/dock` ships no stylesheet.css: anything its code expects from one (notification badge) is styled in `dockStyle.js`.
 - A click on the dock seats the row (`seatedAt`): it eases home and stays until the pointer moves. Timelines stop when nothing moves (`_sleep`); a running timeline redraws the glass every frame.
 - Running dots are pushed below the icon with translation (`DOT_DROP`), compensated for the inner widget's scale.
 - Drawer tiles are cached for the module's life; detach them before destroying their rows.
+
+- Super key: `super-key-action` blocks GNOME's `overlay-key` handler (found with `GObject.signal_handler_find`) rather than disconnecting it, so it can go back. Test by emitting `overlay-key`.
 
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.

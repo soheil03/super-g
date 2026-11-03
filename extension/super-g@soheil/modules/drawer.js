@@ -7,6 +7,7 @@
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import Shell from 'gi://Shell';
@@ -43,6 +44,8 @@ const SCROLL_COAST = 0.075;
 const WHEEL_STEP = 130;
 const COAST_MS = 320;
 const TOUCH_SLOP = 10;
+// How long the Super key keeps a hidden dock out.
+const SUPER_DOCK_MS = 2500;
 
 function sectionOf(app) {
     const cats = (app.get_app_info()?.get_categories() ?? '').split(';');
@@ -66,11 +69,74 @@ export default class DrawerModule extends Module {
             this._dropTiles();
         });
         this._hookDocks();
+        this._superId = global.display.connect('overlay-key', () => this.guard(() => this._onSuper()));
+        this.connect(this.settings, 'changed::super-key-action', () => this._syncSuper());
+        this._syncSuper();
+    }
+
+    /* ----------------------------------------------------- Super key -- */
+
+    // GNOME's own handler toggles the overview. It's only held back while
+    // another action is chosen, and gets the key straight back otherwise.
+    _syncSuper() {
+        const ours = this.settings.get_string('super-key-action') !== 'overview';
+        if (ours && !this._overviewHandler) {
+            const id = GObject.signal_handler_find(global.display, {signalId: 'overlay-key'});
+            if (id && id !== this._superId) {
+                GObject.signal_handler_block(global.display, id);
+                this._overviewHandler = id;
+            }
+        } else if (!ours && this._overviewHandler) {
+            GObject.signal_handler_unblock(global.display, this._overviewHandler);
+            this._overviewHandler = 0;
+        }
+    }
+
+    _onSuper() {
+        const action = this.settings.get_string('super-key-action');
+        if (action === 'overview')
+            return;
+        if (Main.overview.visible) {
+            Main.overview.hide();
+            return;
+        }
+        const dock = this._dockExt?.dockManager?._allDocks?.[0];
+        const button = dock?.dash?._showAppsIcon?.toggleButton;
+        if (action === 'dock' && dock && !this._dockOnScreen(dock)) {
+            for (const each of this._dockExt.dockManager._allDocks)
+                each.showDock();
+            this.later('super-dock', SUPER_DOCK_MS, () => {
+                for (const each of this._dockExt.dockManager?._allDocks ?? [])
+                    each.updateDashVisibility();
+            });
+            return;
+        }
+        // The dock is already there (or the drawer was asked for): one step on.
+        if (this._style() === 'overview')
+            Main.overview.showApps();
+        else if (this._open)
+            this.close();
+        else
+            this.open(dock, button);
+    }
+
+    _dockOnScreen(dock) {
+        const bg = dock.dash?._background;
+        if (!bg?.mapped)
+            return false;
+        const [x, y] = bg.get_transformed_position();
+        const [w, h] = bg.get_transformed_size();
+        const m = Main.layoutManager.monitors[dock._monitorIndex] ?? Main.layoutManager.primaryMonitor;
+        return x >= m.x && y >= m.y && x + w <= m.x + m.width && y + h <= m.y + m.height;
     }
 
     disable() {
         this.cleanup();
         this.close(true);
+        global.display.disconnect(this._superId);
+        if (this._overviewHandler)
+            GObject.signal_handler_unblock(global.display, this._overviewHandler);
+        this._overviewHandler = 0;
         this._dropTiles();
         for (const [button, state] of this._buttons)
             this._unhookButton(button, state);
@@ -446,6 +512,11 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
     // anywhere goes back to search.
     _onKey(event) {
         const key = event.get_key_symbol();
+        // Menus hold back the shell's Super handling, so the drawer closes itself.
+        if (key === Clutter.KEY_Super_L || key === Clutter.KEY_Super_R) {
+            this.close();
+            return Clutter.EVENT_STOP;
+        }
         const text = this._entry.clutter_text;
         const inSearch = global.stage.key_focus === text;
         if (key === Clutter.KEY_Escape) {
