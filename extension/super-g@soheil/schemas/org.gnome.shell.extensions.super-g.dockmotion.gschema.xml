@@ -49,21 +49,21 @@
   <schema id="org.gnome.shell.extensions.super-g.dockmotion"
           path="/org/gnome/shell/extensions/super-g/dockmotion/">
     <key name="motion-profile" enum="org.gnome.shell.extensions.super-g.dockmotion.profile">
-      <default>"subtle"</default>
+      <default>'custom'</default>
       <summary>Current preset</summary>
     </key>
 
     <key name="custom-hover-enabled" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Use hover motion in Custom</summary>
     </key>
     <key name="custom-hover-scale" type="d">
-      <default>1.04</default>
+      <default>1.55</default>
       <range min="1.0" max="2.0"/>
       <summary>Hover scale</summary>
     </key>
     <key name="custom-hover-dynamic-spacing" type="b">
-      <default>false</default>
+      <default>true</default>
       <summary>Move neighboring icons apart on hover</summary>
     </key>
     <key name="custom-hover-lift" type="i">
@@ -72,7 +72,7 @@
       <summary>Hover lift in pixels</summary>
     </key>
     <key name="custom-hover-duration" type="i">
-      <default>160</default>
+      <default>150</default>
       <range min="80" max="800"/>
       <summary>Hover duration in milliseconds</summary>
     </key>
@@ -81,13 +81,13 @@
       <summary>Hover transition easing</summary>
     </key>
     <key name="custom-neighbor-radius" type="i">
-      <default>1</default>
+      <default>2</default>
       <range min="1" max="3"/>
       <summary>Hover reach in icon steps</summary>
     </key>
 
     <key name="custom-press-enabled" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Use press feedback in Custom</summary>
     </key>
     <key name="custom-press-mode" enum="org.gnome.shell.extensions.super-g.dockmotion.press-mode">
@@ -95,16 +95,16 @@
       <summary>Press feedback trigger</summary>
     </key>
     <key name="custom-press-effect" enum="org.gnome.shell.extensions.super-g.dockmotion.press-effect">
-      <default>"dim"</default>
+      <default>'squash'</default>
       <summary>Press feedback effect</summary>
     </key>
     <key name="custom-press-intensity" type="d">
-      <default>0.35</default>
+      <default>0.25</default>
       <range min="0.0" max="1.0"/>
       <summary>Press intensity</summary>
     </key>
     <key name="custom-press-duration" type="i">
-      <default>100</default>
+      <default>120</default>
       <range min="80" max="500"/>
       <summary>Press duration in milliseconds</summary>
     </key>
@@ -114,16 +114,16 @@
       <summary>Use launch animation in Custom</summary>
     </key>
     <key name="custom-launch-effect" enum="org.gnome.shell.extensions.super-g.dockmotion.launch-effect">
-      <default>"pulse"</default>
+      <default>'bounce'</default>
       <summary>Launch effect</summary>
     </key>
     <key name="custom-launch-intensity" type="d">
-      <default>0.5</default>
+      <default>0.45</default>
       <range min="0.0" max="1.0"/>
       <summary>Launch effect intensity</summary>
     </key>
     <key name="custom-launch-speed" type="d">
-      <default>0.65</default>
+      <default>0.6</default>
       <range min="0.30" max="1.0"/>
       <summary>Launch speed</summary>
     </key>
@@ -169,17 +169,17 @@
       <summary>Attention effect</summary>
     </key>
     <key name="custom-attention-intensity" type="d">
-      <default>0.25</default>
+      <default>0.4</default>
       <range min="0.0" max="1.0"/>
       <summary>Attention effect intensity</summary>
     </key>
     <key name="custom-attention-speed" type="d">
-      <default>0.6</default>
+      <default>0.7</default>
       <range min="0.30" max="1.0"/>
       <summary>Attention speed</summary>
     </key>
     <key name="custom-attention-cycles" type="i">
-      <default>1</default>
+      <default>2</default>
       <range min="1" max="10"/>
       <summary>Cycles played at each attention reminder</summary>
     </key>
@@ -189,17 +189,17 @@
       <summary>Pause between attention cycles in milliseconds</summary>
     </key>
     <key name="custom-attention-interval" type="i">
-      <default>10</default>
+      <default>8</default>
       <range min="2" max="60"/>
       <summary>Seconds between two attention reminders</summary>
     </key>
     <key name="custom-attention-reminders" type="i">
-      <default>3</default>
+      <default>5</default>
       <range min="1" max="30"/>
       <summary>Reminders before the attention animation stops</summary>
     </key>
     <key name="custom-attention-peek" type="b">
-      <default>false</default>
+      <default>true</default>
       <summary>Show the attention animation while the dock is hidden</summary>
     </key>
 
@@ -216,7 +216,7 @@
     </key>
 
     <key name="dock-outline" enum="org.gnome.shell.extensions.super-g.dockmotion.dock-outline">
-      <default>'none'</default>
+      <default>'light'</default>
       <summary>Dock outline</summary>
       <description>Draw a thin edge around the dock background. Auto follows the color scheme.</description>
     </key>

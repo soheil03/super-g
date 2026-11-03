@@ -2,6 +2,17 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.2.4 - 2026-11-03
+
+### Fixed
+- Clean edges and round corners on every app. The window clip sat about 1 px past each side, because the corners shader mapped its coordinates onto the window's size instead of the slightly larger texture it really gets. That let through whatever apps draw outside their frame: a dark line along Zen's straight edges, gaps beside Electron apps.
+- Chromium and Electron apps leave more of a gap than the old inset allowed for (up to 4 px at the bottom at 133% scale). The inset now covers the largest measured, so there is never a gap, at the cost of up to about 2 px of an app's edge.
+- Maximized windows have no rim or stray pixels along the screen's edges.
+- No row of backdrop pixels shows between a window and its shadow.
+
+### Changed
+- New defaults, from the author's own setup: Slate palette, adaptive 36 px top bar, Thin glass, Adwaita window buttons, 12-hour clock, the Super key opening the app drawer, and matching dock, dock motion, gesture, lock screen and hot corner choices. Anything you already changed stays as it is. Settings you never touched follow the new defaults, and "Reset this page" now goes to them.
+
 ## 1.2.3 - 2026-11-03
 
 ### Fixed

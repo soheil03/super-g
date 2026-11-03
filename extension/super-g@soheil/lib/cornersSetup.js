@@ -11,8 +11,9 @@ import {setWindowShadowStyle} from './softShadow.js';
 
 const KEY = 'global-rounded-corner-settings';
 const CUSTOM_KEY = 'custom-rounded-corner-settings';
-// Left, right, top, bottom, measured against the engine's own bounds.
-const CHROMIUM_INSET = [1, 2, 0, 2];
+// Left, right, top, bottom. What they really leave varies with the window's size
+// (bottom 2.5-4 px), so this covers the most: losing a pixel of an app beats a gap.
+const CHROMIUM_INSET = [2, 3, 2, 4];
 
 export function configureCorners(module) {
     const engine = module.instance.getSettings();

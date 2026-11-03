@@ -72,7 +72,7 @@
       <description>Sets the delay after the mouse left the dock before hiding it.</description>
     </key>
     <key type="b" name="disable-overview-on-startup">
-      <default>false</default>
+      <default>true</default>
       <summary>Do not show overview on startup</summary>
       <description>Whether to show or not the overview during startup animation.</description>
     </key>
@@ -112,7 +112,7 @@
       <description>Sets the opacity of the dash background when no windows are close.</description>
     </key>
     <key type="d" name="max-alpha">
-      <default>0.8</default>
+      <default>0.7</default>
       <summary>Opacity of the dash background when windows are close.</summary>
       <description>Sets the opacity of the dash background when windows are close.</description>
     </key>
@@ -172,12 +172,12 @@
       <description>Add the possibility to switch workspace by mouse scrolling over the dock.</description>
     </key>
     <key type="i" name="dash-max-icon-size">
-      <default>48</default>
+      <default>60</default>
       <summary>Maximum dash icon size</summary>
       <description>Set the allowed maximum dash icon size. Allowed range: 16..64.</description>
     </key>
     <key type="d" name="preview-size-scale">
-      <default>0</default>
+      <default>0.47</default>
       <summary>Preview size scale</summary>
       <description>Set the allowed maximum dash preview size scale. Allowed range: 0,00..1,00.</description>
     </key>
@@ -222,7 +222,7 @@
       <description>Show or hide running applications icons in the dash</description>
     </key>
     <key type="b" name="isolate-workspaces">
-      <default>false</default>
+      <default>true</default>
       <summary>Provide workspace isolation</summary>
       <description>Dash shows only windows from the current workspace, this is applied only if gnome-shell 'current-workspace-only' app-switcher settings is disabled</description>
     </key>
@@ -292,12 +292,12 @@
       <description>Show applications button in the dash</description>
     </key>
     <key type="b" name="show-apps-at-top">
-      <default>false</default>
+      <default>true</default>
       <summary>Show application button on the left</summary>
       <description>Show application button on the left of the dash</description>
     </key>
     <key type="b" name="show-apps-always-in-the-edge">
-      <default>true</default>
+      <default>false</default>
       <summary>Show application button on the edge when using centered panel mode</summary>
     </key>
     <key type="b" name="bolt-support">
@@ -306,7 +306,7 @@
       <description>Make the extension work properly when bolt extensions is enabled</description>
     </key>
     <key type="d" name="height-fraction">
-      <default>0.90</default>
+      <default>1.0</default>
       <summary>Dock max height/width (fraction of available space)</summary>
     </key>
     <key type="b" name="extend-height">
@@ -341,12 +341,12 @@
       <summary>Activate only one window</summary>
     </key>
     <key name="click-action" enum="org.gnome.shell.extensions.super-g.dock.clickAction">
-      <default>'cycle-windows'</default>
+      <default>'minimize'</default>
       <summary>Action when clicking on a running app</summary>
       <description>Set the action that is executed when clicking on the icon of a running application</description>
     </key>
     <key name="scroll-action" enum="org.gnome.shell.extensions.super-g.dock.scrollAction">
-      <default>'do-nothing'</default>
+      <default>'cycle-windows'</default>
       <summary>Action when scrolling app</summary>
       <description>Set the action that is executed when scrolling on the application icon</description>
     </key>
@@ -621,7 +621,7 @@
       <description>Toggle the glossy effect of the unity7 backlit feature.</description>
     </key>
     <key name="hide-tooltip" type="b">
-      <default>false</default>
+      <default>true</default>
       <summary>Hide application tooltip</summary>
       <description>Hide tooltip when hovering application in the dash.</description>
     </key>

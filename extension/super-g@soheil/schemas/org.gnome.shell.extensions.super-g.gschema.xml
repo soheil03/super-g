@@ -67,12 +67,12 @@
 
     <!-- Top bar -->
     <key name="panel-style" type="s">
-      <default>'floating'</default>
+      <default>'adaptive'</default>
       <summary>Top bar style: floating, islands or adaptive</summary>
     </key>
     <key name="panel-height" type="i">
       <range min="22" max="48"/>
-      <default>28</default>
+      <default>36</default>
       <summary>Top bar height in pixels</summary>
     </key>
     <key name="panel-status-style" type="s">
@@ -80,7 +80,7 @@
       <summary>Status icons: grouped (one pill) or bare</summary>
     </key>
     <key name="glass-material" type="s">
-      <default>'regular'</default>
+      <default>'thin'</default>
       <summary>Glass thickness: ultra-thin, thin, regular, thick, ultra-thick, or custom (uses tint, vibrancy and blur)</summary>
     </key>
     <key name="prefs-open-page" type="s">
@@ -100,7 +100,7 @@
         <choice value="drawer"/>
         <choice value="launcher"/>
       </choices>
-      <default>'overview'</default>
+      <default>'drawer'</default>
       <summary>What one press of the Super key does</summary>
     </key>
     <key name="super-double-action" type="s">
@@ -112,7 +112,7 @@
         <choice value="drawer"/>
         <choice value="launcher"/>
       </choices>
-      <default>'none'</default>
+      <default>'apps'</default>
       <summary>What a double press of the Super key does (any other than none delays a single press slightly)</summary>
     </key>
     <key name="super-hold-action" type="s">
@@ -141,7 +141,7 @@
       <summary>Switch off extensions that clash with this one; off asks first</summary>
     </key>
     <key name="panel-glass" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Live glass behind the top bar</summary>
     </key>
     <key name="panel-adaptive-solid" type="b">
@@ -157,7 +157,7 @@
       <summary>Show the date in the clock</summary>
     </key>
     <key name="clock-24h" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Use a 24-hour clock</summary>
     </key>
     <key name="hide-accessibility" type="b">
@@ -182,7 +182,7 @@
     </key>
     <key name="glass-blur" type="i">
       <range min="8" max="120"/>
-      <default>40</default>
+      <default>8</default>
       <summary>Blur radius</summary>
     </key>
     <key name="glass-overview" type="b">
@@ -223,7 +223,7 @@
 
     <!-- Appearance -->
     <key name="palette" type="s">
-      <default>'catppuccin'</default>
+      <default>'slate'</default>
       <summary>Palette: graphite, catppuccin, stone or slate</summary>
     </key>
     <key name="accent" type="s">
@@ -231,7 +231,7 @@
       <summary>Accent name, or auto for the palette default</summary>
     </key>
     <key name="window-buttons" type="s">
-      <default>'capsule'</default>
+      <default>'adwaita'</default>
       <summary>Window button style: capsule, mini-dots, close-emphasized or adwaita</summary>
     </key>
     <key name="window-radius" type="i">

@@ -62,9 +62,12 @@ export const RoundedCornersEffect = GObject.registerClass({}, class Effect exten
         if (borderedAreaRadius < 0.001) {
             borderedAreaRadius = 0.0;
         }
+        // Super G: Clutter pads an offscreen effect's texture by 2 px before the
+        // actor and 1 after it, at every scale. Mapping it onto the actor's own
+        // size left the clip about 1 px past the window on every side.
         const pixelStep = [
-            1 / this.actor.get_width(),
-            1 / this.actor.get_height(),
+            1 / (Math.round(this.actor.get_width()) + 3),
+            1 / (Math.round(this.actor.get_height()) + 3),
         ];
         // This is needed for squircle corners
         let exponent = smoothing * 10 + 2;

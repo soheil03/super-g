@@ -245,11 +245,12 @@ function updateEffect(actor) {
     // screen's edges it would pull the rim on screen on some sides only.
     if (win.maximizedHorizontally || win.maximizedVertically) {
         const { left, right, top, bottom } = cfg.padding;
+        // Past the edge by the rim's width, which would otherwise line the screen.
         cfg = { ...cfg, padding: {
-            left: win.maximizedHorizontally ? 0 : left,
-            right: win.maximizedHorizontally ? 0 : right,
-            top: win.maximizedVertically ? 0 : top,
-            bottom: win.maximizedVertically ? 0 : bottom,
+            left: win.maximizedHorizontally ? -1 : left,
+            right: win.maximizedHorizontally ? -1 : right,
+            top: win.maximizedVertically ? -1 : top,
+            bottom: win.maximizedVertically ? -1 : bottom,
         } };
     }
     const windowContentOffset = computeWindowContentsOffset(win);

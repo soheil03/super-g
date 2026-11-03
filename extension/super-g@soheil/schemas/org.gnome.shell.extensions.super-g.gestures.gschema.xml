@@ -112,11 +112,11 @@
       <description>Enable vertical swipe for app gesture</description>
     </key>
     <key name="pinch-3-finger-gesture" enum="org.gnome.shell.extensions.super-g.gestures.pinch-gestures">
-      <default>'CLOSE_DOCUMENT'</default>
+      <default>'SHOW_DESKTOP'</default>
       <description>Gesture action for 3 finger pinch</description>
     </key>
     <key name="pinch-4-finger-gesture" enum="org.gnome.shell.extensions.super-g.gestures.pinch-gestures">
-      <default>'CLOSE_WINDOW'</default>
+      <default>'SHOW_DESKTOP'</default>
       <description>Gesture action for 4 finger pinch</description>
     </key>
     <key name="tap-3-finger-gesture" enum="org.gnome.shell.extensions.super-g.gestures.tap-gestures">
@@ -136,7 +136,7 @@
       <description>Gesture action for 3-fingers horizontal swipe</description>
     </key>
     <key name="vertical-swipe-4-fingers-gesture" enum="org.gnome.shell.extensions.super-g.gestures.vertical-swipe-gestures">
-      <default>'WINDOW_MANIPULATION'</default>
+      <default>'OVERVIEW_NAVIGATION'</default>
       <description>Gesture action for 4-fingers vertical swipe</description>
     </key>
     <key name="horizontal-swipe-4-fingers-gesture" enum="org.gnome.shell.extensions.super-g.gestures.horizontal-swipe-gestures">

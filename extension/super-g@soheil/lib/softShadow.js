@@ -22,7 +22,7 @@ export function uniformLocation(pipeline, name) {
 }
 
 const NAMES = ['size_x', 'size_y', 'radius', 'exponent', 'aa', 'full_x', 'full_y', 'center_x', 'center_y',
-    'd0', 's0', 'a0', 'd1', 's1', 'a1', 'd2', 's2', 'a2'];
+    'tuck', 'd0', 's0', 'a0', 'd1', 's1', 'a1', 'd2', 's2', 'a2'];
 
 const DECLARATIONS = `
 ${NAMES.map(name => `uniform float ${name};`).join('\n')}
@@ -42,8 +42,8 @@ const CODE = `
 vec2 half_size = vec2(size_x, size_y) * 0.5;
 vec2 p = cogl_tex_coord_in[0].st * vec2(full_x, full_y) - vec2(center_x, center_y);
 float a = 1.0 - (1.0 - a0 * soft(p, half_size, d0, s0)) * (1.0 - a1 * soft(p, half_size, d1, s1)) * (1.0 - a2 * soft(p, half_size, d2, s2));
-// Hollow: nothing under the surface itself.
-a *= clamp(roundedBox(p, half_size, radius, exponent) / aa + 0.5, 0.0, 1.0);
+// Hollow: nothing under the surface itself, up to tuck px in from its edge.
+a *= clamp((roundedBox(p, half_size, radius, exponent) + tuck) / aa + 0.5, 0.0, 1.0);
 // Under one 8-bit step of noise, a wide shadow doesn't band on a smooth backdrop.
 float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
 a = clamp(a + (noise - 0.5) / 255.0 * step(0.001, a), 0.0, 1.0);
@@ -88,9 +88,11 @@ export class ShadowPainter {
 
     // x, y, width, height: the whole area, in the actor's coordinates. box: the
     // surface in it. layers: nine numbers, from above.
-    paint(node, {x, y, width, height, box, radius, exponent, aa, layers}) {
+    // tuck: how far the shadow goes under an opaque surface, so no backdrop shows
+    // through the row of pixels where the two edges meet.
+    paint(node, {x, y, width, height, box, radius, exponent, aa, layers, tuck = 0}) {
         const w = box.x2 - box.x1, h = box.y2 - box.y1;
-        const values = [w, h, radius, exponent, aa, width, height, (box.x1 + box.x2) / 2 - x, (box.y1 + box.y2) / 2 - y, ...layers];
+        const values = [w, h, radius, exponent, aa, width, height, (box.x1 + box.x2) / 2 - x, (box.y1 + box.y2) / 2 - y, tuck, ...layers];
         for (let i = 0; i < values.length; i++) {
             if (this._values[i] !== values[i]) {
                 this._values[i] = values[i];
@@ -193,7 +195,7 @@ class SuperGWindowShadow extends St.Widget {
             this._painter = new ShadowPainter(pipeline);
         }
         const {left, right, top, bottom} = this._inset;
-        this._painter.paint(node, {x: 0, y: 0, width, height, radius: this._radius, exponent: this._exponent, aa: 1,
+        this._painter.paint(node, {x: 0, y: 0, width, height, radius: this._radius, exponent: this._exponent, aa: 1, tuck: 1,
             layers: this._layers, box: {x1: left, y1: top, x2: width - right, y2: height - bottom}});
     }
 });

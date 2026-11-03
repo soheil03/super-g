@@ -4,6 +4,8 @@
 // reported, and the rest keep running. Modules start in the order listed
 // (the dock comes before the engines that attach to it).
 
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
@@ -17,7 +19,12 @@ import {configureDock, configureDockMotion, onceOnly} from './lib/dockStyle.js';
 import {configureBlur} from './lib/blurSetup.js';
 import {configureCorners} from './lib/cornersSetup.js';
 
-export const MODULES = {
+export const HOT_CORNERS = {
+    'monitor-0-bottom-left-0': {action: 'show-overview', 'barrier-size-h': 1, fullscreen: true},
+    'monitor-0-bottom-left-6': {action: 'show-desktop-mon', ctrl: true},
+};
+
+const MODULES = {
     appearance: AppearanceModule,
     corners: engine('corners', 'rounded-window-corners@fxgn', ['rounded-window-corners@fxgn'], {
         configure() {
@@ -60,7 +67,24 @@ export const MODULES = {
     panel: PanelModule,
     glass: GlassModule,
     drawer: DrawerModule,
-    hotcorners: engine('hotcorners', 'custom-hot-corners-extended@G-dH.github.com'),
+    hotcorners: engine('hotcorners', 'custom-hot-corners-extended@G-dH.github.com', ['custom-hot-corners-extended@G-dH.github.com'], {
+        configure() {
+            // Corners live on paths of their own, so a schema can't give them defaults.
+            onceOnly('hotcorners-defaults', () => {
+                const source = Gio.SettingsSchemaSource.new_from_directory(`${this.ext.path}/schemas`,
+                    Gio.SettingsSchemaSource.get_default(), false);
+                const schema = source.lookup('org.gnome.shell.extensions.super-g.hotcorners.corner', false);
+                for (const [corner, values] of Object.entries(HOT_CORNERS)) {
+                    const settings = new Gio.Settings({settings_schema: schema,
+                        path: `/org/gnome/shell/extensions/super-g/hotcorners/${corner}/`});
+                    if (settings.get_user_value('action'))
+                        continue;
+                    for (const [key, value] of Object.entries(values))
+                        settings.set_value(key, new GLib.Variant(settings.get_value(key).get_type_string(), value));
+                }
+            });
+        },
+    }),
     gestures: engine('gestures', 'touchpad-gesture-customization@coooolapps.com'),
     launcher: engine('launcher', 'superbar@Furkan-rgb.github.io', ['superbar@Furkan-rgb.github.io'], {
         configure() {

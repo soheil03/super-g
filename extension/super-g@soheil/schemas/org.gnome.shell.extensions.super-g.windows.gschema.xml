@@ -19,7 +19,7 @@
         <description>Make the top panel transparent.</description>
       </key>
       <key name="panel-transparency-level" type="i">
-        <default>29</default>
+        <default>0</default>
         <range min="0" max="100"/>
         <summary>Panel Transparency Level</summary>
         <description>Set the transparency level of the panel (0-100).</description>
@@ -40,7 +40,7 @@
         <description>Apply background-color: inherit to fix panel color issues on some themes (e.g., white panel on dark themes).</description>
       </key>
       <key name="panel-invert-tray-icons" type="b">
-        <default>false</default>
+        <default>true</default>
         <summary>Invert Tray Icons on Light Wallpapers</summary>
         <description>Darken white monochrome tray icons when the panel adapts to a light wallpaper. Colored icons are left untouched.</description>
       </key>
@@ -57,7 +57,7 @@
         <description>Display the focused application's icon next to the window title in the top panel.</description>
       </key>
       <key name="show-window-subtitle" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Show window subtitle next to the app name</summary>
         <description>Display the window's own title after the application name in the top panel.</description>
       </key>
@@ -119,12 +119,12 @@
 
       <!-- Styling -->
       <key name="panel-styling" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Panel Styling</summary>
         <description>Restyle the top panel: tighter button spacing, bold titles, smaller status icons, no dropdown arrows and a transparent panel in the overview.</description>
       </key>
       <key name="popup-menu-styling" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Menu and App Styling</summary>
         <description>Restyle shell popup menus with taller items and accent-colored hover, selected and checked entries, and apply the GTK 3 and GTK 4 app fixes (fixes3.css, fixes4.css).</description>
       </key>
@@ -172,12 +172,12 @@
 
       <!-- Styling -->
       <key name="dock-styling" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Dock Styling</summary>
         <description>Tighten Dash-to-Dock icon spacing and remove the icon hover highlight.</description>
       </key>
       <key name="dock-blur" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Dock Blur</summary>
         <description>Apply a blur effect behind the Dash-to-Dock background.</description>
       </key>
@@ -193,7 +193,7 @@
 
       <!-- Window Control Button Style -->
       <key name="enable-app-window-buttons" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Enable Application Window Buttons</summary>
         <description>Enable or disable window control buttons in application windows (affects GTK theming).</description>
       </key>
@@ -220,7 +220,7 @@
 
       <!-- Panel window controls -->
       <key name="show-window-controls" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Show Window Controls on Panel</summary>
         <description>Display window control buttons in the top panel when window is maximized.</description>
       </key>
@@ -236,17 +236,17 @@
 
       <!-- Kiwi -->
       <key name="overview-wallpaper-background" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Overview Wallpaper Background</summary>
         <description>Use the current desktop wallpaper as a blurred background in the overview.</description>
       </key>
       <key name="overview-seamless-zoom" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Seamless Overview Zoom</summary>
         <description>Zoom the whole monitor in and out of the overview, including the desktop strip behind the top panel.</description>
       </key>
       <key name="focus-on-overview-exit" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Focus Window Under Cursor on Overview Exit</summary>
         <description>Focus the window under the cursor instead of the previously focused window when leaving the overview.</description>
       </key>
@@ -271,7 +271,7 @@
         <description>Enable or disable moving windows to new workspaces.</description>
       </key>
       <key name="reduce-window-animations" type="b">
-        <default>true</default>
+        <default>false</default>
         <summary>Reduce Window Open/Close Animations</summary>
         <description>Replace the default window opening and closing animation with a subtle macOS-style scale and fade.</description>
       </key>

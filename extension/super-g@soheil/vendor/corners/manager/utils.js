@@ -55,11 +55,13 @@ export function getRoundedCornersEffect(actor) {
  * @param [x, y, width, height] - The content offsets of the window actor.
  */
 export function computeBounds(actor, [x, y, width, height]) {
+    // Super G: the effect's texture starts 2 px before the actor (see
+    // rounded_corners_effect.js), which moves all four sides.
     const bounds = {
-        x1: x + 1,
-        y1: y + 1,
-        x2: x + actor.width + width,
-        y2: y + actor.height + height,
+        x1: x + 2,
+        y1: y + 2,
+        x2: x + 2 + actor.width + width,
+        y2: y + 2 + actor.height + height,
     };
     // Kitty draws its window decoration by itself, so we need to manually
     // clip its shadow and recompute the outer bounds for it.

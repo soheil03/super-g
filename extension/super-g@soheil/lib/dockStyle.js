@@ -54,8 +54,7 @@ export function configureDock(module) {
         setIf(dtd, 'running-indicator-style', 'DOT');
         setIf(dtd, 'hide-tooltip', true);
         setIf(dtd, 'show-show-apps-button', true);
-        // Apple-sized: about 72 physical pixels at 133% scaling.
-        setIf(dtd, 'dash-max-icon-size', 54);
+        setIf(dtd, 'dash-max-icon-size', 60);
     });
 
     // The engine's own dots draw over the icon's art; the plain one sits below.

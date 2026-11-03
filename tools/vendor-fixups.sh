@@ -80,6 +80,54 @@ if 'Super G: late signals' not in s:
 print('dock locations guard patched')
 PY
 
+python3 -I "$(dirname "$0")/engine-defaults.py" "$v/../schemas"
+
+# Corners: map the shader's coordinates onto the effect's real, padded texture.
+python3 -I - "$v/corners" <<'PY'
+import sys
+root = sys.argv[1]
+p = root + '/manager/utils.js'
+s = open(p).read()
+old = """    const bounds = {
+        x1: x + 1,
+        y1: y + 1,
+        x2: x + actor.width + width,
+        y2: y + actor.height + height,
+"""
+new = """    // Super G: the effect's texture starts 2 px before the actor (see
+    // rounded_corners_effect.js), which moves all four sides.
+    const bounds = {
+        x1: x + 2,
+        y1: y + 2,
+        x2: x + 2 + actor.width + width,
+        y2: y + 2 + actor.height + height,
+"""
+if 'Super G: the effect' not in s:
+    assert old in s, 'corners computeBounds changed upstream'
+    s = s.replace(old, new)
+    open(p, 'w').write(s)
+p = root + '/effect/rounded_corners_effect.js'
+s = open(p).read()
+old = """        const pixelStep = [
+            1 / this.actor.get_width(),
+            1 / this.actor.get_height(),
+        ];
+"""
+new = """        // Super G: Clutter pads an offscreen effect's texture by 2 px before the
+        // actor and 1 after it, at every scale. Mapping it onto the actor's own
+        // size left the clip about 1 px past the window on every side.
+        const pixelStep = [
+            1 / (Math.round(this.actor.get_width()) + 3),
+            1 / (Math.round(this.actor.get_height()) + 3),
+        ];
+"""
+if 'Super G: Clutter pads' not in s:
+    assert old in s, 'corners pixelStep changed upstream'
+    s = s.replace(old, new)
+    open(p, 'w').write(s)
+print('corners clip mapping patched')
+PY
+
 # Corners: no per-app inset on maximized windows.
 python3 -I - "$v/corners/manager/event_handlers.js" <<'PY'
 import sys
@@ -92,11 +140,12 @@ new = """    let cfg = getRoundedCornersCfg(win);
     // screen's edges it would pull the rim on screen on some sides only.
     if (win.maximizedHorizontally || win.maximizedVertically) {
         const { left, right, top, bottom } = cfg.padding;
+        // Past the edge by the rim's width, which would otherwise line the screen.
         cfg = { ...cfg, padding: {
-            left: win.maximizedHorizontally ? 0 : left,
-            right: win.maximizedHorizontally ? 0 : right,
-            top: win.maximizedVertically ? 0 : top,
-            bottom: win.maximizedVertically ? 0 : bottom,
+            left: win.maximizedHorizontally ? -1 : left,
+            right: win.maximizedHorizontally ? -1 : right,
+            top: win.maximizedVertically ? -1 : top,
+            bottom: win.maximizedVertically ? -1 : bottom,
         } };
     }
 """
