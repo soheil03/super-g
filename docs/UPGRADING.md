@@ -86,7 +86,7 @@ Each folder's `vendor/<name>/UPSTREAM` holds the imported version and schema ren
 | `dock` | [Dash to Dock](https://micheleg.github.io/dash-to-dock/) | 110 |
 | `dockmotion` | [Flourish](https://github.com/Orsso/flourish) | 1.2.1 |
 | `gestures` | [Touchpad Gesture Customization](https://github.com/HieuTNg/touchpad-gesture-customization) | 28 |
-| `hotcorners` | [Custom Hot Corners Extended](https://github.com/G-dH/custom-hot-corners-extended) | 50.0 |
+| `hotcorners` | [Custom Hot Corners Extended](https://github.com/G-dH/custom-hot-corners) | 50.0 |
 | `launcher` | [Superbar](https://github.com/Furkan-rgb/superbar) | none recorded |
 | `lockscreen` | [WACK](https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen) | 2.1.0 |
 | `windows` | [Kiwi](https://github.com/kem-a/kiwi-kemma) | 2.3.1 |
