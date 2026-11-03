@@ -28,6 +28,8 @@ const SEATED_SLOP = 6;
 const IDLE_POLL_MS = 80;
 // The running dot's distance below the icon's edge.
 const DOT_DROP = 7;
+const REVEAL_WATCH_MS = 1500;
+const REVEAL_POLL_MS = 30;
 const DOT_FADE_MS = 220;
 // A launch: hops of this share of the icon, each lower than the last, repeating
 // while the app starts, as on a Mac.
@@ -135,6 +137,9 @@ export class DockMagnifier {
                 [box, box.connect('child-removed', () => this._rowChanged(state))]);
         }
         dash.connect('destroy', () => (state.gone = true));
+        // Revealing the dock means the pointer is past it, likely over a window,
+        // and motion there goes to the app, not the shell. So look for it.
+        state.watched.push([dock, dock.connect('showing', () => this._watchReveal(state))]);
         this._docks.set(dock, state);
         this._placeDots(state);
         this._hookLaunches(state);
@@ -436,6 +441,21 @@ export class DockMagnifier {
             this._wake(state);
         else if (this._enabled && this._overDock(state, x, y))
             this.start(state.dock);
+    }
+
+    _watchReveal(state) {
+        let left = REVEAL_WATCH_MS;
+        const look = () => {
+            left -= REVEAL_POLL_MS;
+            if (state.gone || state.active || !this._enabled || left <= 0)
+                return;
+            const [x, y] = global.get_pointer();
+            if (this._overDock(state, x, y))
+                this.start(state.dock);
+            else
+                this._module.later(`dock-reveal-${state.id}`, REVEAL_POLL_MS, look);
+        };
+        look();
     }
 
     _wake(state) {

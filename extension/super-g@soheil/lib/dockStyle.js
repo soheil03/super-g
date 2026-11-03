@@ -67,12 +67,13 @@ export function configureDock(module) {
     const appsIcon = new AppsIcon(module);
     const apply = () => {
         const dark = iface.get_string('color-scheme') === 'prefer-dark';
-        sheet.set(dockCss(tokens, module.settings, dark));
+        sheet.set(dockCss(tokens, module.settings, dark, dtd.get_int('dash-max-icon-size')));
         appsIcon.update(resolve(tokens, {palette: module.settings.get_string('palette'),
             accent: module.settings.get_string('accent')}, dark));
     };
     module.connect(iface, 'changed::color-scheme', apply);
     module.connect(module.settings, 'changed', () => module.later('dock-css', 120, apply));
+    module.connect(dtd, 'changed::dash-max-icon-size', apply);
     appsIcon.patch().then(() => {
         apply();
         module.magnifier = new DockMagnifier(module, appsIcon.dockExt);
@@ -174,7 +175,7 @@ ${[0, 1, 2].flatMap(r => [0, 1, 2].map(k =>
 
 // Proportions follow Apple's dock: icons ~75% of the dock height, gaps ~10%
 // of an icon, corner radius ~30% of the height, light glass, bright top edge.
-function dockCss(tokens, settings, dark) {
+function dockCss(tokens, settings, dark, iconSize) {
     const c = resolve(tokens, {palette: settings.get_string('palette'), accent: settings.get_string('accent')}, dark);
     const D = '#uiGroup #dashtodockContainer';
     // With Super G glass on, the glass layer draws the whole surface.
@@ -201,7 +202,9 @@ ${D} .dash-item-container { margin: 0; padding: 0; }
 ${D} .overview-icon { padding: 0; }
 ${D} .notification-badge { background-color: #ff3b30; color: #ffffff; font-weight: 600; border-radius: 999px;
   padding: 1px 6px; margin: 0; text-shadow: none; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-${D} .kiwi-downloads-item { margin: 0; padding: 9px 3px 11px 3px; }
+/* Its natural size follows the newest thumbnail, which moved the whole dock. */
+${D}.bottom .kiwi-downloads-item, ${D}.top .kiwi-downloads-item { margin: 0; padding: 9px 3px 11px 3px; height: ${iconSize}px; }
+${D}.left .kiwi-downloads-item, ${D}.right .kiwi-downloads-item { margin: 0; padding: 3px 9px 3px 11px; width: ${iconSize}px; }
 ${D} .dash-item-container > StButton:hover, ${D} .dash-item-container > StButton:focus,
 ${D} .dash-item-container > StButton:active, ${D} .dash-item-container > StButton:checked,
 ${D} .overview-tile:hover .overview-icon, ${D} .overview-tile:focus .overview-icon,
@@ -212,7 +215,10 @@ ${D} .show-apps .overview-icon, ${D} .show-apps:hover .overview-icon, ${D} .show
 ${D} .overview-icon { background-color: transparent !important; box-shadow: none; }
 ${D} .overview-tile, ${D} .overview-tile:hover, ${D} .overview-tile:focus { background-color: transparent; }
 ${D} .app-grid-running-dot { background-color: ${c.fg}; width: 5px; height: 5px; border-radius: 3px; margin: 0; }
-${D} .dash-separator { background-color: ${dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)'} !important; width: 1px; margin: 12px 5px; }
+${D} .dash-separator { background-color: ${dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)'} !important; }
+/* The engine sizes its length; the margins must leave the dock's height alone. */
+${D}.bottom .dash-separator, ${D}.top .dash-separator { width: 1px; margin: 7px 5px; }
+${D}.left .dash-separator, ${D}.right .dash-separator { height: 1px; margin: 5px 7px; }
 ${D} .dash-label, #uiGroup .dash-label {
   background-color: ${withAlpha(c.popover, 0.92)}; color: ${c.fg}; border-radius: 999px;
   border: none; box-shadow: inset 0 0 0 1px ${c.hairline}; padding: 4px 12px; }
