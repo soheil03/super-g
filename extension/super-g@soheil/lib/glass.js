@@ -717,6 +717,9 @@ class SuperGGlassLayer extends St.Widget {
                 this.visible = shown;
             if (!shown)
                 return;
+            // Forces any pending layout. Before it, a resizing actor reports its
+            // preferred size, margins included.
+            t.get_allocation_box?.();
             const [tx, ty] = t.get_transformed_position();
             const [tw, th] = t.get_transformed_size();
             const [rx, ry, rw, rh] = [Math.round(tx), Math.round(ty), Math.round(tw), Math.round(th)];

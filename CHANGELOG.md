@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.2.5 - 2026-11-03
+
+### Fixed
+- Notifications no longer glitch when you hover over them. While a banner expanded, its glass read the banner's size before layout ran and stuck out 28 px wider and 16 px taller. Glass that follows another surface now settles its layout first.
+
 ## 1.2.4 - 2026-11-03
 
 ### Fixed
