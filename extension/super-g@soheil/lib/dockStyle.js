@@ -189,6 +189,8 @@ ${D}.left .dash-item-container > StButton, ${D}.left .show-apps { padding: 3px 9
 ${D}.right .dash-item-container > StButton, ${D}.right .show-apps { padding: 3px 11px 3px 9px; }
 ${D} .dash-item-container { margin: 0; padding: 0; }
 ${D} .overview-icon { padding: 0; }
+${D} .notification-badge { background-color: #ff3b30; color: #ffffff; font-weight: 600; border-radius: 999px;
+  padding: 1px 6px; margin: 0; text-shadow: none; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 ${D} .kiwi-downloads-item { margin: 0; padding: 9px 3px 11px 3px; }
 ${D} .dash-item-container > StButton:hover, ${D} .dash-item-container > StButton:focus,
 ${D} .dash-item-container > StButton:active, ${D} .dash-item-container > StButton:checked,

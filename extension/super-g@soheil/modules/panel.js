@@ -134,6 +134,7 @@ export default class PanelModule extends Module {
         const inset = Math.max(0, Math.min(4, Math.floor((height - 28) / 2)));
 
         const base = `
+#uiGroup .popup-menu-boxpointer { -boxpointer-gap: ${inset + 7}px; }
 ${P} { height: ${height}px; color: ${c.fg}; font-weight: 500; font-size: ${height < 28 ? 9.5 : height < 32 ? 10 : 10.5}pt;
   transition-duration: 250ms; padding: 0 ${style === 'adaptive' ? 8 : 4}px; }
 ${P} .panel-button { color: ${c.fg}; border-radius: 999px; -natural-hpadding: 9px; -minimum-hpadding: 6px;

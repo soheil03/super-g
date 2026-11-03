@@ -35,6 +35,14 @@ const OTHER = 'Other';
 // One tile's width, and the room between the drawer and the dock.
 const SLOT = 108;
 const GAP = 14;
+// Share of the way to the scroll target covered per 60 Hz frame: a wheel glides,
+// fingers on a touchpad stay close to their hand, a flick coasts out.
+const SCROLL_WHEEL = 0.17;
+const SCROLL_FINGER = 0.5;
+const SCROLL_COAST = 0.075;
+const WHEEL_STEP = 130;
+const COAST_MS = 320;
+const TOUCH_SLOP = 10;
 
 function sectionOf(app) {
     const cats = (app.get_app_info()?.get_categories() ?? '').split(';');
@@ -290,6 +298,7 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         if (!open)
             return;
         this._open = null;
+        this._stopScrolling();
         if (this._grab) {
             Main.popModal(this._grab);
             this._grab = null;
@@ -312,6 +321,10 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         const type = event.type();
         if (type === Clutter.EventType.KEY_PRESS)
             return this._onKey(event);
+        if (type === Clutter.EventType.SCROLL)
+            return this._onScroll(event);
+        if (type === Clutter.EventType.TOUCH_UPDATE || type === Clutter.EventType.TOUCH_END)
+            return this._onTouch(event, type);
         if (type !== Clutter.EventType.BUTTON_PRESS && type !== Clutter.EventType.TOUCH_BEGIN)
             return Clutter.EVENT_PROPAGATE;
         const drawer = this._open?.drawer;
@@ -320,10 +333,113 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         const [x, y] = event.get_coords();
         const [dx, dy] = drawer.get_transformed_position();
         const [dw, dh] = drawer.get_transformed_size();
-        if (x >= dx && x <= dx + dw && y >= dy && y <= dy + dh)
+        if (x >= dx && x <= dx + dw && y >= dy && y <= dy + dh) {
+            if (type === Clutter.EventType.TOUCH_BEGIN)
+                this._touch = {startY: y, startValue: this._scroll.vadjustment.value, lastY: y, lastTime: Date.now(), speed: 0, dragging: false};
             return Clutter.EVENT_PROPAGATE;
+        }
         this.close();
         return Clutter.EVENT_STOP;
+    }
+
+    /* ------------------------------------------------------ scrolling -- */
+
+    // St's own scrolling jumps by whole steps. Here every input only moves a
+    // target, and each frame the view eases towards it.
+    _onScroll(event) {
+        const [x, y] = event.get_coords();
+        const [sx, sy] = this._scroll.get_transformed_position();
+        const [sw, sh] = this._scroll.get_transformed_size();
+        if (x < sx || x > sx + sw || y < sy || y > sy + sh)
+            return Clutter.EVENT_PROPAGATE;
+        const adjustment = this._scroll.vadjustment;
+        const now = Date.now();
+        const direction = event.get_scroll_direction();
+        if (direction === Clutter.ScrollDirection.UP || direction === Clutter.ScrollDirection.DOWN) {
+            this._scrollBy(direction === Clutter.ScrollDirection.UP ? -WHEEL_STEP : WHEEL_STEP, SCROLL_WHEEL);
+            return Clutter.EVENT_STOP;
+        }
+        if (direction !== Clutter.ScrollDirection.SMOOTH)
+            return Clutter.EVENT_PROPAGATE;
+        const [, dy] = event.get_scroll_delta();
+        const fingers = event.get_scroll_source() === Clutter.ScrollSource.FINGER;
+        // The same unit St scrolls by, so the speed is what the system's is.
+        const moved = dy * adjustment.page_size ** (2 / 3);
+        if (moved)
+            this._scrollBy(moved, fingers ? SCROLL_FINGER : SCROLL_WHEEL);
+        const elapsed = Math.max(1, now - (this._scrollTime ?? now - 16));
+        this._scrollTime = now;
+        this._scrollSpeed = 0.7 * (this._scrollSpeed ?? 0) + 0.3 * moved / elapsed;
+        // Lifting the fingers carries on with the speed they had.
+        if (event.get_scroll_finish_flags() !== Clutter.ScrollFinishFlags.NONE && fingers) {
+            this._scrollBy(this._scrollSpeed * COAST_MS, SCROLL_COAST);
+            this._scrollSpeed = 0;
+        }
+        return Clutter.EVENT_STOP;
+    }
+
+    _onTouch(event, type) {
+        const touch = this._touch;
+        if (!touch)
+            return Clutter.EVENT_PROPAGATE;
+        const [, y] = event.get_coords();
+        if (type === Clutter.EventType.TOUCH_END) {
+            this._touch = null;
+            if (!touch.dragging)
+                return Clutter.EVENT_PROPAGATE;
+            this._dragged = true;
+            this._scrollBy(touch.speed * COAST_MS, SCROLL_COAST);
+            return Clutter.EVENT_STOP;
+        }
+        if (!touch.dragging && Math.abs(y - touch.startY) < TOUCH_SLOP)
+            return Clutter.EVENT_PROPAGATE;
+        touch.dragging = true;
+        const now = Date.now();
+        touch.speed = 0.7 * touch.speed + 0.3 * (touch.lastY - y) / Math.max(1, now - touch.lastTime);
+        touch.lastY = y;
+        touch.lastTime = now;
+        this._scrollTo(touch.startValue + touch.startY - y, 1);
+        return Clutter.EVENT_STOP;
+    }
+
+    _scrollBy(amount, follow) {
+        const base = this._scrollTarget ?? this._scroll.vadjustment.value;
+        this._scrollTo(base + amount, follow);
+    }
+
+    _scrollTo(value, follow) {
+        const adjustment = this._scroll.vadjustment;
+        const most = Math.max(0, adjustment.upper - adjustment.page_size);
+        this._scrollTarget = Math.max(0, Math.min(most, value));
+        this._scrollFollow = follow;
+        this._scrollLast = Date.now();
+        if (!this._scrollTimeline) {
+            this._scrollTimeline = new Clutter.Timeline({actor: this._scroll, duration: 1000, repeat_count: -1});
+            this._scrollTimeline.connect('new-frame', () => this._scrollFrame());
+        }
+        this._scrollTimeline.start();
+    }
+
+    _scrollFrame() {
+        const adjustment = this._scroll.vadjustment;
+        const now = Date.now();
+        const dt = Math.max(1, Math.min(64, now - this._scrollLast));
+        this._scrollLast = now;
+        const left = this._scrollTarget - adjustment.value;
+        if (Math.abs(left) < 0.5) {
+            adjustment.value = this._scrollTarget;
+            this._scrollTarget = null;
+            this._scrollTimeline.stop();
+            return;
+        }
+        adjustment.value += left * (1 - (1 - this._scrollFollow) ** (dt * 60 / 1000));
+    }
+
+    _stopScrolling() {
+        this._scrollTimeline?.stop();
+        this._scrollTimeline = null;
+        this._scrollTarget = null;
+        this._touch = null;
     }
 
     // Search keeps the keyboard until an arrow moves into the grid; typing
@@ -370,14 +486,13 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
     }
 
     _reveal(actor) {
-        const adjustment = this._scroll.vadjustment;
         const [, y] = actor.get_transformed_position();
         const [, top] = this._scroll.get_transformed_position();
         const below = y + actor.height - (top + this._scroll.height);
         if (y < top)
-            adjustment.value += y - top - 16;
+            this._scrollBy(y - top - 16, SCROLL_WHEEL);
         else if (below > 0)
-            adjustment.value += below + 16;
+            this._scrollBy(below + 16, SCROLL_WHEEL);
     }
 
     _launch(app) {
@@ -439,7 +554,13 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         };
         button.connect('notify::hover', react);
         button.connect('notify::pressed', react);
-        button.connect('clicked', () => this._launch(app));
+        button.connect('clicked', () => {
+            // The end of a touch drag isn't a tap.
+            if (this._dragged)
+                this._dragged = false;
+            else
+                this._launch(app);
+        });
         button.connect('destroy', () => this._tiles.delete(app));
         this._tiles.set(app, {button, slot: this._slot});
         return button;
@@ -499,6 +620,8 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         } else {
             add(this._section, all.filter(app => sectionOf(app) === this._section));
         }
+        this._scrollTimeline?.stop();
+        this._scrollTarget = null;
         this._scroll.vadjustment.value = 0;
         if (animate) {
             this._body.remove_all_transitions();

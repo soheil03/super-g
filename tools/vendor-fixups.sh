@@ -40,3 +40,42 @@ if 'Super G: headroom' not in s:
     open(p, 'w').write(s)
 print('dock clip headroom patched')
 PY
+# Dock: badges read 99+ past two digits, as on a Mac.
+python3 -I - "$v/dock/appIconIndicators.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = """    _notificationBadgeCountToText(count) {
+"""
+new = """    _notificationBadgeCountToText(count) {
+        // Super G: 99+ past two digits.
+        if (count > 99)
+            return '99+';
+"""
+if 'Super G: 99+' not in s:
+    assert old in s, 'dock badge code changed upstream'
+    s = s.replace(old, new)
+    open(p, 'w').write(s)
+print('dock badge cap patched')
+PY
+# Dock: late signals after the manager went away (a lock) must not throw.
+python3 -I - "$v/dock/locations.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = """    const locationApps = [];
+
+    if (dockManager.removables)"""
+new = """    const locationApps = [];
+
+    // Super G: late signals after the manager went away (a lock) must not throw.
+    if (!dockManager)
+        return locationApps;
+
+    if (dockManager.removables)"""
+if 'Super G: late signals' not in s:
+    assert old in s, 'dock locations code changed upstream'
+    s = s.replace(old, new)
+    open(p, 'w').write(s)
+print('dock locations guard patched')
+PY

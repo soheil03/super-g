@@ -834,6 +834,9 @@ export class UnityIndicator extends IndicatorBase {
     }
 
     _notificationBadgeCountToText(count) {
+        // Super G: 99+ past two digits.
+        if (count > 99)
+            return '99+';
         if (count <= 9999) {
             return count.toString();
         } else if (count < 1e5) {

@@ -83,6 +83,10 @@
       <default>'regular'</default>
       <summary>Glass thickness: ultra-thin, thin, regular, thick, ultra-thick, or custom (uses tint, vibrancy and blur)</summary>
     </key>
+    <key name="dock-launch-bounce" type="b">
+      <default>true</default>
+      <summary>Bounce a dock icon while its app starts</summary>
+    </key>
     <key name="glass-refraction" type="d">
       <range min="0" max="1"/>
       <default>0.5</default>

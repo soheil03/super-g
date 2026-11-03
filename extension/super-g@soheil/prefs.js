@@ -243,6 +243,7 @@ export default class SuperGPrefs extends ExtensionPreferences {
                 group('Icons', [
                     spinRow(dock, 'dash-max-icon-size', 'Icon size', {lower: 24, upper: 96, step: 1}),
                     switchRow(s, 'dock-magnify', 'Magnification', 'Icons grow under the pointer'),
+                    switchRow(s, 'dock-launch-bounce', 'Bounce on launch', 'The icon hops while its app starts'),
                     spinRow(s, 'dock-magnify-scale', 'Magnification size', {lower: 1.1, upper: 2.5, step: 0.05, digits: 2}),
                     spinRow(s, 'dock-magnify-reach', 'Magnification reach', {lower: 1, upper: 5, step: 0.1, digits: 1,
                         subtitle: 'Icons to each side that grow with the pointer'}),

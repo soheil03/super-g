@@ -381,6 +381,7 @@ ${rule('.app-folder-dialog', `background-color: ${withAlpha(c.window, 0.94)}; co
 ${rule('.app-folder-dialog .overview-tile, .app-folder-dialog .folder-name-label', `color: ${c.fg}; text-shadow: none;`)}
 ${rule('.spotlight-entry, .spotlight-entry:focus, .spotlight-entry:hover', `background-color: transparent; border: none; box-shadow: none; color: ${c.fg};`)}
 ${rule('.spotlight-entry StLabel.hint-text', `color: ${withAlpha(c.fg, 0.55)};`)}
+${rule('.window-caption', `background-color: ${withAlpha(c.popover, 0.92)}; color: ${c.fg}; border-radius: 999px; box-shadow: inset 0 0 0 1px ${c.hairline};`)}
 ${rule('.search-entry', `background-color: ${withAlpha(c.window, dark ? 0.55 : 0.6)}; color: ${c.fg}; border-radius: 999px; border: none; box-shadow: inset 0 0 0 1px ${c.hairline};`)}
 ${rule('.search-entry:focus', `box-shadow: inset 0 0 0 2px ${withAlpha(c.accent, 0.6)};`)}
 ${rule('.search-entry .search-entry-icon, .search-entry StLabel.hint-text', `color: ${c.fgMuted};`)}

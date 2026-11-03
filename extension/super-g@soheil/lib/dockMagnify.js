@@ -8,6 +8,7 @@
 // The approach follows Dhruva's magnifier by NarkAgni (GPL-3.0).
 
 import Clutter from 'gi://Clutter';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 // Share of the distance covered per 60 Hz frame.
@@ -25,6 +26,13 @@ const SEATED_SLOP = 6;
 const IDLE_POLL_MS = 80;
 // The running dot's distance below the icon's edge.
 const DOT_DROP = 7;
+// A launch: hops of this share of the icon, each lower than the last, repeating
+// while the app starts, as on a Mac.
+const BOUNCE_HEIGHT = 0.42;
+const BOUNCE_MS = 420;
+const DAMPING = 0.82;
+const BOUNCE_MIN = 2;
+const BOUNCE_MAX = 12;
 
 const approach = (from, to, factor) =>
     Math.abs(to - from) < DONE ? to : from + (to - from) * factor;
@@ -120,6 +128,7 @@ export class DockMagnifier {
         dash.connect('destroy', () => (state.gone = true));
         this._docks.set(dock, state);
         this._placeDots(state);
+        this._hookLaunches(state);
     }
 
     _rowChanged(state) {
@@ -127,7 +136,11 @@ export class DockMagnifier {
             return;
         state.dirty = true;
         this._wake(state);
-        this._module.later('dock-dots', RESETTLE_MS, () => this._placeDots(state));
+        this._module.later('dock-dots', RESETTLE_MS, () => {
+            this._placeDots(state);
+            if (!state.gone)
+                this._hookLaunches(state);
+        });
     }
 
     // The icon fills its box, so the box's own bottom edge is inside the art;
@@ -140,6 +153,65 @@ export class DockMagnifier {
             for (const dot of this._dots(item))
                 dot.translation_y = drop;
         }
+    }
+
+    // The launch is the icon itself hopping: Flourish's launch flies a clone in
+    // a layer of its own, which slips away from a row that is still settling.
+    // On the instance, so it shadows Flourish's hook for dock icons only.
+    _hookLaunches(state) {
+        for (const item of this._items(state)) {
+            const icon = item.child;
+            if (!icon?.animateLaunch || icon._superGLaunch)
+                continue;
+            icon._superGLaunch = true;
+            icon.animateLaunch = () => this._module.guard(() => this._bounce(state, item));
+        }
+    }
+
+    _bounce(state, item) {
+        const visual = this._visual(item);
+        const s = this._module.settings;
+        if (!visual || visual._bouncing || !s.get_boolean('dock-launch-bounce') || !this._enabled)
+            return;
+        visual._bouncing = true;
+        const side = state.dock._position;
+        const [axis, sign] = {
+            [St.Side.LEFT]: ['translation_x', 1], [St.Side.RIGHT]: ['translation_x', -1],
+            [St.Side.TOP]: ['translation_y', 1],
+        }[side] ?? ['translation_y', -1];
+        const height = (state.vertical ? visual.width : visual.height) * BOUNCE_HEIGHT;
+        const dots = this._dots(item);
+        const app = item.child.app;
+        let hop = 0;
+        const timeline = new Clutter.Timeline({actor: visual, duration: BOUNCE_MS, repeat_count: BOUNCE_MAX - 1});
+        const place = lift => {
+            visual[axis] = lift * sign;
+            // The dot stays on the dock.
+            for (const dot of dots)
+                dot[axis] = (axis === 'translation_y' ? (dot._dockDrop ?? 0) : 0) - lift * sign;
+        };
+        for (const dot of dots)
+            dot._dockDrop = dot.translation_y;
+        const stop = () => {
+            timeline.stop();
+            place(0);
+            visual._bouncing = false;
+        };
+        timeline.connect('new-frame', (_t, ms) => {
+            const t = ms / BOUNCE_MS;
+            place(height * DAMPING ** hop * 4 * t * (1 - t));
+        });
+        timeline.connect('stopped', () => {
+            if (visual._bouncing)
+                stop();
+        });
+        // A hop always lands; only then is the app asked whether it's up.
+        timeline.connect('completed', () => {
+            hop++;
+            if (hop >= BOUNCE_MIN && app?.state !== Shell.AppState.STARTING)
+                stop();
+        });
+        timeline.start();
     }
 
     _detach(state) {
@@ -367,7 +439,10 @@ export class DockMagnifier {
         // the wave only returns when the pointer moves on.
         if (state.seatedAt && Math.hypot(x - state.seatedAt[0], y - state.seatedAt[1]) > SEATED_SLOP)
             state.seatedAt = null;
-        const over = this._enabled && this._inside(state, x, y);
+        // An icon being dragged has the row to itself, and an open context menu
+        // shouldn't sit on a raised icon.
+        const menuOpen = slots.some(slot => slot.actor.child?._menu?.isOpen);
+        const over = this._enabled && !menuOpen && !state.dash._dragPlaceholder && this._inside(state, x, y);
         const inside = over && !state.seatedAt;
         const cursor = state.vertical ? y : x;
 
@@ -452,6 +527,7 @@ export class DockMagnifier {
     _apply(state, slot, {scale, shift}) {
         const drop = state.vertical ? 0 : state.dock._position === St.Side.TOP ? -DOT_DROP : DOT_DROP;
         const {actor, visual} = slot;
+        const bouncing = visual?._bouncing;
         if (visual) {
             visual.scale_x = scale;
             visual.scale_y = scale;
@@ -464,7 +540,7 @@ export class DockMagnifier {
         for (const dot of slot.dots) {
             dot.scale_x = inverse;
             dot.scale_y = inverse;
-            if (drop)
+            if (drop && !bouncing)
                 dot.translation_y = drop * inverse;
         }
     }

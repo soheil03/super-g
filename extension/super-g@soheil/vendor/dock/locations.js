@@ -1511,6 +1511,10 @@ function getApps() {
     const dockManager = Docking.DockManager.getDefault();
     const locationApps = [];
 
+    // Super G: late signals after the manager went away (a lock) must not throw.
+    if (!dockManager)
+        return locationApps;
+
     if (dockManager.removables)
         locationApps.push(...dockManager.removables.getApps());
 

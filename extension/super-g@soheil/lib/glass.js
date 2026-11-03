@@ -79,11 +79,12 @@ float inside = clamp(0.5 - d / aa, 0.0, 1.0);
 vec3 rgb = cogl_color_out.rgb;
 if (lens > 0.0) {
     vec2 p = px - size * 0.5;
-    vec2 q = abs(p) - size * 0.5 + radius;
-    vec2 n = (q.x > 0.0 && q.y > 0.0) ? normalize(q) : (q.x > q.y ? vec2(1.0, 0.0) : vec2(0.0, 1.0));
     float band = min(18.0, min(size.x, size.y) * 0.3);
+    // The direction from a rounder box than the surface, so it turns smoothly
+    // through the corner instead of folding along the diagonal.
+    vec2 q = max(abs(p) - size * 0.5 + band, vec2(0.0001));
     float t = clamp(1.0 + d / band, 0.0, 1.0);
-    vec2 pull = -sign(p) * n * lens * t * t * t;
+    vec2 pull = -sign(p) * normalize(q) * lens * t * t * t;
     rgb = texture2D(cogl_sampler0, cogl_tex_coord_in[0].st + pull / size * uv_size).rgb;
 }
 float luma = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -95,7 +96,7 @@ rgb = mix(rgb, tint.rgb, mix(tint.a, max(tint.a, 0.8), clash * guard));
 
 // A fine dark outline keeps the shape readable over light content; a specular
 // rim just inside it, strongest along the top, gives the edge its light.
-float ring = clamp(1.0 - abs(d + 1.9) / 1.0, 0.0, 1.0);
+float ring = clamp(1.0 - abs(d + 1.5) / 0.9, 0.0, 1.0);
 rgb += ring * rim * mix(0.35, 1.0, 1.0 - uv.y);
 rgb = mix(rgb, vec3(0.0), clamp(1.0 - abs(d + 0.6) / 0.8, 0.0, 1.0) * outline);
 
@@ -697,9 +698,9 @@ class SuperGGlassLayer extends St.Widget {
 // Thickness, as Apple names its materials: how much palette colour the glass
 // carries, how far it blurs, how much colour it lets through.
 const MATERIALS = {
-    'ultra-thin': {tint: 0.18, blur: 26, saturation: 1.8},
-    'thin': {tint: 0.34, blur: 32, saturation: 1.7},
-    'regular': {tint: 0.5, blur: 40, saturation: 1.6},
+    'ultra-thin': {tint: 0.18, blur: 26, saturation: 1.55},
+    'thin': {tint: 0.34, blur: 32, saturation: 1.55},
+    'regular': {tint: 0.5, blur: 40, saturation: 1.5},
     'thick': {tint: 0.68, blur: 48, saturation: 1.45},
     'ultra-thick': {tint: 0.84, blur: 56, saturation: 1.3},
 };
@@ -716,7 +717,7 @@ function material(settings) {
 // backdrop than the reverse.
 export function glassAlpha(c, settings) {
     const {tint} = material(settings);
-    return c.dark ? tint * 0.9 : Math.min(tint * 1.25, 0.92);
+    return c.dark ? Math.max(tint * 0.95, 0.3) : Math.min(tint * 1.25, 0.92);
 }
 
 // Glass parameters from the palette, light or dark.
@@ -727,8 +728,8 @@ export function glassStyle(c, settings) {
         tint: [r, g, b, glassAlpha(c, settings)],
         saturation,
         brightness: c.dark ? 0.92 : 1.04,
-        rim: c.dark ? 0.16 : 0.32,
-        outline: c.dark ? 0.32 : 0.14,
+        rim: c.dark ? 0.12 : 0.26,
+        outline: c.dark ? 0.26 : 0.1,
         lightText: c.dark ? 1 : 0,
         lens: settings.get_double('glass-refraction') * 12,
         shadow: c.dark ? 0.32 : 0.2,

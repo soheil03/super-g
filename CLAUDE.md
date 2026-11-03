@@ -62,6 +62,9 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Wallpapers can be timed XML (lib/wallpaper.js `currentImage`) and half light, half dark: each top bar box picks its own text colour.
 - A running session keeps the old code: when the user reports a bug, confirm what's actually running (installed version, journal) before debugging.
 
+- Launch motion is ours on the icon itself (`_bounce`, hooked per instance over Flourish's `animateLaunch`, setting `dock-launch-bounce`). Flourish flies a clone in its own layer, which slips away from a settling row: the "ghost going down".
+- Drawer scrolling only moves a target, eased per frame (wheel, touchpad with coast, touch drag). Real inputs in tests: `seat.create_virtual_device` with `notify_discrete_scroll`, `notify_scroll_continuous`, `notify_touch_*`.
+- `vendor/dock` ships no stylesheet.css: anything its code expects from one (notification badge) is styled in `dockStyle.js`.
 - A click on the dock seats the row (`seatedAt`): it eases home and stays until the pointer moves. Timelines stop when nothing moves (`_sleep`); a running timeline redraws the glass every frame.
 - Running dots are pushed below the icon with translation (`DOT_DROP`), compensated for the inner widget's scale.
 - Drawer tiles are cached for the module's life; detach them before destroying their rows.
