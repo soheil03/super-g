@@ -20,7 +20,9 @@ import { computeBounds, computeShadowActorOffset, computeWindowContentsOffset, g
  */
 function withActorLock(actor, fn) {
     const prev = actor.rwcLock;
-    const next = prev ? prev.then(fn, fn) : fn();
+    // Super G: the actor may be gone by the time this one's turn comes.
+    const run = () => (actor.rwcRemoved ? undefined : fn());
+    const next = prev ? prev.then(run, run) : run();
     actor.rwcLock = next;
     return next;
 }
@@ -30,6 +32,8 @@ export function onAddEffect(actor) {
         const win = actor.metaWindow;
         // Skip windows that already have the effect to prevent a memory leak
         const shouldHaveEffect = await shouldEnableEffect(win);
+        if (actor.rwcRemoved)
+            return;
         const effect = getRoundedCornersEffect(actor);
         const hasEffect = effect && actor.rwcCustomData;
         if (!shouldHaveEffect || hasEffect) {

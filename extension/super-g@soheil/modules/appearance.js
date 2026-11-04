@@ -9,7 +9,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
-import {Module} from '../lib/module.js';
+import {Module, moduleOn} from '../lib/module.js';
 import * as Files from '../lib/files.js';
 import * as Gen from '../lib/themeGen.js';
 
@@ -141,8 +141,8 @@ export default class AppearanceModule extends Module {
             sidebarRadius: s.get_int('sidebar-radius'),
             sidebarAccentIcons: s.get_boolean('sidebar-accent-icons'),
             titleWeight: s.get_int('title-weight'),
-            glass: s.get_boolean('module-glass') && !s.get_strv('broken-modules').includes('glass'),
-            overviewGlass: s.get_boolean('module-glass') && s.get_boolean('glass-overview'),
+            glass: moduleOn(s, 'glass'),
+            overviewGlass: moduleOn(s, 'glass') && s.get_boolean('glass-overview'),
         };
     }
 
@@ -249,8 +249,9 @@ export default class AppearanceModule extends Module {
         const theme = St.ThemeContext.get_for_stage(global.stage).get_theme();
         if (!theme)
             return [];
-        const ours = this._shellSheet?.get_uri();
-        const custom = (theme.get_custom_stylesheets() ?? []).filter(f => f.get_uri() !== ours);
+        // Not the ones our modules generate: they use no accent to mirror, and each
+        // swap of one (the top bar, the dock) would rebuild this sheet for nothing.
+        const custom = (theme.get_custom_stylesheets() ?? []).filter(f => !f.get_path()?.startsWith(`${Files.CACHE}/`));
         return [theme.default_stylesheet, theme.application_stylesheet, ...custom].filter(Boolean);
     }
 
@@ -259,13 +260,19 @@ export default class AppearanceModule extends Module {
     }
 
     _applyShell() {
-        this._unloadShell();
-        if (!this.settings.get_boolean('theme-shell'))
+        if (!this.settings.get_boolean('theme-shell')) {
+            this._unloadShell();
             return;
+        }
         const theme = St.ThemeContext.get_for_stage(global.stage).get_theme();
         const sheets = this._themeSheets();
         this._shellSource = this._currentShellSource();
         const css = Gen.shellCss(this._tokens, this._opts(), this._dark, sheets.map(f => Files.readFile(f)).join('\n'));
+        // Every setting comes through here; reloading restyles the whole shell.
+        if (this._shellSheet && css === this._shellCss)
+            return;
+        this._unloadShell();
+        this._shellCss = css;
         // A fresh file name each time, so St never serves a cached sheet.
         const path = `${Files.CACHE}/shell-${GLib.get_monotonic_time()}-${this._serial++}.css`;
         Files.writeText(path, css);

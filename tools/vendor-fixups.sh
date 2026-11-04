@@ -278,3 +278,166 @@ if 'syncPivot' not in s:
 open(p, 'w').write(s)
 print('corners shadow follows the window')
 PY
+
+# Corners: windows can vanish at any time while the engine waits or keeps signals
+# on them. Popups get no wm "destroy" at all (mutter just kills them), a surface
+# can swap its texture, and adding the effect awaits a check. Without this the
+# engine touches dead actors, logs a burst at every lock and leaks connections.
+python3 -I - "$v/corners/manager" <<'PY'
+import sys
+root = sys.argv[1]
+p = root + '/event_manager.js'
+s = open(p).read()
+if 'rwcRemoved' not in s:
+    for old, new in [
+        ("""            const notifyId = win.connect('notify::wm-class', () => {
+                applyEffectTo(actor);
+                win.disconnect(notifyId);
+            });
+""", """            // Super G: tracked, or it fires after the engine stopped; the actor
+            // is looked up then, since the window may be gone.
+            connect(win, 'notify::wm-class', () => {
+                disconnectAll(win);
+                const current = win.get_compositor_private();
+                if (current)
+                    applyEffectTo(current);
+            });
+"""),
+        ("""    connections.push({
+        object,
+        id: object.connect(signal, callback),
+    });
+}
+""", """    connections.push({
+        object,
+        id: object.connect(signal, callback),
+    });
+    // Super G: an actor dies with its signals; never disconnect those later.
+    if (object instanceof Clutter.Actor && !watched.has(object)) {
+        watched.add(object);
+        object.connect('destroy', () => {
+            for (let i = connections.length - 1; i >= 0; i--) {
+                if (connections[i].object === object)
+                    connections.splice(i, 1);
+            }
+        });
+    }
+}
+const watched = new WeakSet();
+"""),
+        ("""    const texture = actor.get_texture();
+    if (!texture) {
+        return;
+    }
+    // Window resized.
+""", """    const texture = actor.get_texture();
+    if (!texture) {
+        return;
+    }
+    // Super G: see tools/vendor-fixups.sh.
+    actor.rwcRemoved = false;
+    const metaWindow = actor.metaWindow;
+    connect(actor, 'destroy', () => {
+        actor.rwcRemoved = true;
+        disconnectAll(metaWindow);
+    });
+    // Window resized.
+"""),
+        ("""function removeEffectFrom(actor) {
+    disconnectAll(actor);
+""", """function removeEffectFrom(actor) {
+    actor.rwcRemoved = true;
+    disconnectAll(actor);
+"""),
+    ]:
+        assert old in s, 'corners event manager changed upstream: ' + old[:40]
+        s = s.replace(old, new)
+    if "gi://Clutter" not in s:
+        s = "import Clutter from 'gi://Clutter';\n" + s
+    open(p, 'w').write(s)
+
+p = root + '/event_handlers.js'
+s = open(p).read()
+if 'rwcRemoved' not in s:
+    for old, new in [
+        ("""    const prev = actor.rwcLock;
+    const next = prev ? prev.then(fn, fn) : fn();
+""", """    const prev = actor.rwcLock;
+    // Super G: the actor may be gone by the time this one's turn comes.
+    const run = () => (actor.rwcRemoved ? undefined : fn());
+    const next = prev ? prev.then(run, run) : run();
+"""),
+        ("""        const shouldHaveEffect = await shouldEnableEffect(win);
+        const effect = getRoundedCornersEffect(actor);
+""", """        const shouldHaveEffect = await shouldEnableEffect(win);
+        if (actor.rwcRemoved)
+            return;
+        const effect = getRoundedCornersEffect(actor);
+"""),
+    ]:
+        assert old in s, 'corners event handlers changed upstream: ' + old[:40]
+        s = s.replace(old, new)
+    open(p, 'w').write(s)
+print('corners follows dead windows')
+PY
+
+# Corners: a preview's window can report no size yet, and a closed one no actor.
+python3 -I - "$v/corners/patch/add_shadow_in_overview.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+if 'frameWidth' not in s:
+    for old, new in [
+        ("""        const containerScaleFactor = windowContainerBox.get_width() /
+            metaWindow.get_frame_rect().width;
+""", """        const frameWidth = metaWindow.get_frame_rect().width;
+        const containerScaleFactor = frameWidth ? windowContainerBox.get_width() / frameWidth : 1;
+"""),
+        ("""    const shadow = windowActor.rwcCustomData?.shadow;
+""", """    const shadow = windowActor?.rwcCustomData?.shadow;
+"""),
+    ]:
+        assert old in s, 'corners overview shadow changed upstream: ' + old[:40]
+        s = s.replace(old, new)
+    open(p, 'w').write(s)
+print('corners overview shadow guarded')
+PY
+
+# Lock screen: idle callbacks that outlive what they style.
+python3 -I - "$v/lockscreen/src/main" <<'PY'
+import sys
+root = sys.argv[1]
+p = root + '/promptStyling.js'
+s = open(p).read()
+if '_wackGone' not in s:
+    old = "if (entry && entry.get_stage && entry.get_stage())"
+    assert s.count(old) == 2, 'lock prompt idle changed upstream'
+    s = s.replace(old, "if (entry && !entry._wackGone && entry.get_stage && entry.get_stage())")
+    old = """                'destroy', () => {
+                    if (global.stage)
+                        global.stage.disconnectObject(entry);"""
+    assert old in s, 'lock prompt destroy changed upstream'
+    s = s.replace(old, """                'destroy', () => {
+                    entry._wackGone = true;
+                    if (global.stage)
+                        global.stage.disconnectObject(entry);""")
+    open(p, 'w').write(s)
+p = root + '/notificationManager.js'
+s = open(p).read()
+if 'cardGone' not in s:
+    old = """                if (!this._extension) return;
+                this._extension._idleAdd(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                    if (!this._extension) return GLib.SOURCE_REMOVE;
+                    if (!actor.get_parent()) return GLib.SOURCE_REMOVE;
+"""
+    assert old in s, 'lock notifications idle changed upstream'
+    s = s.replace(old, """                if (!this._extension) return;
+                let cardGone = false;
+                actor.connect('destroy', () => (cardGone = true));
+                this._extension._idleAdd(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                    if (!this._extension || cardGone) return GLib.SOURCE_REMOVE;
+                    if (!actor.get_parent()) return GLib.SOURCE_REMOVE;
+""")
+    open(p, 'w').write(s)
+print('lock screen idles guarded')
+PY

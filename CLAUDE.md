@@ -15,7 +15,7 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
   - `schemas/` — ours + one renamed schema per engine (`org.gnome.shell.extensions.super-g.<name>`, dconf `/org/gnome/shell/extensions/super-g/<name>/`).
   - `prefs.js` — Adw prefs. `enumRow` builds choices from a key's own schema, for engine settings that are safe to expose. Never expose keys our modules force (Kiwi's panel and button styling, the dock's theme keys).
 - `tools/` — `install.sh`, `takeover.sh`, `vendor.sh` + `vendor-fixups.sh`, `gen.js`, `render.sh`/`render-gtk.py`, `shell-test.sh`.
-- `tests/shot@super-g-test/` — camera extension used by shell-test.sh.
+- `tests/shot@super-g-test/` — camera extension used by shell-test.sh. `tests/integration.js` — all modules together, see its header.
 
 ## Verify every visual change (don't guess)
 - GTK: `gjs -m tools/gen.js <out> '{"palette":"stone"}' && tools/render.sh <out> <png-dir>` (broadway, offscreen).
@@ -98,6 +98,10 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - `GlassLayer.holdFor(ms, room)` shows one blurred copy while a surface moves. Pass `room` when it will grow, none when it shrinks or leaves.
 - Blur pass shaders are shared through `shaderTemplates().passes`: `createPassPipeline` makes a new snippet, which compiles again.
 - `ext._active.get(name)` is the module itself; `.instance` exists only on engine modules.
+- GNOME's `_updatePanel` runs `container.show()` on every indicator at each session mode change. Anything set once on shell or engine state can be reset like that (Superbar's `_updateTheme` does it to its surface): watch the property (`notify::visible`, `notify::style`) rather than setting it once.
+- Modules that keep running through a lock, and surfaces that outlive a module (dialogs, folders, OSDs): tie signals to the glass with `connectObject`, and undo per-instance overrides in `disable`. Otherwise each restart stacks another copy.
+- Only `Workspace._isOverviewWindow` is patched by more than one module (dock, windows, hotcorners). Stopping in reverse start order keeps patches from restoring a dead wrapper; `needsDock` modules stop before the dock for that reason too.
+- Before calling the shell clean, `tests/integration.js` must leave none of its listed signals in `<sandbox>/shell.log`. Test crashes with `ext.reportError(name, new Error('x'))` in an EVAL. A drawer test needs `get_most_used` stubbed: the sandbox has no usage history.
 - Tried and removed: re-blurring glass at half rate on 120 Hz. CPU went up (19.5% to 25.5%), since a skipped frame must force another redraw.
 - Super hold fires from the timer in `_checkHold`, so a Super combo pressed more than 450 ms in fires it first: key presses to clients aren't visible to the shell.
 - The window shadow takes opacity by hand (`fade` in `lib/softShadow.js`): a snippet writing `cogl_color_out` ignores the actor's opacity. Its pivot is the window's pivot in its own coordinates (`syncPivot`, vendor-fixups), or it keeps its full padding away from a shrinking window. To see this, slow down with `St.Settings.get().slow_down_factor` and use `frame`.

@@ -1,3 +1,4 @@
+import Clutter from 'gi://Clutter';
 /**
  * @file Manages connections between gnome shell events and the rounded corners
  * effect. See {@link enableEffect} for more information.
@@ -32,9 +33,13 @@ export function enableEffect() {
         // If wm_class_instance of Meta.Window is null, wait for it to be
         // set before applying the effect.
         if (win?.wmClass === null) {
-            const notifyId = win.connect('notify::wm-class', () => {
-                applyEffectTo(actor);
-                win.disconnect(notifyId);
+            // Super G: tracked, or it fires after the engine stopped; the actor
+            // is looked up then, since the window may be gone.
+            connect(win, 'notify::wm-class', () => {
+                disconnectAll(win);
+                const current = win.get_compositor_private();
+                if (current)
+                    applyEffectTo(current);
             });
         }
         else {
@@ -80,7 +85,18 @@ callback) {
         object,
         id: object.connect(signal, callback),
     });
+    // Super G: an actor dies with its signals; never disconnect those later.
+    if (object instanceof Clutter.Actor && !watched.has(object)) {
+        watched.add(object);
+        object.connect('destroy', () => {
+            for (let i = connections.length - 1; i >= 0; i--) {
+                if (connections[i].object === object)
+                    connections.splice(i, 1);
+            }
+        });
+    }
 }
+const watched = new WeakSet();
 /**
  * Disconnect all connected signals from all actors or a specific object.
  * Pruning disconnected entries keeps the array from growing unboundedly as
@@ -128,6 +144,13 @@ function applyEffectTo(actor) {
     if (!texture) {
         return;
     }
+    // Super G: see tools/vendor-fixups.sh.
+    actor.rwcRemoved = false;
+    const metaWindow = actor.metaWindow;
+    connect(actor, 'destroy', () => {
+        actor.rwcRemoved = true;
+        disconnectAll(metaWindow);
+    });
     // Window resized.
     //
     // The signal has to be connected both to the actor and the texture. Why is
@@ -171,6 +194,7 @@ function applyEffectTo(actor) {
  * @param actor - The window actor to remove the effect from.
  */
 function removeEffectFrom(actor) {
+    actor.rwcRemoved = true;
     disconnectAll(actor);
     disconnectAll(actor.metaWindow);
     const texture = actor.get_texture();

@@ -2,6 +2,28 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.2.8 - 2026-11-04
+
+The modules now hold up together through locks, restarts and crashes. Everything here was found by running them all at once.
+
+### Fixed
+- A hidden accessibility icon stays hidden. GNOME showed it again at every lock and unlock, and nothing hid it until the setting changed.
+- The drawer's All view no longer drops your most-used apps from their categories, which left holes in those rows. Those apps now appear in both places.
+- The drawer no longer goes blank (titles with no apps) when an app is installed or removed while it's open.
+- Superbar keeps its glass. It repainted its surface at every theme or session change, covering the glass with a nearly solid colour.
+- App folders no longer get darker behind them after each lock. Every unlock added another dim layer.
+- Switching the dock off and on, or the dock crashing, now restarts what attaches to it (dock motion, windows, glass, drawer) on the new dock, in the right order. Dock motion and the windows module used to stay attached to the old one.
+- Switching glass off gives Superbar its own surface back, and the drawer's glass stays live without the glass module.
+- If glass crashes, the top bar and dock go solid and stay readable instead of staying transparent.
+- Rebuilding the dock no longer leaves dead buttons behind in the drawer. Stopping the drawer used to fail on them and left its style and signals in place.
+- Window corners no longer touch windows that are already gone, which caused bursts of errors in the log at every lock and whenever a popup closed. The overview's window shadows no longer get invalid sizes.
+- Overview glass no longer places its wallpaper at an invalid position on its first frame.
+
+### Changed
+- Changing a setting no longer reloads the shell's whole stylesheet unless its CSS really changed.
+- Modules wait for the dock's setup to finish before attaching to it.
+- `tests/integration.js` runs all the modules together.
+
 ## 1.2.7 - 2026-11-03
 
 ### Fixed

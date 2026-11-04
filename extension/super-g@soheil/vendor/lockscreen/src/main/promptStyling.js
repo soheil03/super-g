@@ -101,13 +101,14 @@ export class PromptStyling {
                 },
                 'key-focus-out', () => {
                     GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                        if (entry && entry.get_stage && entry.get_stage())
+                        if (entry && !entry._wackGone && entry.get_stage && entry.get_stage())
                             this._updatePromptEntryStyle(entry);
                         return GLib.SOURCE_REMOVE;
                     });
                     return Clutter.EVENT_PROPAGATE;
                 },
                 'destroy', () => {
+                    entry._wackGone = true;
                     if (global.stage)
                         global.stage.disconnectObject(entry);
                 },
@@ -123,7 +124,7 @@ export class PromptStyling {
                     },
                     'key-focus-out', () => {
                         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                            if (entry && entry.get_stage && entry.get_stage())
+                            if (entry && !entry._wackGone && entry.get_stage && entry.get_stage())
                                 this._updatePromptEntryStyle(entry);
                             return GLib.SOURCE_REMOVE;
                         });

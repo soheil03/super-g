@@ -11,7 +11,7 @@ Built for **Ubuntu 26.04 LTS / GNOME 50**. An independent project, not affiliate
 
 | Super G | Ubuntu | GNOME Shell | GTK 4 | libadwaita | Session |
 |---|---|---|---|---|---|
-| 1.2.7 | 26.04.1 LTS | 50.1 | 4.22.4 | 1.9.1 | Wayland, with Xwayland for X11 apps |
+| 1.2.8 | 26.04.1 LTS | 50.1 | 4.22.4 | 1.9.1 | Wayland, with Xwayland for X11 apps |
 
 GNOME 51 is declared in `metadata.json` but not tested yet. See the [changelog](CHANGELOG.md), and [docs/UPGRADING.md](docs/UPGRADING.md) for how we port to new releases.
 

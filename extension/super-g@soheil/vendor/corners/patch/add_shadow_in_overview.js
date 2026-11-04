@@ -24,7 +24,7 @@ export async function addShadowInOverview(window, self) {
     // we don't need to do anything, so we can skip it.
     const hasRoundedCorners = await shouldEnableEffect(window);
     const windowActor = window.get_compositor_private();
-    const shadow = windowActor.rwcCustomData?.shadow;
+    const shadow = windowActor?.rwcCustomData?.shadow;
     if (!(hasRoundedCorners && shadow)) {
         return;
     }
@@ -84,8 +84,8 @@ const OverviewShadowActorClone = GObject.registerClass({}, class extends Clutter
         }
         // Scale the shadow by the same scale factor that the window preview
         // is scaled by.
-        const containerScaleFactor = windowContainerBox.get_width() /
-            metaWindow.get_frame_rect().width;
+        const frameWidth = metaWindow.get_frame_rect().width;
+        const containerScaleFactor = frameWidth ? windowContainerBox.get_width() / frameWidth : 1;
         const paddings = SHADOW_PADDING * containerScaleFactor;
         // Setup the bounding box of the shadow actor.
         box.set_origin(-paddings, -paddings);

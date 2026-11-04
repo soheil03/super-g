@@ -9,7 +9,7 @@ import Meta from 'gi://Meta';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {PopupAnimation} from 'resource:///org/gnome/shell/ui/boxpointer.js';
 
-import {Module} from '../lib/module.js';
+import {Module, moduleOn} from '../lib/module.js';
 import * as Files from '../lib/files.js';
 import {LiveStylesheet, engineSettings, engineChildSettings} from '../lib/stylesheet.js';
 import {resolve} from '../lib/themeGen.js';
@@ -61,6 +61,15 @@ export default class PanelModule extends Module {
         this.connect(this._iface, 'changed::color-scheme', () => this._apply());
         this._bg = new Gio.Settings({schema_id: 'org.gnome.desktop.background'});
         this.connect(this._bg, 'changed', () => this.later('apply', 120, () => this._apply()));
+        // GNOME shows every indicator again at each session change, a lock or an
+        // unlock, so hiding this one once doesn't last.
+        const a11y = Main.panel.statusArea.a11y?.container;
+        if (a11y) {
+            this.connect(a11y, 'notify::visible', () => {
+                if (a11y.visible && this.settings.get_boolean('hide-accessibility'))
+                    a11y.hide();
+            });
+        }
 
         if (Main.layoutManager._startingUp && this.settings.get_boolean('startup-desktop')) {
             this.connect(Main.layoutManager, 'startup-complete', () => Main.overview.hide());
@@ -92,7 +101,7 @@ export default class PanelModule extends Module {
         this._quickMenuProto = null;
         Main.panel.remove_style_class_name(SOLID_CLASS);
         Main.panel.statusArea.quickSettings?.remove_style_class_name(STATUS_CLASS);
-        this._setA11yVisible(true);
+        this._setA11yHidden(false);
         this._restore();
         handBack(this.name, REPLACES);
     }
@@ -163,7 +172,7 @@ export default class PanelModule extends Module {
         Main.panel.statusArea.quickSettings?.add_style_class_name(STATUS_CLASS);
 
         this._sheet.set(this._css(style, height, s.get_string('panel-status-style')));
-        this._setA11yVisible(!s.get_boolean('hide-accessibility'));
+        this._setA11yHidden(s.get_boolean('hide-accessibility'));
         this._applyClock();
         this._applyBlur(style);
         for (const [key, value] of Object.entries(KIWI_OFF)) {
@@ -192,7 +201,7 @@ export default class PanelModule extends Module {
         // The bar blurs through the clear pipeline (lib/blurSetup.js), so a
         // moderate tint is enough to carry the palette colour.
         // With Super G glass on the bar, the glass layer is the surface.
-        const glassOn = this.settings.get_boolean('panel-glass') && this.settings.get_boolean('module-glass');
+        const glassOn = this.settings.get_boolean('panel-glass') && moduleOn(this.settings, 'glass');
         const glass = glassOn ? 'transparent' : withAlpha(c.window, dark ? 0.78 : 0.8);
         const edge = dark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.55)';
         const pill = withAlpha(c.fg, dark ? 0.1 : 0.07);
@@ -248,7 +257,8 @@ ${this.settings.get_boolean('panel-adaptive-solid') ? `${P}.${SOLID_CLASS} { bac
 ${BOXES.map(([id]) => boxRules(`${P}.${SOLID_CLASS} #${id}`, themeFg)).join('\n')}` : ''}`;
         } else {
             // The glass shader draws its own rim; a CSS rim on top doubles the edge.
-            const rim = glassOn ? 'none' : `inset 0 1px 0 ${edge}, inset 0 0 0 1px ${c.hairline}`;
+            // St takes one shadow only.
+            const rim = glassOn ? 'none' : `inset 0 1px 0 ${edge}`;
             shape = `${P} { background-color: ${glass}; border-radius: ${Math.round(height * 0.42)}px; box-shadow: ${rim};
   margin: ${GAP}px ${GAP}px ${GAP}px ${GAP}px; }`;
         }
@@ -263,7 +273,7 @@ ${BOXES.map(([id]) => boxRules(`${P}.${SOLID_CLASS} #${id}`, themeFg)).join('\n'
         const wall = stripLuminance(currentWallpaperUri(dark), 'top', 0.04, x0, x1);
         if (wall === null)
             return c.fg;
-        const glassOn = this.settings.get_boolean('panel-glass') && this.settings.get_boolean('module-glass');
+        const glassOn = this.settings.get_boolean('panel-glass') && moduleOn(this.settings, 'glass');
         const alpha = glassOn ? glassAlpha(c, this.settings) : style === 'adaptive' ? 0 : 0.8;
         const gamma = alpha * luminance(c.window) ** (1 / 2.2) + (1 - alpha) * wall ** (1 / 2.2);
         const behind = gamma ** 2.2;
@@ -297,10 +307,11 @@ ${BOXES.map(([id]) => boxRules(`${P}.${SOLID_CLASS} #${id}`, themeFg)).join('\n'
             this._blurPanel.set_boolean('override-background', false);
     }
 
-    _setA11yVisible(visible) {
+    // Not hidden means what the session wants: the login screen's bar lacks it.
+    _setA11yHidden(hidden) {
         const a11y = Main.panel.statusArea.a11y;
         if (a11y)
-            a11y.container.visible = visible;
+            a11y.container.visible = !hidden && Object.values(Main.sessionMode.panel).flat().includes('a11y');
     }
 
     _setIface(key, value) {

@@ -36,6 +36,7 @@ function isBlank(actor) {
 // More than magnification can stretch the dock, at any setting.
 const DOCK_REACH = 420;
 const ISLAND_CHECK_MS = 100;
+const CLEAR_SURFACE = 'background-color: transparent; background-image: none; border: none; box-shadow: none;';
 
 // The union of some top bar buttons, for a glass layer to follow.
 class Island {
@@ -184,13 +185,26 @@ export default class GlassModule extends Module {
         const material = this.ext._active?.get('launcher')?.instance?._materialLayer;
         if (!material || this._launcherGlass)
             return;
-        material.style = 'background-color: transparent; background-image: none; border: none; box-shadow: none;';
-        this._launcherGlass = new GlassLayer({style: this._style, shapeSource: material});
-        material.insert_child_at_index(this._launcherGlass, 0);
-        this._launcherGlass.add_constraint(new Clutter.BindConstraint({
+        let style = material.style;
+        material.style = CLEAR_SURFACE;
+        const glass = this._launcherGlass = new GlassLayer({style: this._style, shapeSource: material});
+        // It repaints its surface at every theme or session change, over the glass.
+        material.connectObject('notify::style', () => {
+            if (material.style !== CLEAR_SURFACE) {
+                style = material.style;
+                material.style = CLEAR_SURFACE;
+            }
+        }, glass);
+        material.insert_child_at_index(glass, 0);
+        glass.add_constraint(new Clutter.BindConstraint({
             source: material, coordinate: Clutter.BindCoordinate.SIZE,
         }));
-        this._launcherGlass.connect('destroy', () => (this._launcherGlass = null));
+        // Glass going away on its own hands the launcher its surface back.
+        this._dropLauncherGlass = () => {
+            glass.destroy();
+            material.style = style;
+        };
+        glass.connect('destroy', () => (this._launcherGlass = this._dropLauncherGlass = null));
     }
 
     disable() {
@@ -225,14 +239,14 @@ export default class GlassModule extends Module {
         if (this._origPopup)
             AppDisplay.AppFolderDialog.prototype.popup = this._origPopup;
         this._origPopup = null;
-        for (const glass of this._folders.values())
-            glass.destroy();
+        for (const folder of [...this._folders.values()])
+            folder.drop();
         this._folders.clear();
         if (this._dockReadyId)
             this._dockExt?.dockManager?.disconnect(this._dockReadyId);
         this._panelGlass?.destroy();
         this._panelGlass = null;
-        this._launcherGlass?.destroy();
+        this._dropLauncherGlass?.();
         this._islands.forEach(glass => glass.destroy());
         this._islands = [];
         this._overviewOut(true);
@@ -249,10 +263,13 @@ export default class GlassModule extends Module {
 
     _restyle() {
         this._style = this._computeStyle();
-        const all = [this._panelGlass, this._launcherGlass, ...this._islands, ...this._folders.values(), ...[...this._menus.values()].map(e => e.glass),
+        const folders = [...this._folders.values()];
+        const all = [this._panelGlass, this._launcherGlass, ...this._islands, ...folders.map(f => f.glass), ...[...this._menus.values()].map(e => e.glass),
             ...this._docks.values(), ...this._surfaces.values(), ...(this._overview ?? [])];
         for (const glass of all.filter(Boolean))
             glass.setStyle(this._style);
+        for (const folder of folders)
+            folder.wash.style = this._washStyle();
         this._syncPanelGlass();
     }
 
@@ -288,7 +305,6 @@ export default class GlassModule extends Module {
         const box = dialog._viewBox;
         const glass = new GlassLayer({style: this._style, shapeSource: box, track: box, smoothing: 0.5});
         dialog.get_parent().insert_child_below(glass, dialog);
-        this._folders.set(dialog, glass);
         // GNOME's dim is the dialog's own background colour, eased when it opens,
         // and would lie over the glass; ours goes under, a soft wash of the theme.
         dialog.ease = params => {
@@ -297,16 +313,26 @@ export default class GlassModule extends Module {
         };
         const monitor = Main.layoutManager.primaryMonitor;
         const wash = new St.Widget({x: monitor.x, y: monitor.y, width: monitor.width, height: monitor.height, opacity: 0,
-            style: `background-color: ${this._style.lightText ? 'rgba(0,0,0,0.38)' : 'rgba(255,255,255,0.28)'};`});
+            style: this._washStyle()});
         dialog.get_parent().insert_child_below(wash, glass);
         const show = open => wash.ease({opacity: open ? 255 : 0, duration: 200, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
         show(true);
-        dialog.connect('open-state-changed', (_d, open) => show(open));
-        dialog.connect('destroy', () => {
+        // The dialog outlives this module across a lock, and each start adds its
+        // own wash: a stale one would darken the folder a little more every time.
+        const signals = [dialog.connect('open-state-changed', (_d, open) => show(open))];
+        const drop = () => {
+            signals.forEach(id => dialog.disconnect(id));
+            delete dialog.ease;
             this._folders.delete(dialog);
             glass.destroy();
             wash.destroy();
-        });
+        };
+        signals.push(dialog.connect('destroy', drop));
+        this._folders.set(dialog, {glass, wash, drop});
+    }
+
+    _washStyle() {
+        return `background-color: ${this._style.lightText ? 'rgba(0,0,0,0.38)' : 'rgba(255,255,255,0.28)'};`;
     }
 
     _after(proto, name, ensure) {
@@ -323,19 +349,21 @@ export default class GlassModule extends Module {
     _addSurface(surface, glass) {
         this._surfaces.set(surface, glass);
         surface.add_style_class_name('super-g-glassed');
-        surface.connect('destroy', () => {
+        // Tied to the glass: the surface can outlive it, as an open dialog does a lock.
+        surface.connectObject('destroy', () => {
             this._surfaces.delete(surface);
             glass.destroy();
-        });
+        }, glass);
     }
 
     // For owners that place their children by hand: the glass sits just below
     // the owner and follows the surface.
     _ensureTracked(owner, surface) {
-        if (!surface || this._surfaces.has(surface))
+        const parent = owner.get_parent();
+        if (!surface || !parent || this._surfaces.has(surface))
             return;
         const glass = new GlassLayer({style: this._style, shapeSource: surface, track: surface});
-        owner.get_parent().insert_child_below(glass, owner);
+        parent.insert_child_below(glass, owner);
         this._addSurface(surface, glass);
     }
 
@@ -374,7 +402,7 @@ export default class GlassModule extends Module {
             return;
         content.add_style_class_name('super-g-glassed');
         this._menus.set(box, entry);
-        box.connect('destroy', () => this._menus.delete(box));
+        box.connectObject('destroy', () => this._menus.delete(box), entry.glass);
     }
 
     // For what resizes a menu from outside, like a quick settings submenu.
@@ -392,7 +420,6 @@ export default class GlassModule extends Module {
             menu._setDimmed = () => {};
             this._undimmed = menu;
         }
-        menu.connect('destroy', () => this._menus.delete(menu));
     }
 
     /* ----------------------------------------------------------- dock -- */
@@ -403,6 +430,8 @@ export default class GlassModule extends Module {
         if (!path)
             return;
         this._dockExt = await import(`file://${path}/extension.js`);
+        if (this.stopped)
+            return;
         const attach = () => {
             for (const glass of this._docks.values())
                 glass.destroy();

@@ -36,11 +36,11 @@ const MODULES = {
             configureDock(this);
         },
     }),
-    dockmotion: engine('dockmotion', 'flourish@orsso.github.io', ['flourish@orsso.github.io'], {
+    dockmotion: Object.assign(engine('dockmotion', 'flourish@orsso.github.io', ['flourish@orsso.github.io'], {
         configure() {
             configureDockMotion(this);
         },
-    }),
+    }), {needsDock: true}),
     // Legacy: Super G glass replaces it, so turning it off never brings
     // Blur my Shell back.
     blur: Object.assign(engine('blur', 'blur-my-shell@aunetx', ['blur-my-shell@aunetx'], {
@@ -50,7 +50,8 @@ const MODULES = {
     }), {noHandBack: true}),
     // Window buttons belong to the appearance module, so Kiwi's own
     // (traffic-light) button CSS stays off.
-    windows: engine('windows', 'kiwi@kemma', ['kiwi@kemma'], {
+    // It adds strips to the dock, and patches a method the dock patches too.
+    windows: Object.assign(engine('windows', 'kiwi@kemma', ['kiwi@kemma'], {
         configure() {
             const s = this.instance.getSettings();
             // popup-menu-styling also imports Kiwi's GTK fix-ups from inside
@@ -60,7 +61,7 @@ const MODULES = {
                 if (s.get_boolean(key))
                     s.set_boolean(key, false);
         },
-    }),
+    }), {needsDock: true}),
     // WACK only exists on the lock screen, as upstream declares.
     lockscreen: Object.assign(engine('lockscreen', 'wack-lockscreen-clock@rinzler69-wastaken.github.com',
         ['wack-lockscreen-clock@rinzler69-wastaken.github.com']), {onlyWhenLocked: true}),
@@ -139,7 +140,9 @@ export default class SuperG extends Extension {
         this._sessionId = Main.sessionMode.connect('updated', () => this._sync());
         this._conflictsId = global.settings.connect('changed::enabled-extensions', () => this._checkConflicts());
         this._sync();
-        this._checkConflicts();
+        // After the modules: what they take over is remembered and can be handed
+        // back later, what's switched off here is not.
+        this._queue.then(() => this._active && this._checkConflicts());
     }
 
     /* ----------------------------------------------------- conflicts -- */
@@ -191,8 +194,11 @@ export default class SuperG extends Extension {
         this._settings.disconnect(this._settingsId);
         Main.sessionMode.disconnect(this._sessionId);
         global.settings.disconnect(this._conflictsId);
-        for (const name of [...this._active.keys()].reverse())
-            this._stop(name);
+        // In the listed order, not the order of the map: a lock cycle reshuffles that.
+        for (const name of Object.keys(MODULES).reverse()) {
+            if (this._active.has(name))
+                this._stop(name);
+        }
         this._active = null;
         this._settings = null;
     }
@@ -249,17 +255,19 @@ export default class SuperG extends Extension {
             if (!this._active)
                 return;
             const entries = Object.entries(MODULES);
+            // Whatever attached to the dock can't outlive it or miss a new one
+            // (a lock, a switch, a crash). Going in reverse, it stops before the
+            // dock does, which also unwinds shared patches in the right order,
+            // and restarts on top of the new one.
+            const dock = this._active.get('dock') ?? null;
+            const dockChanging = !!dock !== this._wanted('dock', MODULES.dock);
             for (const [name, Module] of [...entries].reverse()) {
-                if (this._active.has(name) && !this._wanted(name, Module))
+                const module = this._active.get(name);
+                if (!module)
+                    continue;
+                const onOldDock = Module.needsDock && (dockChanging || module.dock !== dock);
+                if (onOldDock || !this._wanted(name, Module))
                     this._stop(name);
-            }
-            // The dock is back (after a lock, say): whatever attached to the
-            // old one restarts after it.
-            if (!this._active.has('dock') && this._wanted('dock', MODULES.dock)) {
-                for (const [name, Module] of entries) {
-                    if (Module.needsDock && this._active.has(name))
-                        this._stop(name);
-                }
             }
             for (const [name, Module] of entries) {
                 if (this._active && !this._active.has(name) && this._wanted(name, Module))
@@ -270,6 +278,7 @@ export default class SuperG extends Extension {
 
     async _start(name, Module) {
         const module = new Module(this, name);
+        module.dock = this._active.get('dock') ?? null;
         this._active.set(name, module);
         try {
             await module.enable();

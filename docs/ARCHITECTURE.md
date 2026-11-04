@@ -16,8 +16,9 @@ A module is a class with `enable()` (may be async) and `disable()`, built on
 `lib/module.js`. `extension.js` starts and stops modules one after another in
 `MODULES` order. A module is wanted when `module-<name>` is on, it isn't in
 `broken-modules`, and, while the screen is locked, its upstream declares
-`unlock-dialog` (modules with `needsDock` stop on lock too, and restart after
-the dock). Errors in `enable()` or in guarded callbacks go to `reportError`:
+`unlock-dialog`. Modules with `needsDock` (glass, drawer, dockmotion, windows)
+stop on lock too, and whenever the dock goes away or comes back, for any reason:
+before the dock when it leaves, and they restart on top of the new one. Errors in `enable()` or in guarded callbacks go to `reportError`:
 the module stops, is added to `broken-modules` for this session (the list
 resets at login), keeps its original switched off, and the user gets one
 notification.

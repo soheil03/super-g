@@ -19,7 +19,7 @@ import * as Files from '../lib/files.js';
 import {LiveStylesheet} from '../lib/stylesheet.js';
 import {resolve} from '../lib/themeGen.js';
 import {withAlpha} from '../lib/color.js';
-import {GlassLayer, glassStyle} from '../lib/glass.js';
+import {GlassLayer, glassStyle, trackPaintingView, untrackPaintingView} from '../lib/glass.js';
 
 // Desktop-entry categories → drawer sections, first match wins.
 const SECTIONS = [
@@ -69,12 +69,19 @@ export default class DrawerModule extends Module {
         this._sheet = new LiveStylesheet('drawer');
         this._buttons = new Map();
         this._tiles = new Map();
+        // Its glass must stay live with the glass module switched off.
+        trackPaintingView();
         this._applyStyle();
         this.connect(this._iface, 'changed::color-scheme', () => this._applyStyle());
         this.connect(this.settings, 'changed', () => this.later('drawer-style', 120, () => this._applyStyle()));
         this.connect(Shell.AppSystem.get_default(), 'installed-changed', () => {
             this._apps = null;
             this._dropTiles();
+            // Open, it would be left showing section titles with nothing under them.
+            if (this._open) {
+                this._renderChips();
+                this._render();
+            }
         });
         this._hookDocks();
         this._superId = global.display.connect('overlay-key', () => this.guard(() => this._onSuper()));
@@ -268,6 +275,7 @@ export default class DrawerModule extends Module {
         if (this._readyId)
             this._dockExt?.dockManager?.disconnect(this._readyId);
         this._sheet.clear();
+        untrackPaintingView();
     }
 
     _dropTiles() {
@@ -283,6 +291,8 @@ export default class DrawerModule extends Module {
         if (!path)
             return;
         this._dockExt = await import(`file://${path}/extension.js`);
+        if (this.stopped)
+            return;
         const hook = () => {
             for (const dock of this._dockExt.dockManager?._allDocks ?? []) {
                 const button = dock.dash?._showAppsIcon?.toggleButton;
@@ -307,12 +317,18 @@ export default class DrawerModule extends Module {
             button.toggle_mode = this._style() === 'overview' ? state.toggle : false;
         };
         state.syncId = this.settings.connect('changed::app-drawer-style', sync);
+        // The dock rebuilds its buttons whenever a monitor or its layout changes.
+        state.destroyId = button.connect('destroy', () => {
+            this.settings.disconnect(state.syncId);
+            this._buttons.delete(button);
+        });
         sync();
         this._buttons.set(button, state);
     }
 
     _unhookButton(button, state) {
         button.disconnect(state.id);
+        button.disconnect(state.destroyId);
         this.settings.disconnect(state.syncId);
         button.toggle_mode = state.toggle;
     }
@@ -728,8 +744,11 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
 
     // Tiles live as long as the module, so opening and filtering only move
     // them around; building them on the fly is what made typing stutter.
-    _tile(app) {
-        const cached = this._tiles.get(app);
+    // An actor has one parent, so the row of most-used apps has tiles of its own:
+    // sharing them left those apps missing from their sections, with holes.
+    _tile(app, place = '') {
+        const key = `${place}/${app.get_id()}`;
+        const cached = this._tiles.get(key);
         if (cached?.slot === this._slot)
             return cached.button;
         cached?.button.destroy();
@@ -760,16 +779,19 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             else
                 this._launch(app);
         });
-        button.connect('destroy', () => this._tiles.delete(app));
-        this._tiles.set(app, {button, slot: this._slot});
+        button.connect('destroy', () => {
+            if (this._tiles.get(key)?.button === button)
+                this._tiles.delete(key);
+        });
+        this._tiles.set(key, {button, slot: this._slot});
         return button;
     }
 
-    _grid(apps) {
+    _grid(apps, place) {
         const grid = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style: 'padding: 4px 22px; spacing: 4px;'});
         for (let i = 0; i < apps.length; i += this._columns) {
             const row = new St.BoxLayout();
-            apps.slice(i, i + this._columns).forEach(app => row.add_child(this._tile(app)));
+            apps.slice(i, i + this._columns).forEach(app => row.add_child(this._tile(app, place)));
             grid.add_child(row);
         }
         return grid;
@@ -785,12 +807,12 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         const all = this._allApps();
         this._visible = [];
 
-        const add = (title, apps) => {
+        const add = (title, apps, place) => {
             if (!apps.length)
                 return;
             if (title)
                 this._body.add_child(new St.Label({text: title, style_class: 'drawer-section'}));
-            this._body.add_child(this._grid(apps));
+            this._body.add_child(this._grid(apps, place));
             this._visible.push(...apps);
         };
 
@@ -810,7 +832,7 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
                 const used = Shell.AppUsage.get_default().get_most_used()
                     .filter(app => all.includes(app)).slice(0, this._columns);
                 if (used.length) {
-                    add('', used);
+                    add('', used, 'used');
                     this._body.add_child(new St.Widget({style_class: 'drawer-rule'}));
                 }
             }

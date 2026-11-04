@@ -735,6 +735,10 @@ class SuperGGlassLayer extends St.Widget {
                 this.opacity = opacity;
         }
         const [x, y] = this.get_transformed_position();
+        // Not placed yet: a parent has no usable transform this frame (the overview's
+        // first one). Passing that on would allocate the wallpaper copy at NaN.
+        if (Number.isNaN(x) || Number.isNaN(y))
+            return;
         const w = this.width, h = this.height;
         const radius = this._shapeRadius();
         if (!this._stale && x === this._lx && y === this._ly && w === this._lw && h === this._lh && radius === this._lr)

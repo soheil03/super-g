@@ -157,7 +157,8 @@ export class Engine extends Module {
 
         this._loadStylesheet(`${path}/stylesheet.css`);
         this.instance.enable();
-        this.configure?.();
+        // Later modules attach to what this sets up, so they wait for it.
+        await this.configure?.();
     }
 
     disable() {
@@ -189,9 +190,7 @@ export class Engine extends Module {
     // First run: copy the original extension's settings (dconf tree) into
     // ours, so the engine starts with the user's existing tuning.
     async _migrateSettings(path) {
-        const state = readHandover();
-        state.migrated ??= {};
-        if (state.migrated[this.constructor.vendor])
+        if (readHandover().migrated?.[this.constructor.vendor])
             return;
         const info = Files.readText(`${path}/UPSTREAM`) ?? '';
         const m = info.match(/^dconf: (\S+) -> (\S+)$/m);
@@ -204,6 +203,9 @@ export class Engine extends Module {
                     await run(['dconf', 'load', to], theirs);
             }
         }
+        // Read only now: another module may have handed something back meanwhile.
+        const state = readHandover();
+        state.migrated ??= {};
         state.migrated[this.constructor.vendor] = true;
         writeHandover(state);
     }

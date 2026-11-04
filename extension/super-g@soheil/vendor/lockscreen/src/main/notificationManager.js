@@ -288,8 +288,10 @@ export class NotificationManager {
         nb._notificationBox.connectObject(
             'child-added', (container, actor) => {
                 if (!this._extension) return;
+                let cardGone = false;
+                actor.connect('destroy', () => (cardGone = true));
                 this._extension._idleAdd(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    if (!this._extension) return GLib.SOURCE_REMOVE;
+                    if (!this._extension || cardGone) return GLib.SOURCE_REMOVE;
                     if (!actor.get_parent()) return GLib.SOURCE_REMOVE;
 
                     this._addCardBlur(actor);

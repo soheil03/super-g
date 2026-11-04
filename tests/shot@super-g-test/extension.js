@@ -267,6 +267,7 @@ export default class Camera extends Extension {
                 locked, ms, after: [...ext._active.keys()],
                 broken: ext._settings.get_strv('broken-modules'),
                 dock: !!ext._active.get('dock')?.instance,
+                a11yHidden: !Main.panel.statusArea.a11y?.container.visible,
             }));
             return shot(`${dir}/lock-cycle.png`);
         }
