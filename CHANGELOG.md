@@ -2,6 +2,25 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.2.9 - 2026-11-04
+
+### Added
+- Drag an app from the drawer to the dock to pin it, at the spot you drop it. The drawer steps aside as the drag starts, and the dock comes up if it was hidden. Dropping anywhere else pins nothing.
+- A setting to bring the dock up over full-screen windows by pushing the pointer against the screen edge: Dock > Show over full-screen windows. It's off by default.
+
+### Fixed
+- Pinning and unpinning no longer breaks the dock. With the pointer on the dock, a newly pinned or moved icon stayed invisible at size zero, and an unpinned one could stay on the row.
+- Dragging dock icons to reorder them works again. Those invisible icons threw off the row's count, so drags after the first did nothing.
+- The top bar over a full-screen window is now solid in every style, with text in the theme's colour, so it stays readable over whatever the window shows.
+- The top bar no longer glitches when it slides out over a full-screen window:
+  - It no longer changes the work area on each reveal, which made the dock and maximized windows re-layout.
+  - It no longer flashes at the moment a window goes full screen.
+  - It no longer slides or hides when the full-screen window is minimized, covered or on another monitor.
+  - Windows drawn directly to the screen no longer hide the slide.
+  - Floating and islands styles slide all the way out, margins included.
+  - Leaving full screen in the middle of a reveal no longer leaves it stuck.
+- In drawer search, Right and Down now go to the next result instead of onto the first one, which was already selected. Right moves along the row and on to the next row, Down moves to the row below, or to the next result if there's only one row. Up and Left come back to the search box, and Backspace edits the search from the results.
+
 ## 1.2.8 - 2026-11-04
 
 The modules now hold up together through locks, restarts and crashes. Everything here was found by running them all at once.

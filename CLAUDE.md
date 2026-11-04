@@ -110,6 +110,13 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - The engine zeroes the dot's translation at each style change (`_updateDotStyle`), a hover included. A `notify::translation-y` handler puts it back.
 - In a sandbox the dock only shows with `CLONE=1` (otherwise Ubuntu's own dock takes over), and intellihide can leave it off screen: set `dock-fixed` in the EVAL, then read the dock state after, since it's rebuilt. Only click safe apps there: a clone sees the real ones.
 
+- `_measure` runs on every fresh hover, so it may only cancel an item's slide. GNOME brings dash items in and out with eased scale and opacity, and an out ends in `destroy` from `onComplete`. Removing all transitions left pinned icons at 0x0 and unpinned ones on the row, and `handleDragOver` then miscounted the row, so drags stopped working.
+- Drawer tiles aren't `AppIcon`s, so `Dash.getAppFromSource` is wrapped to take them (`isDrawerTile`). A drag closes the drawer with `untilDropped`: it stays on stage, hidden from pick, until `drag-end`, because the tile is the snap-back source. The module's `_afterDrag` finishes it.
+- EVAL's `pointer` also has `press` and `release`, for drags. Test drags with a virtual `KEYBOARD_DEVICE` or `TOUCHSCREEN_DEVICE` alongside when keys or touch matter. Install-time work can fire `installed-changed` a few seconds after a sandbox starts, which re-renders the drawer: wait before the first key.
+- The bar's reveal over full screen (`panelHover.js`, patched in vendor-fixups) slides `Main.panel`, never `panelBox`: layout reads struts from `panelBox`'s transformed position, so moving it changes the work area. `trackFullscreen` stays true except during a reveal, otherwise the bar flashes on each entry to full screen. A reveal holds `disable_unredirect`, or a directly scanned-out window hides the bar.
+- `barOverFullscreen()` (`lib/glass.js`): the bar goes solid through `super-g-panel-fullscreen` and its glass turns off, since tracked glass trails a moving bar by a frame.
+- A non-fixed dock isn't tracked for full screen, so `autohide-in-fullscreen` is all it takes to show over one. A fixed dock is tracked and stays hidden. Test edge pushes with `notify_relative_motion`; absolute motion skips barriers.
+
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.
 - Every user-facing choice becomes a setting (user's rule). Show options before building visual pieces.

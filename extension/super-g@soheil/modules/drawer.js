@@ -3,7 +3,8 @@
 // Search is the title (type to filter, Enter launches the first hit, Esc
 // closes), category pills filter, "All" shows a row of most-used apps and
 // then one section per category. Styles: dock-popup (default), fullscreen,
-// or overview (GNOME's own app grid, untouched).
+// or overview (GNOME's own app grid, untouched). A tile dragged to the dock
+// pins its app; the drawer steps aside for that.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -12,6 +13,8 @@ import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
+import * as Dash from 'resource:///org/gnome/shell/ui/dash.js';
+import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {Module} from '../lib/module.js';
@@ -46,6 +49,8 @@ const COAST_MS = 320;
 const TOUCH_SLOP = 10;
 // How long the Super key keeps a hidden dock out.
 const SUPER_DOCK_MS = 2500;
+// As GNOME's app icons, so a quick touch swipe still scrolls.
+const DRAG_HOLD_MS = 200;
 const SUPER_POLL_MS = 80;
 const SUPER_IDLE_MS = 3000;
 const SUPER_HOLD_MS = 450;
@@ -83,6 +88,7 @@ export default class DrawerModule extends Module {
                 this._render();
             }
         });
+        this._acceptTilesOnDocks();
         this._hookDocks();
         this._superId = global.display.connect('overlay-key', () => this.guard(() => this._onSuper()));
         for (const key of ['super-key-action', 'super-double-action', 'super-hold-action'])
@@ -262,6 +268,8 @@ export default class DrawerModule extends Module {
     disable() {
         this.cleanup();
         this.close(true);
+        this._afterDrag?.();
+        Dash.Dash.getAppFromSource = this._appFromSource;
         global.display.disconnect(this._superId);
         if (this._idleMonitor)
             this._dropSuperWatch();
@@ -276,6 +284,12 @@ export default class DrawerModule extends Module {
             this._dockExt?.dockManager?.disconnect(this._readyId);
         this._sheet.clear();
         untrackPaintingView();
+    }
+
+    // A dash takes only GNOME's own app icons, which a tile isn't.
+    _acceptTilesOnDocks() {
+        const original = this._appFromSource = Dash.Dash.getAppFromSource;
+        Dash.Dash.getAppFromSource = source => (source?.isDrawerTile ? source.app : original(source));
     }
 
     _dropTiles() {
@@ -499,7 +513,9 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             mode: Clutter.AnimationMode.EASE_OUT_QUINT});
     }
 
-    close(now = false) {
+    // untilDropped: a tile in the drawer is being dragged, so it stays on stage,
+    // hidden and out of the way, until the drag is over.
+    close(now = false, {untilDropped = false} = {}) {
         const open = this._open;
         if (!open)
             return;
@@ -519,11 +535,23 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             finish();
             return;
         }
+        if (untilDropped) {
+            this._afterDrag = () => {
+                this._afterDrag = null;
+                finish();
+            };
+            Shell.util_set_hidden_from_pick(open.root, true);
+            open.root.reactive = false;
+            open.drawer.ease({opacity: 0, duration: 130, mode: Clutter.AnimationMode.EASE_IN_QUAD});
+            return;
+        }
         open.drawer.ease({opacity: 0, scale_x: 0.94, scale_y: 0.94, duration: 130,
             mode: Clutter.AnimationMode.EASE_IN_QUAD, onComplete: finish});
     }
 
     _onCaptured(event) {
+        if (!this._open)
+            return Clutter.EVENT_PROPAGATE;
         const type = event.type();
         if (type === Clutter.EventType.KEY_PRESS)
             return this._onKey(event);
@@ -681,14 +709,16 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             [Clutter.KEY_Right]: St.DirectionType.RIGHT,
         }[key];
         if (dir !== undefined) {
+            if (inSearch && this._entry.get_text().trim())
+                return this._leaveSearch(dir);
             if (inSearch && dir !== St.DirectionType.DOWN)
                 return Clutter.EVENT_PROPAGATE;
-            const from = inSearch ? null : global.stage.key_focus;
-            if (!this._body.navigate_focus(from, dir, false) && dir === St.DirectionType.UP)
-                global.stage.set_key_focus(text);
-            const focused = global.stage.key_focus;
-            if (focused && this._body.contains(focused))
-                this._reveal(focused);
+            this._move(inSearch ? null : global.stage.key_focus, dir);
+            return Clutter.EVENT_STOP;
+        }
+        if (!inSearch && key === Clutter.KEY_BackSpace) {
+            global.stage.set_key_focus(text);
+            this._entry.set_text(this._entry.get_text().slice(0, -1));
             return Clutter.EVENT_STOP;
         }
         const unicode = event.get_key_unicode();
@@ -698,6 +728,49 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             return Clutter.EVENT_STOP;
         }
         return Clutter.EVENT_PROPAGATE;
+    }
+
+    // With results showing, the first one is already selected, so an arrow goes
+    // on to the next rather than onto it. Left and Up stay with the text, as does
+    // Right while the caret has text to cross.
+    _leaveSearch(dir) {
+        const text = this._entry.clutter_text;
+        const caret = text.get_cursor_position();
+        const atEnd = caret < 0 || caret >= text.text.length;
+        if (dir !== St.DirectionType.DOWN && !(dir === St.DirectionType.RIGHT && atEnd))
+            return Clutter.EVENT_PROPAGATE;
+        const tiles = this._visible.map(app => this._tile(app));
+        const next = dir === St.DirectionType.DOWN ? tiles[this._columns] ?? tiles[1] : tiles[1];
+        this._select(next ?? (dir === St.DirectionType.DOWN ? this._everywhere : null));
+        return Clutter.EVENT_STOP;
+    }
+
+    _select(actor) {
+        if (!actor)
+            return;
+        this._firstHit?.remove_style_class_name('first-hit');
+        actor.grab_key_focus();
+        this._reveal(actor);
+    }
+
+    _move(from, dir) {
+        if (this._body.navigate_focus(from, dir, false)) {
+            const focused = global.stage.key_focus;
+            this._firstHit?.remove_style_class_name('first-hit');
+            if (focused && this._body.contains(focused))
+                this._reveal(focused);
+            return;
+        }
+        // Past the end of a row of results, on to the next row.
+        const results = this._entry.get_text().trim() ? this._visible.map(app => this._tile(app)) : [];
+        const at = results.indexOf(from);
+        const across = dir === St.DirectionType.RIGHT ? 1 : dir === St.DirectionType.LEFT ? -1 : 0;
+        if (at >= 0 && across && results[at + across]) {
+            this._select(results[at + across]);
+        } else if (dir === St.DirectionType.UP || (at === 0 && dir === St.DirectionType.LEFT)) {
+            global.stage.set_key_focus(this._entry.clutter_text);
+            this._firstHit?.add_style_class_name('first-hit');
+        }
     }
 
     _reveal(actor) {
@@ -783,8 +856,30 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             if (this._tiles.get(key)?.button === button)
                 this._tiles.delete(key);
         });
+        this._makeDraggable(button, app, icon);
         this._tiles.set(key, {button, slot: this._slot});
         return button;
+    }
+
+    _makeDraggable(button, app, icon) {
+        const source = {
+            app, isDrawerTile: true,
+            getDragActor: () => app.create_icon_texture(64),
+            getDragActorSource: () => icon,
+        };
+        button._delegate = source;
+        const dragging = DND.makeDraggable(button, {timeoutThreshold: DRAG_HOLD_MS});
+        dragging.connect('drag-begin', () => this.guard(() => {
+            button.fake_release();
+            Main.overview.beginItemDrag(source);
+            this.close(false, {untilDropped: true});
+        }));
+        dragging.connect('drag-cancelled', () => this.guard(() => Main.overview.cancelledItemDrag(source)));
+        // Comes after the icon has flown back, too.
+        dragging.connect('drag-end', () => this.guard(() => {
+            Main.overview.endItemDrag(source);
+            this._afterDrag?.();
+        }));
     }
 
     _grid(apps, place) {
@@ -798,6 +893,10 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
     }
 
     _render({animate = false} = {}) {
+        // The tile with the keyboard is about to leave its row.
+        const focused = global.stage.key_focus;
+        if (focused && this._body.contains(focused))
+            global.stage.set_key_focus(this._entry.clutter_text);
         for (const {button} of this._tiles.values()) {
             button.remove_style_class_name('first-hit');
             button.get_parent()?.remove_child(button);
@@ -806,6 +905,7 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         const query = this._entry.get_text().trim();
         const all = this._allApps();
         this._visible = [];
+        this._firstHit = this._everywhere = null;
 
         const add = (title, apps, place) => {
             if (!apps.length)
@@ -821,7 +921,8 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             if (hits.length) {
                 add('', hits);
                 // Enter launches this one.
-                this._tile(hits[0]).add_style_class_name('first-hit');
+                this._firstHit = this._tile(hits[0]);
+                this._firstHit.add_style_class_name('first-hit');
             } else if (!this._launcher()) {
                 this._body.add_child(new St.Label({text: `No apps match "${query}"`, style_class: 'drawer-empty',
                     x_align: Clutter.ActorAlign.CENTER}));
@@ -872,6 +973,9 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         row.set_child(box);
         row.connect('clicked', () => this._searchEverywhere());
         this._body.add_child(row);
+        this._everywhere = row;
+        if (primary)
+            this._firstHit = row;
     }
 
     _searchEverywhere() {

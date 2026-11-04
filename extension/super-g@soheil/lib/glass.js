@@ -498,6 +498,10 @@ export const LiveGlassEffect = GObject.registerClass({
 // style: {tint: [r,g,b,a], saturation, brightness, rim, grain, blur}
 // smoothing: 0 = circular corners (matches CSS), up to 1 = squircle.
 // shapeSource: actor whose CSS border-radius the glass follows (optional).
+// The top bar slid out over a full-screen window. It's solid there: tracked glass
+// trails a moving bar by a frame.
+export const barOverFullscreen = () => !Main.overview.visible && !!Main.layoutManager.primaryMonitor?.inFullscreen;
+
 // track: actor whose on-screen box the glass copies (for layers that can't
 // be its child, like the top bar's).
 export const GlassLayer = GObject.registerClass(

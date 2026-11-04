@@ -19,7 +19,7 @@ import * as WorkspaceSwitcherPopup from 'resource:///org/gnome/shell/ui/workspac
 import {Module} from '../lib/module.js';
 import * as Files from '../lib/files.js';
 import {resolve} from '../lib/themeGen.js';
-import {GlassLayer, glassStyle, wrapWithGlass, unwrap, trackPaintingView, untrackPaintingView} from '../lib/glass.js';
+import {GlassLayer, glassStyle, wrapWithGlass, unwrap, trackPaintingView, untrackPaintingView, barOverFullscreen} from '../lib/glass.js';
 
 // A title button with nothing to title (no focused window) keeps its place.
 function isBlank(actor) {
@@ -176,6 +176,11 @@ export default class GlassModule extends Module {
         this.connect(Main.overview, 'showing', () => this._overviewIn());
         this.connect(Main.overview, 'hidden', () => this._overviewOut());
 
+        const syncFullscreen = () => this._syncPanelGlass();
+        this.connect(global.display, 'in-fullscreen-changed', syncFullscreen);
+        this.connect(Main.overview, 'showing', syncFullscreen);
+        this.connect(Main.overview, 'hidden', syncFullscreen);
+
         this._attachDocks();
         this.attachLauncher();
     }
@@ -277,7 +282,7 @@ export default class GlassModule extends Module {
 
     // Islands style: no bar to speak of, each island is its own piece of glass.
     _syncPanelGlass() {
-        const on = this.settings.get_boolean('panel-glass');
+        const on = this.settings.get_boolean('panel-glass') && !barOverFullscreen();
         const islands = this.settings.get_string('panel-style') === 'islands';
         if (this._panelGlass) {
             this._panelGlass.active = on && !islands;

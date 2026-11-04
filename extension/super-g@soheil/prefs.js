@@ -311,6 +311,7 @@ export default class SuperGPrefs extends ExtensionPreferences {
                     comboRow(dock, 'dock-position', 'Position', DOCK_POSITIONS),
                     invertedSwitch(dock, 'dock-fixed', 'Auto-hide'),
                     switchRow(dock, 'intellihide', 'Hide only when a window overlaps'),
+                    switchRow(dock, 'autohide-in-fullscreen', 'Show over full-screen windows', 'Push the pointer against the screen edge to bring it up'),
                     enumRow(dock, 'intellihide-mode', 'Windows that make it hide'),
                     enumRow(dock, 'click-action', 'Click on a running app'),
                     enumRow(dock, 'scroll-action', 'Scroll on an app'),

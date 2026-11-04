@@ -100,6 +100,14 @@ function makePointer() {
                 await wait(16);
             }
         },
+        async press() {
+            button(Clutter.ButtonState.PRESSED);
+            await wait(60);
+        },
+        async release() {
+            button(Clutter.ButtonState.RELEASED);
+            await wait(60);
+        },
         async click(x, y) {
             await pointer.move(x, y);
             button(Clutter.ButtonState.PRESSED);

@@ -12,6 +12,7 @@ import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 // Share of the distance covered per 60 Hz frame.
 const FOLLOW = 0.3;
@@ -115,10 +116,21 @@ export class DockMagnifier {
             }
             return Clutter.EVENT_PROPAGATE;
         });
+        // A dragged app, from the dock or the drawer, has the row to itself.
+        const dragging = on => {
+            this._dragging = on;
+            for (const state of this._docks.values())
+                this._wake(state);
+        };
+        Main.overview.connectObject(
+            'item-drag-begin', () => dragging(true),
+            'item-drag-end', () => dragging(false),
+            'item-drag-cancelled', () => dragging(false), this);
         this._attachAll();
     }
 
     disable() {
+        Main.overview.disconnectObject(this);
         global.stage.disconnect(this._stageId);
         this._stageId = 0;
         global.stage.disconnect(this._clickId);
@@ -467,7 +479,11 @@ export class DockMagnifier {
             // clicks through to the window below. Events bubble up to the button.
             if (fresh.zooms && fresh.visual)
                 fresh.visual.reactive = true;
-            actor.remove_all_transitions();
+            // Only its slide. GNOME eases an item's scale and opacity to bring it
+            // in or take it out, and cancelling that left a newly pinned icon at
+            // size zero and an unpinned one on the row for good.
+            actor.remove_transition('translation-x');
+            actor.remove_transition('translation-y');
             fresh.visual?.remove_all_transitions();
             fresh.visual?.set_pivot_point(
                 state.vertical ? (side === St.Side.RIGHT ? 1 : 0) : 0.5,
@@ -567,7 +583,7 @@ export class DockMagnifier {
     _onMotion(state, x, y) {
         if (state.active)
             this._wake(state);
-        else if (this._enabled && this._overDock(state, x, y))
+        else if (this._enabled && !this._dragging && this._overDock(state, x, y))
             this.start(state.dock);
     }
 
@@ -575,7 +591,7 @@ export class DockMagnifier {
         let left = REVEAL_WATCH_MS;
         const look = () => {
             left -= REVEAL_POLL_MS;
-            if (state.gone || state.active || !this._enabled || left <= 0)
+            if (state.gone || state.active || !this._enabled || this._dragging || left <= 0)
                 return;
             const [x, y] = global.get_pointer();
             if (this._overDock(state, x, y))
@@ -650,13 +666,12 @@ export class DockMagnifier {
         // the wave only returns on another icon or once the pointer has left.
         if (state.seated && this._reachedAnother(state, x, y))
             state.seated = null;
-        // An icon being dragged has the row to itself, and an open context menu
-        // shouldn't sit on a raised icon.
+        // An open context menu shouldn't sit on a raised icon.
         const menuOpen = slots.some(slot => slot.actor.child?._menu?.isOpen);
         // A seated row has nothing risen, so the dock alone counts: past it, the
         // row goes to rest and coming back starts a fresh wave.
         const on = state.seated ? this._overDock(state, x, y) : this._inside(state, x, y);
-        const over = this._enabled && !menuOpen && !state.dash._dragPlaceholder && on;
+        const over = this._enabled && !menuOpen && !this._dragging && on;
         const inside = over && !state.seated;
         const cursor = state.vertical ? y : x;
 

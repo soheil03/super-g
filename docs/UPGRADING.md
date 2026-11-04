@@ -8,6 +8,7 @@ Add a row each time, and copy the newest one into the README.
 
 | Super G | Ubuntu | GNOME Shell | Mutter | GTK 4 | libadwaita | Session | How it was tested |
 |---|---|---|---|---|---|---|---|
+| 1.2.9 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 100% scale | Headless shell with a copy of the real settings: `tests/integration.js`, real pointer, keyboard and touch input for dock and drawer drags, search keys, and a real full-screen window. Real-desktop check still to do |
 | 1.2.8 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell with a copy of the real settings: `tests/integration.js`, simulated module crashes. Real-desktop check still to do |
 | 1.1.0 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell at 100% scale, real keyboard and pointer input. Real-desktop check still to do |
 
@@ -72,6 +73,9 @@ One false alarm to rule out first: `disable-user-extensions` set to `true` turns
 | `Main.panel._leftBox`, `_centerBox`, `_rightBox` | `modules/panel.js`, `modules/glass.js` | Top bar layout and islands |
 | `dock.dash._background`, `_box`, `_items` (Dash to Dock) | `modules/glass.js`, `modules/drawer.js`, `lib/dockMagnify.js` | Dock has no glass or no magnification |
 | `AppIcon.animateLaunch`, `createIcon` on `BaseIcon` | `lib/dockMagnify.js`, `lib/dockStyle.js` | Launch bounce, Show Apps icon |
+| `Dash.getAppFromSource`, `Main.overview.beginItemDrag`, `endItemDrag`, `cancelledItemDrag`, `DND.makeDraggable` delegate (`getDragActor`, `getDragActorSource`) | `modules/drawer.js` | Dragging from the drawer to the dock stops working |
+| `Main.overview` `item-drag-begin`, `item-drag-end`, `item-drag-cancelled` | `lib/dockMagnify.js`, `modules/drawer.js` | Magnification runs during drags |
+| `Main.layoutManager._trackedActors` (`trackFullscreen`), `_updateVisibility`, `primaryMonitor.inFullscreen`, `global.compositor.disable_unredirect` | `vendor/windows/apps/panelHover.js`, `lib/glass.js` | Top bar over full-screen windows |
 | `Main.shellDBusService._extensionsService.GetExtensionInfo` | `lib/engine.js` | Extensions window shows the originals as on |
 | GNOME's `overlay-key` handler, found with `GObject.signal_handler_find` | `modules/drawer.js` | Super key setting does nothing |
 | `Clutter.Effect.vfunc_paint_node`, `Cogl.Framebuffer.blit`, stage `before-paint`/`after-paint` | `lib/glass.js` | Glass is blank or frozen: the hardest one |

@@ -37,17 +37,42 @@ let _periodCheckId = null;
 let _recomputeIdleId = null;
 let _ghostMenu = null;
 let _originalTrackFullscreen = null;
+let _inFullscreenHandler = null;
 
 function _getPanelBox() {
     return Main.layoutManager.panelBox;
 }
 
 function _getPanelHeight() {
-    return Main.panel.height || 40;
+    return _getPanelBox().height || Main.panel.height || 40;
+}
+
+let _unredirectHeld = false;
+
+function _holdUnredirect(hold) {
+    if (hold === _unredirectHeld)
+        return;
+    _unredirectHeld = hold;
+    if (hold)
+        global.compositor.disable_unredirect();
+    else
+        global.compositor.enable_unredirect();
+}
+
+// Whatever a reveal left behind, for when it's cut short.
+function _resetReveal() {
+    _cancelHideTimeout();
+    _cancelPeriodicCheck();
+    _closeGhostMenu();
+    _cancelPanelTransitions();
+    Main.panel.translation_y = 0;
+    _panelRevealed = false;
+    _animating = false;
+    _holdUnredirect(false);
 }
 
 function _cancelPanelTransitions() {
-    _getPanelBox().remove_all_transitions();
+    Main.panel.remove_all_transitions();
 }
 
 function _isMenuOpen() {
@@ -113,9 +138,10 @@ function _scheduleHideAfterDelay(force = false) {
 function _showPanelAnimated() {
     if (!_enabled) return;
     if (_panelRevealed || _animating) return; // Prevent jitter
-    const panelBox = _getPanelBox();
+    const panelBox = Main.panel;
     _cancelPanelTransitions();
     const h = _getPanelHeight();
+    _holdUnredirect(true);
     panelBox.translation_y = -h;
     _setPanelAutoHide(false);
     _animating = true;
@@ -135,7 +161,7 @@ function _showPanelAnimated() {
 function _hidePanelAnimated() {
     if (!_enabled) return;
     if (!_panelRevealed || _animating) return; // Prevent jitter
-    const panelBox = _getPanelBox();
+    const panelBox = Main.panel;
     _cancelPanelTransitions();
     _cancelPeriodicCheck(); // Stop periodic checking
     _animating = true;
@@ -149,6 +175,7 @@ function _hidePanelAnimated() {
             _panelRevealed = false;
             _setPanelAutoHide(true);
             panelBox.translation_y = 0;
+            _holdUnredirect(false);
         },
     });
 }
@@ -182,8 +209,8 @@ function _closeGhostMenu() {
         Main.panel.menuManager.removeMenu(_ghostMenu);
         if (_ghostMenu.actor.get_parent())
             _ghostMenu.actor.get_parent().remove_child(_ghostMenu.actor);
-        if (_ghostMenu._ghostAnchor && _ghostMenu._ghostAnchor.get_parent())
-            _ghostMenu._ghostAnchor.get_parent().remove_child(_ghostMenu._ghostAnchor);
+        _ghostMenu._ghostAnchor?.destroy();
+        _ghostMenu.destroy();
         _ghostMenu = null;
     }
 }
@@ -301,13 +328,10 @@ function _onWindowCreated(display, window) {
 function _recomputeFullscreenState() {
     if (!_enabled) return;
 
-    fullscreenWindows.clear();
-    for (const w of global.workspace_manager.get_active_workspace().list_windows()) {
-        if (w.is_fullscreen())
-            fullscreenWindows.add(w);
-    }
-
-    wsHasFullscreen = fullscreenWindows.size > 0;
+    const wasFullscreen = wsHasFullscreen;
+    wsHasFullscreen = global.display.get_monitor_in_fullscreen(Main.layoutManager.primaryIndex);
+    if (wasFullscreen === wsHasFullscreen && (_panelRevealed || _animating))
+        return;
 
     // Update panel behavior based on fullscreen state and overview visibility
     // Track idle source so it can be cancelled on disable
@@ -318,16 +342,15 @@ function _recomputeFullscreenState() {
     _recomputeIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         if (!_enabled) { _recomputeIdleId = null; return GLib.SOURCE_REMOVE; }
 
-        _panelRevealed = false;
-        _animating = false;
+        _resetReveal();
+        // The layout hides a tracked bar only over a full-screen window, so this
+        // stays set: a gap until this idle ran showed the bar on every entry.
+        _setPanelAutoHide(true);
         // Auto-hide behind the hover area only in fullscreen outside the overview
-        if (!Main.overview.visible && wsHasFullscreen) {
-            _setPanelAutoHide(true);
+        if (!Main.overview.visible && wsHasFullscreen)
             hotCorner.show();
-        } else {
-            _setPanelAutoHide(false);
+        else
             hotCorner.hide();
-        }
         _recomputeIdleId = null;
         return GLib.SOURCE_REMOVE;
     });
@@ -340,7 +363,8 @@ function _onWorkspaceChanged() {
 function _onOverviewShowing() {
     if (!_enabled) return;
     // In overview, always show panel
-    _setPanelAutoHide(false);
+    _resetReveal();
+    _setPanelAutoHide(true);
     hotCorner.hide();
 }
 
@@ -377,6 +401,7 @@ export function enable() {
     workspaceChangedHandler = global.workspace_manager.connect('active-workspace-changed', _onWorkspaceChanged);
     overviewShowingHandler = Main.overview.connect('showing', _onOverviewShowing);
     overviewHiddenHandler = Main.overview.connect('hidden', _onOverviewHidden);
+    _inFullscreenHandler = global.display.connect('in-fullscreen-changed', _recomputeFullscreenState);
 
     // Hide when leaving panel area in fullscreen
     const panelBox = _getPanelBox();
@@ -449,6 +474,10 @@ export function disable() {
         Main.overview.disconnect(overviewHiddenHandler);
         overviewHiddenHandler = null;
     }
+    if (_inFullscreenHandler) {
+        global.display.disconnect(_inFullscreenHandler);
+        _inFullscreenHandler = null;
+    }
     // Disconnect panel box signals
     const panelBox = _getPanelBox();
     if (_panelBoxEnterId) { panelBox.disconnect(_panelBoxEnterId); _panelBoxEnterId = null; }
@@ -476,8 +505,9 @@ export function disable() {
     // Restore panel to its original state - this must be done BEFORE setting _enabled to false
     // but we already set it to false above, so we need to do manual restoration
     _cancelPanelTransitions();
-    panelBox.translation_y = 0;
+    Main.panel.translation_y = 0;
     panelBox.visible = true;
+    _holdUnredirect(false);
 
     // Restore trackFullscreen to its original value, or default to true if not stored
     const lm = Main.layoutManager;

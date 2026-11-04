@@ -441,3 +441,144 @@ if 'cardGone' not in s:
     open(p, 'w').write(s)
 print('lock screen idles guarded')
 PY
+# Windows: the top bar over a full-screen window. Everything here keeps it from
+# jumping: it follows what the compositor calls full-screen rather than any such
+# window on the workspace (one on another monitor, minimized or covered would
+# slide and hide a bar that's simply there), it slides inside its box (the layout
+# reads struts from the box's position, so sliding the box changed the work area
+# on every reveal), by the box's height (margins too), a window scanned out
+# directly would show none of it, and a reveal is taken back cleanly if the window
+# leaves.
+python3 -I - "$v/windows/apps/panelHover.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+if '_holdUnredirect' not in s:
+    def sub(old, new):
+        global s
+        assert old in s, 'panelHover changed upstream: ' + old
+        s = s.replace(old, new, 1)
+    sub("""function _getPanelHeight() {
+    return Main.panel.height || 40;
+}
+""", """function _getPanelHeight() {
+    return _getPanelBox().height || Main.panel.height || 40;
+}
+
+let _unredirectHeld = false;
+
+function _holdUnredirect(hold) {
+    if (hold === _unredirectHeld)
+        return;
+    _unredirectHeld = hold;
+    if (hold)
+        global.compositor.disable_unredirect();
+    else
+        global.compositor.enable_unredirect();
+}
+
+// Whatever a reveal left behind, for when it's cut short.
+function _resetReveal() {
+    _cancelHideTimeout();
+    _cancelPeriodicCheck();
+    _closeGhostMenu();
+    _cancelPanelTransitions();
+    Main.panel.translation_y = 0;
+    _panelRevealed = false;
+    _animating = false;
+    _holdUnredirect(false);
+}
+""")
+    sub("""function _cancelPanelTransitions() {
+    _getPanelBox().remove_all_transitions();
+}""", """function _cancelPanelTransitions() {
+    Main.panel.remove_all_transitions();
+}""")
+    sub("""    const panelBox = _getPanelBox();
+    _cancelPanelTransitions();
+    const h = _getPanelHeight();
+    panelBox.translation_y = -h;
+""", """    const panelBox = Main.panel;
+    _cancelPanelTransitions();
+    const h = _getPanelHeight();
+    _holdUnredirect(true);
+    panelBox.translation_y = -h;
+""")
+    sub("""    const panelBox = _getPanelBox();
+    _cancelPanelTransitions();
+    _cancelPeriodicCheck(); // Stop periodic checking""", """    const panelBox = Main.panel;
+    _cancelPanelTransitions();
+    _cancelPeriodicCheck(); // Stop periodic checking""")
+    sub("""            _setPanelAutoHide(true);
+            panelBox.translation_y = 0;
+        },""", """            _setPanelAutoHide(true);
+            panelBox.translation_y = 0;
+            _holdUnredirect(false);
+        },""")
+    sub("""        if (_ghostMenu._ghostAnchor && _ghostMenu._ghostAnchor.get_parent())
+            _ghostMenu._ghostAnchor.get_parent().remove_child(_ghostMenu._ghostAnchor);
+        _ghostMenu = null;""", """        _ghostMenu._ghostAnchor?.destroy();
+        _ghostMenu.destroy();
+        _ghostMenu = null;""")
+    sub("""let _originalTrackFullscreen = null;
+""", """let _originalTrackFullscreen = null;
+let _inFullscreenHandler = null;
+""")
+    sub("""    fullscreenWindows.clear();
+    for (const w of global.workspace_manager.get_active_workspace().list_windows()) {
+        if (w.is_fullscreen())
+            fullscreenWindows.add(w);
+    }
+
+    wsHasFullscreen = fullscreenWindows.size > 0;
+""", """    const wasFullscreen = wsHasFullscreen;
+    wsHasFullscreen = global.display.get_monitor_in_fullscreen(Main.layoutManager.primaryIndex);
+    if (wasFullscreen === wsHasFullscreen && (_panelRevealed || _animating))
+        return;
+""")
+    sub("""        _panelRevealed = false;
+        _animating = false;
+        // Auto-hide behind the hover area only in fullscreen outside the overview
+        if (!Main.overview.visible && wsHasFullscreen) {
+            _setPanelAutoHide(true);
+            hotCorner.show();
+        } else {
+            _setPanelAutoHide(false);
+            hotCorner.hide();
+        }""", """        _resetReveal();
+        // The layout hides a tracked bar only over a full-screen window, so this
+        // stays set: a gap until this idle ran showed the bar on every entry.
+        _setPanelAutoHide(true);
+        // Auto-hide behind the hover area only in fullscreen outside the overview
+        if (!Main.overview.visible && wsHasFullscreen)
+            hotCorner.show();
+        else
+            hotCorner.hide();""")
+    sub("""    // In overview, always show panel
+    _setPanelAutoHide(false);
+    hotCorner.hide();""", """    // In overview, always show panel
+    _resetReveal();
+    _setPanelAutoHide(true);
+    hotCorner.hide();""")
+    sub("""    overviewHiddenHandler = Main.overview.connect('hidden', _onOverviewHidden);
+""", """    overviewHiddenHandler = Main.overview.connect('hidden', _onOverviewHidden);
+    _inFullscreenHandler = global.display.connect('in-fullscreen-changed', _recomputeFullscreenState);
+""")
+    sub("""    // Disconnect panel box signals
+""", """    if (_inFullscreenHandler) {
+        global.display.disconnect(_inFullscreenHandler);
+        _inFullscreenHandler = null;
+    }
+    // Disconnect panel box signals
+""")
+    sub("""    _cancelPanelTransitions();
+    panelBox.translation_y = 0;
+    panelBox.visible = true;
+""", """    _cancelPanelTransitions();
+    Main.panel.translation_y = 0;
+    panelBox.visible = true;
+    _holdUnredirect(false);
+""")
+    open(p, 'w').write(s)
+print('top bar over full screen fixed')
+PY
