@@ -164,13 +164,21 @@ export class Engine extends Module {
     disable() {
         this._generation = (this._generation ?? 0) + 1;
         this.cleanup();
-        this.cleanupExtra?.();
+        // A half-started engine may fail to stop; the stand-in, stylesheet and
+        // lookup must go regardless, or later engines find a dead one.
+        let failure = null;
+        try {
+            this.cleanupExtra?.();
+        } catch (e) {
+            failure = e;
+        }
         if (this.instance) {
             try {
                 this.instance.disable();
-            } finally {
-                this.instance = null;
+            } catch (e) {
+                failure ??= e;
             }
+            this.instance = null;
         }
         this._unloadStylesheet();
         if (this._standIn) {
@@ -183,8 +191,11 @@ export class Engine extends Module {
         // must not bring the original back.
         // A crash doesn't either: the original can't load next to the engine's
         // types in this session, and the next login retries the module.
-        if (!this.constructor.noHandBack && !this.crashed)
+        // Nor does a failed stop: parts of the engine may still be running.
+        if (!this.constructor.noHandBack && !this.crashed && !failure)
             this._handBack(this.constructor.replaces);
+        if (failure)
+            throw failure;
     }
 
     // First run: copy the original extension's settings (dconf tree) into

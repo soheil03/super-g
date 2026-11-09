@@ -788,11 +788,15 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         app.activate();
     }
 
+    // Only a search has a first hit: with none, Enter would open whatever app
+    // happens to lead the list, with nothing marked.
     _launchFirst() {
+        if (!this._entry.get_text().trim())
+            return;
         const first = this._visible?.[0];
         if (first)
             this._launch(first);
-        else if (this._entry.get_text().trim())
+        else
             this._searchEverywhere();
     }
 

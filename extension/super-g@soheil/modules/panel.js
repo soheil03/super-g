@@ -352,16 +352,23 @@ ${BOXES.map(([id]) => boxRules(`${F} #${id}`, themeFg)).join('\n')}`;
         if (this._tracking)
             return;
         this._tracking = true;
+        // Kept apart from the module's own signals: tracking turns on and off
+        // with the settings, and each start would add another set.
+        const before = this._signals.length;
         this.connect(global.display, 'window-created', (_d, win) => this._watch(win));
         this.connect(global.workspace_manager, 'active-workspace-changed', () => this._queueCheck());
         this.connect(Main.overview, 'showing', () => this._setSolid(false));
         this.connect(Main.overview, 'hidden', () => this._queueCheck());
+        this._trackingSignals = this._signals.splice(before);
         for (const actor of global.get_window_actors())
             this._watch(actor.meta_window);
         this._queueCheck();
     }
 
     _stopTracking() {
+        for (const [obj, id] of this._trackingSignals ?? [])
+            obj.disconnect(id);
+        this._trackingSignals = null;
         for (const [win, ids] of this._windowSignals)
             ids.forEach(id => win.disconnect(id));
         this._windowSignals.clear();

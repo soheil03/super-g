@@ -16,6 +16,8 @@ import * as Gen from '../lib/themeGen.js';
 const IFACE = 'org.gnome.desktop.interface';
 // Settings that end up in gtk.css as colours and shapes.
 const RESTART_KEYS = ['palette', 'accent', 'window-buttons', 'window-radius', 'sidebar-style', 'sidebar-radius', 'sidebar-accent-icons', 'title-weight'];
+// How long a restarting app has to quit before we stop waiting for it.
+const RESTART_WAIT_MS = 30000;
 const THEME = 'Super-G';
 const THEME_DARK = 'Super-G-dark';
 // Earlier versions wrote a separate file and @imported it; snaps copy only
@@ -111,15 +113,23 @@ export default class AppearanceModule extends Module {
         notification.addAction('Restart them', () => {
             for (const app of this._gtk4Apps()) {
                 const pids = [...new Set(app.get_windows().map(w => w.get_pid()))];
-                const id = app.connect('notify::state', () => {
+                // A quit the user cancels (unsaved work) must not leave the app to
+                // be killed and reopened whenever it's closed later on.
+                const forget = () => {
+                    if (id)
+                        app.disconnect(id);
+                    id = 0;
+                };
+                let id = app.connect('notify::state', () => {
                     if (app.state !== Shell.AppState.STOPPED)
                         return;
-                    app.disconnect(id);
+                    forget();
                     // Apps like Files live on as a service with no windows left,
                     // and a new window would come from the same old process.
                     pids.forEach(pid => GLib.spawn_command_line_async(`kill ${pid}`));
                     this.later(`restart-${app.get_id()}`, 400, () => app.activate());
                 });
+                this.later(`restart-wait-${app.get_id()}`, RESTART_WAIT_MS, forget);
                 app.request_quit();
             }
         });

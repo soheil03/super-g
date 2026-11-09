@@ -96,6 +96,12 @@ export class DockMagnifier {
     enable() {
         const manager = this._dockExt.dockManager;
         this._readyId = manager?.connect('docks-ready', () => this._attachAll());
+        // Size and reach are cached for the per-frame path; a change in
+        // preferences has to reach the next wave.
+        this._settingsId = this._module.settings.connect('changed', (_s, key) => {
+            if (key === 'dock-magnify-scale' || key === 'dock-magnify-reach')
+                this._zoomScale = this._zoomReach = undefined;
+        });
         // Pointer events reach the stage however the dock's actors handle them.
         this._stageId = global.stage.connect('motion-event', (_s, event) => {
             const [x, y] = event.get_coords();
@@ -131,6 +137,9 @@ export class DockMagnifier {
 
     disable() {
         Main.overview.disconnectObject(this);
+        if (this._settingsId)
+            this._module.settings.disconnect(this._settingsId);
+        this._settingsId = 0;
         global.stage.disconnect(this._stageId);
         this._stageId = 0;
         global.stage.disconnect(this._clickId);
@@ -367,6 +376,11 @@ export class DockMagnifier {
 
     _detach(state) {
         if (state.gone) {
+            // Its timeline is on the stage and would run on for the dead row,
+            // and an idle poll would start it again.
+            state.active = false;
+            state.timeline?.stop();
+            state.timeline = null;
             this._docks.delete(state.dock);
             return;
         }

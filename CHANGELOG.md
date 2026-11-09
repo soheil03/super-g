@@ -2,6 +2,16 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.3.1 - 2026-11-09
+
+### Fixed
+- Changing the dock's magnification size or reach takes effect right away. It used to wait until the dock was restarted.
+- A dock rebuilt while the pointer was on it (a monitor or dock setting change) no longer leaves its magnification running in the background.
+- Turning the adaptive top bar's solid mode on and off no longer stacks up a copy of its window watching each time.
+- Enter in the drawer's search box with nothing typed no longer opens whichever app is first in the list.
+- "Restart them" after a colour change: an app whose quit you cancel (unsaved work) is no longer killed and reopened later, when you close it yourself.
+- A built-in engine that fails to stop no longer leaves a dead copy of itself for the others to find.
+
 ## 1.3.0 - 2026-11-09
 
 ### Added
