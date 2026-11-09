@@ -582,3 +582,133 @@ let _inFullscreenHandler = null;
     open(p, 'w').write(s)
 print('top bar over full screen fixed')
 PY
+# Windows: minimized windows go into their own dock tiles or into their app's
+# icon (minimize-to-dock off). Upstream turned the whole strip off for the icon
+# mode, which left two bugs: every window kept a null minimize target until Dash
+# to Dock next touched its app (windows shrank to nowhere), and the Trash went
+# back inside Dash to Dock's box, before the Downloads stack. The icon mode now
+# keeps the strip for the Trash alone and hands the targets back to the icons.
+python3 -I - "$v/windows/apps/minimizedToDock.js" "$v/windows/extension.js" <<'PY'
+import sys
+p, e = sys.argv[1], sys.argv[2]
+s = open(p).read()
+if '_handBackGeometry' not in s:
+    def sub(old, new):
+        global s
+        assert old in s, 'minimizedToDock changed upstream: ' + old
+        s = s.replace(old, new, 1)
+    sub("""    applyIconOffset, beforeRedraw, cancelBeforeRedraw, dashEndsWithSeparator, dashOf,
+""", """    applyIconOffset, beforeRedraw, cancelBeforeRedraw, dashEndsWithSeparator, dashOf, dockContainers,
+""")
+    sub("""let enabled = false;
+""", """let enabled = false;
+let parkWindows = true;         // false: windows go into their app icon, the strip keeps the trash
+""")
+    sub("""    if (!_isEligible(win) || windowSignals.has(win))
+        return;
+""", """    if (!parkWindows || !_isEligible(win) || windowSignals.has(win))
+        return;
+""")
+    sub("""function _queueIconGeometry() {
+    if (!enabled)
+        return;
+""", """function _queueIconGeometry() {
+    if (!enabled || !parkWindows)
+        return;
+""")
+    sub("""    const strip = makeStrip(dash, 'kiwi-minimized-strip');
+""", """    const strip = makeStrip(dash, 'kiwi-minimized-strip');
+    // Dash to Dock leaves the minimize targets to a strip that parks windows
+    strip._parksWindows = parkWindows;
+""")
+    sub("""/* ----------------------------------------------------------- entry points */
+""", """let handBackSource = 0;
+
+function _handBackGeometry() {
+    if (handBackSource)
+        GLib.Source.remove(handBackSource);
+    // Low priority: after the dash has laid out without the tiles
+    handBackSource = GLib.idle_add(GLib.PRIORITY_LOW, () => {
+        handBackSource = 0;
+        if (enabled && parkWindows)
+            return GLib.SOURCE_REMOVE;
+        for (const dash of dockContainers().map(dashOf)) {
+            for (const item of dash?._box?.get_children() ?? [])
+                item.child?.updateIconGeometry?.();
+        }
+        return GLib.SOURCE_REMOVE;
+    });
+}
+
+/* ----------------------------------------------------------- entry points */
+""")
+    sub("""export function enable() {
+    if (enabled)
+        return;
+    enabled = true;
+""", """export function enable(park = true) {
+    if (enabled && park === parkWindows)
+        return;
+    if (enabled)
+        disable();
+    enabled = true;
+    parkWindows = park;
+    if (handBackSource) {
+        GLib.Source.remove(handBackSource);
+        handBackSource = 0;
+    }
+    if (!park)
+        _handBackGeometry();
+""")
+    sub("""    windowSignals.clear();
+    restoring.clear();
+    order = [];
+""", """    windowSignals.clear();
+    restoring.clear();
+    order = [];
+    _handBackGeometry();
+""")
+    open(p, 'w').write(s)
+s = open(e).read()
+old = """        if (minimizeToDock) {
+            minimizedToDockEnable();
+        } else {
+            minimizedToDockDisable();
+        }
+"""
+if old in s:
+    s = s.replace(old, """        if (hasDock) {
+            minimizedToDockEnable(minimizeToDock);
+        } else {
+            minimizedToDockDisable();
+        }
+""", 1)
+    open(e, 'w').write(s)
+else:
+    assert 'minimizedToDockEnable(minimizeToDock)' in s, 'kiwi extension.js changed upstream'
+print('minimize into tiles or app icons')
+PY
+# Dock: a window minimizes into its app icon at the icon geometry the dock last
+# set, which only followed an icon moving inside the dash. The dash recentres as
+# icons come and go, leaving every target behind by up to half an icon; refresh
+# them all when the centred slider moves. Not while Kiwi parks minimized windows
+# in their own tiles: it owns the targets then.
+python3 -I - "$v/dock/docking.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = """        this._slider.connect('notify::allocation', () => this._updateStaticBox());
+"""
+new = """        this._slider.connect('notify::allocation', () => {
+            this._updateStaticBox();
+            const tiles = a => a._parksWindows || a.get_children().some(tiles);
+            if (!tiles(this.dash))
+                this.dash.getAppIcons().forEach(icon => icon.updateIconGeometry());
+        });
+"""
+if 'icon.updateIconGeometry()' not in s:
+    assert old in s, 'docking.js changed upstream: slider allocation'
+    s = s.replace(old, new, 1)
+    open(p, 'w').write(s)
+print('minimize targets follow the dock')
+PY

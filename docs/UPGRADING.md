@@ -8,6 +8,7 @@ Add a row each time, and copy the newest one into the README.
 
 | Super G | Ubuntu | GNOME Shell | Mutter | GTK 4 | libadwaita | Session | How it was tested |
 |---|---|---|---|---|---|---|---|
+| 1.3.0 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 100% scale | Headless shell with a copy of the real settings: `tests/integration.js`, both minimize modes from login and switched live, minimize targets read against the icons. Real-desktop check still to do |
 | 1.2.9 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 100% scale | Headless shell with a copy of the real settings: `tests/integration.js`, real pointer, keyboard and touch input for dock and drawer drags, search keys, and a real full-screen window. Real-desktop check still to do |
 | 1.2.8 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell with a copy of the real settings: `tests/integration.js`, simulated module crashes. Real-desktop check still to do |
 | 1.1.0 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell at 100% scale, real keyboard and pointer input. Real-desktop check still to do |

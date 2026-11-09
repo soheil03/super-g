@@ -117,6 +117,8 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - `barOverFullscreen()` (`lib/glass.js`): the bar goes solid through `super-g-panel-fullscreen` and its glass turns off, since tracked glass trails a moving bar by a frame.
 - A non-fixed dock isn't tracked for full screen, so `autohide-in-fullscreen` is all it takes to show over one. A fixed dock is tracked and stays hidden. Test edge pushes with `notify_relative_motion`; absolute motion skips barriers.
 
+- Minimize modes (`minimize-to-dock`): tiles, or into the app icon. The icon mode keeps Kiwi's strip for the Trash alone (`parkWindows` false, after the Downloads stack) and hands minimize targets back to Dash to Dock's icons; the dock refreshes them when its slider moves, except while a strip `_parksWindows`. Check targets with `win.get_icon_geometry()` against the icon.
+
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.
 - Every user-facing choice becomes a setting (user's rule). Show options before building visual pieces.

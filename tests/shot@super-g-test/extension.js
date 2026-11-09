@@ -282,15 +282,17 @@ export default class Camera extends Extension {
         case 'eval': {
             // EVAL holds a JS function body; its JSON result goes to eval.txt.
             let out;
+            // Stopped on a throw too, or its pump outlives the stage at shutdown
+            const pointer = makePointer();
             try {
                 const AsyncFunction = (async () => {}).constructor;
-                const pointer = makePointer();
                 out = JSON.stringify(await new AsyncFunction('Main', 'global', 'pointer', 'shot', 'wait', 'frame',
                     GLib.getenv('EVAL'))(Main, global, pointer, name => shot(`${dir}/${name}.png`), wait,
                     name => frameShot(`${dir}/${name}.png`)), null, 2);
-                pointer.stop();
             } catch (e) {
                 out = `${e}\n${e.stack}`;
+            } finally {
+                pointer.stop();
             }
             GLib.file_set_contents(`${dir}/eval.txt`, out ?? 'undefined');
             return undefined;

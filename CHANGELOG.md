@@ -2,6 +2,17 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.3.0 - 2026-11-09
+
+### Added
+- A choice of where minimized windows go: into the app's icon, or into their own spot in the dock (as before, the default). Windows > Behaviour > Minimize windows into.
+
+### Fixed
+- With minimizing into the dock turned off, windows shrank to nowhere: they had no target until the dock next touched their app. They now fly into their app's icon.
+- Windows minimize to where their icon really is after the dock recentres (an app opening or closing), not up to half an icon off.
+- With minimizing into the dock turned off, the Trash sat before the Downloads stack. It stays at the end now.
+- Test camera: a script that throws no longer leaves its pointer running into shutdown.
+
 ## 1.2.9 - 2026-11-04
 
 ### Added

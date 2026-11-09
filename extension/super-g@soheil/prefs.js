@@ -93,6 +93,19 @@ function enumRow(settings, key, title, {subtitle = '', labels = {}} = {}) {
     return comboRow(settings, key, title, range.map(nick => [nick, pretty(nick)]), {subtitle});
 }
 
+// Two named choices over a boolean key: [label when false, label when true].
+function choiceRow(settings, key, title, [off, on], subtitle = '') {
+    const row = new Adw.ComboRow({title, subtitle, model: Gtk.StringList.new([off, on])});
+    const sync = () => { row.selected = settings.get_boolean(key) ? 1 : 0; };
+    sync();
+    row.connect('notify::selected', () => {
+        if ((row.selected === 1) !== settings.get_boolean(key))
+            settings.set_boolean(key, row.selected === 1);
+    });
+    settings.connect(`changed::${key}`, sync);
+    return track(settings, key, row);
+}
+
 function switchRow(settings, key, title, subtitle = '') {
     const row = new Adw.SwitchRow({title, subtitle});
     settings.bind(key, row, 'active', Gio.SettingsBindFlags.DEFAULT);
@@ -373,7 +386,8 @@ export default class SuperGPrefs extends ExtensionPreferences {
                 switchRow(windows, 'show-tiling-title-menu', 'Tiling in its menu'),
             ]),
             group('Behaviour', [
-                switchRow(windows, 'minimize-to-dock', 'Minimize into the dock'),
+                choiceRow(windows, 'minimize-to-dock', 'Minimize windows into',
+                    ["The app's icon", 'Their own spot in the dock']),
                 switchRow(windows, 'downloads-in-dock', 'Downloads stack in the dock'),
                 switchRow(windows, 'move-window-to-new-workspace', 'Fullscreen windows get their own workspace'),
                 switchRow(windows, 'focus-new-windows', 'Focus new windows'),

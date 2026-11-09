@@ -181,8 +181,8 @@ export default class KiwiExtension extends Extension {
             hideMinimizedWindowsDisable();
         }
 
-        if (minimizeToDock) {
-            minimizedToDockEnable();
+        if (hasDock) {
+            minimizedToDockEnable(minimizeToDock);
         } else {
             minimizedToDockDisable();
         }

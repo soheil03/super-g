@@ -15,7 +15,7 @@ import St from 'gi://St';
 import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {
-    applyIconOffset, beforeRedraw, cancelBeforeRedraw, dashEndsWithSeparator, dashOf,
+    applyIconOffset, beforeRedraw, cancelBeforeRedraw, dashEndsWithSeparator, dashOf, dockContainers,
     dashItemMatchesDock, disconnectAll, dockSettings, isTrashItem, makeDashItem,
     makeDashSeparator, makeStrip, scaleFactor, watchDocks,
 } from './dockUtils.js';
@@ -36,6 +36,7 @@ const TILE_SLOT_TIME = 160;   // ms to open or close the slot along the dock
 const TILE_GROW_TIME = 240;   // ms for the thumbnail itself to grow or shrink
 
 let enabled = false;
+let parkWindows = true;         // false: windows go into their app icon, the strip keeps the trash
 let docks = [];                 // [{ dash, strip, iconSize, signals, tiles, trashItem }]
 let order = [];                 // Meta.Window[], in minimize order (newest last)
 let snapshots = new Map();      // Meta.Window -> { content, width, height }
@@ -90,7 +91,7 @@ function _captureSnapshot(win) {
  * @param win a Meta.Window
  */
 function _trackWindow(win) {
-    if (!_isEligible(win) || windowSignals.has(win))
+    if (!parkWindows || !_isEligible(win) || windowSignals.has(win))
         return;
 
     windowSignals.set(win, [
@@ -669,7 +670,7 @@ function _applyIconGeometry() {
  * stop moving first.
  */
 function _queueIconGeometry() {
-    if (!enabled)
+    if (!enabled || !parkWindows)
         return;
 
     if (sources.geometryUpdate)
@@ -690,6 +691,8 @@ function _attachDock(dockContainer) {
 
     const isHorizontal = dash._isHorizontal ?? true;
     const strip = makeStrip(dash, 'kiwi-minimized-strip');
+    // Dash to Dock leaves the minimize targets to a strip that parks windows
+    strip._parksWindows = parkWindows;
     dash._boxContainer.insert_child_above(strip, dash._box);
 
     const info = {
@@ -757,12 +760,39 @@ function _detachDock(info, removeActors = true) {
     docks = docks.filter(d => d !== info);
 }
 
+let handBackSource = 0;
+
+function _handBackGeometry() {
+    if (handBackSource)
+        GLib.Source.remove(handBackSource);
+    // Low priority: after the dash has laid out without the tiles
+    handBackSource = GLib.idle_add(GLib.PRIORITY_LOW, () => {
+        handBackSource = 0;
+        if (enabled && parkWindows)
+            return GLib.SOURCE_REMOVE;
+        for (const dash of dockContainers().map(dashOf)) {
+            for (const item of dash?._box?.get_children() ?? [])
+                item.child?.updateIconGeometry?.();
+        }
+        return GLib.SOURCE_REMOVE;
+    });
+}
+
 /* ----------------------------------------------------------- entry points */
 
-export function enable() {
-    if (enabled)
+export function enable(park = true) {
+    if (enabled && park === parkWindows)
         return;
+    if (enabled)
+        disable();
     enabled = true;
+    parkWindows = park;
+    if (handBackSource) {
+        GLib.Source.remove(handBackSource);
+        handBackSource = 0;
+    }
+    if (!park)
+        _handBackGeometry();
 
     // Dash-to-Dock cannot take its trash item back while we hold it, so follow
     // the setting to know when the user does not want it any more
@@ -851,6 +881,7 @@ export function disable() {
     windowSignals.clear();
     restoring.clear();
     order = [];
+    _handBackGeometry();
 
     d2dSettings = null;
 }
