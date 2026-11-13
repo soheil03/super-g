@@ -271,10 +271,16 @@ export class DockMagnifier {
                 if (dot._superGFade)
                     continue;
                 dot._superGFade = true;
+                if (dot.constructor.name === 'IndicatorDrawingArea')
+                    continue;
                 // A running dot arrives softly instead of popping in.
                 dot.connect('notify::visible', () => {
                     if (!dot.visible)
                         return;
+                    if (!this._defaultStyle()) {
+                        dot.opacity = 0;
+                        return;
+                    }
                     dot.opacity = 0;
                     dot.ease({opacity: 255, duration: DOT_FADE_MS, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
                 });
@@ -536,13 +542,28 @@ export class DockMagnifier {
         return child?.get_first_child?.() ?? child ?? null;
     }
 
+    // Every style but the GNOME default draws its marks on an area of the icon's
+    // size, which sits inside what grows. It's rotated about its centre for
+    // other sides, so only the bottom dock can pin it to the icon's foot.
+    _isDrawnIndicator(actor) {
+        return actor.constructor.name === 'IndicatorDrawingArea' &&
+            this._docks.size > 0 && [...this._docks.keys()].every(d => d._position === St.Side.BOTTOM);
+    }
+
+    // The default dot is the one the engine hides (opacity) for drawn styles, so
+    // a fade-in there would bring it back beside the drawn one: two indicators.
+    _defaultStyle() {
+        return this._module.instance?.getSettings().get_string('running-indicator-style') === 'DEFAULT';
+    }
+
     // The running indicator keeps its size and place under a grown icon.
     _dots(item) {
         const found = [];
         const walk = actor => {
             for (const child of actor.get_children()) {
                 if (child.has_style_class_name?.('app-grid-running-dot') ||
-                    child.constructor.name.includes('RunningIndicator') || child._isRunningIndicator)
+                    child.constructor.name.includes('RunningIndicator') || child._isRunningIndicator ||
+                    this._isDrawnIndicator(child))
                     found.push(child);
                 else
                     walk(child);

@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.3.4 - 2026-11-13
+
+### Fixed
+- Running-app indicators in every style except "GNOME default" (small dot, dots per window, dashes) showed two marks and sat inside the magnified icon. The hidden default dot was being faded back in beside the drawn one, and the drawn mark grew with the icon. Now there is one mark, at the foot of the dock at its normal size (bottom dock; other sides keep the old placement).
+
 ## 1.3.3 - 2026-11-13
 
 ### Added
