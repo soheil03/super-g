@@ -87,7 +87,7 @@ function makePointer() {
         return GLib.SOURCE_CONTINUE;
     });
     const now = () => GLib.get_monotonic_time();
-    const button = state => device.notify_button(now(), Clutter.BUTTON_PRIMARY, state);
+    const button = (state, which = Clutter.BUTTON_PRIMARY) => device.notify_button(now(), which, state);
     const pointer = {
         async move(x, y) {
             device.notify_absolute_motion(now(), x, y);
@@ -108,11 +108,12 @@ function makePointer() {
             button(Clutter.ButtonState.RELEASED);
             await wait(60);
         },
-        async click(x, y) {
+        // `which`: Clutter.BUTTON_PRIMARY (default) or BUTTON_SECONDARY.
+        async click(x, y, which) {
             await pointer.move(x, y);
-            button(Clutter.ButtonState.PRESSED);
+            button(Clutter.ButtonState.PRESSED, which);
             await wait(60);
-            button(Clutter.ButtonState.RELEASED);
+            button(Clutter.ButtonState.RELEASED, which);
             await wait(250);
         },
         stop: () => {

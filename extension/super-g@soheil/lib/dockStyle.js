@@ -13,6 +13,7 @@ import {LiveStylesheet} from './stylesheet.js';
 import {resolve} from './themeGen.js';
 import {withAlpha} from './color.js';
 import {DockMagnifier} from './dockMagnify.js';
+import {NewApps} from './newApps.js';
 
 const TUNED = `${Files.STATE}/tuned.json`;
 
@@ -77,6 +78,8 @@ export function configureDock(module) {
     module.cleanupExtra = () => {
         module.magnifier?.disable();
         module.magnifier = null;
+        module.newApps?.disable();
+        module.newApps = null;
         sheet.clear();
         appsIcon.unpatch();
     };
@@ -86,6 +89,14 @@ export function configureDock(module) {
         apply();
         module.magnifier = new DockMagnifier(module, appsIcon.dockExt);
         module.magnifier.enable();
+        const redisplay = () => {
+            for (const dock of appsIcon.dockExt.dockManager?._allDocks ?? [])
+                dock.dash?._queueRedisplay();
+        };
+        module.newApps = new NewApps(module, redisplay);
+        module.newApps.enable();
+        module.connect(module.settings, 'changed::dock-new-apps', () => module.newApps?.refresh());
+        module.connect(module.settings, 'changed::dock-new-apps-days', () => module.newApps?.refresh());
     }).catch(e => module.ext.reportError(module.name, e));
 }
 

@@ -728,3 +728,25 @@ if new not in s:
     open(p, 'w').write(s)
 print('softer dash item easing')
 PY
+
+# Dock: newly installed apps lead the list for a few days (lib/newApps.js
+# publishes them; the dock itself knows nothing about the tracker).
+python3 -I - "$v/dock/dash.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = """        this._signalsHandler.removeWithLabel(Labels.SHOW_MOUNTS);
+        if (dockManager.removables) {"""
+new = """        // Super G: new apps first.
+        const fresh = globalThis.superGNewApps?.() ?? [];
+        if (fresh.length)
+            newApps.splice(0, newApps.length, ...fresh, ...newApps.filter(a => !fresh.includes(a)));
+
+        this._signalsHandler.removeWithLabel(Labels.SHOW_MOUNTS);
+        if (dockManager.removables) {"""
+if 'Super G: new apps first' not in s:
+    assert old in s, 'dash.js changed upstream: redisplay'
+    s = s.replace(old, new, 1)
+    open(p, 'w').write(s)
+print('new apps first patched')
+PY

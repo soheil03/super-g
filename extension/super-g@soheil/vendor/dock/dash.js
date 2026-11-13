@@ -845,6 +845,11 @@ export const DockDash = GObject.registerClass({
             });
         }
 
+        // Super G: new apps first.
+        const fresh = globalThis.superGNewApps?.() ?? [];
+        if (fresh.length)
+            newApps.splice(0, newApps.length, ...fresh, ...newApps.filter(a => !fresh.includes(a)));
+
         this._signalsHandler.removeWithLabel(Labels.SHOW_MOUNTS);
         if (dockManager.removables) {
             this._signalsHandler.addWithLabel(Labels.SHOW_MOUNTS,

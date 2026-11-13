@@ -179,7 +179,7 @@
       <summary>Attention speed</summary>
     </key>
     <key name="custom-attention-cycles" type="i">
-      <default>2</default>
+      <default>3</default>
       <range min="1" max="10"/>
       <summary>Cycles played at each attention reminder</summary>
     </key>
@@ -194,7 +194,7 @@
       <summary>Seconds between two attention reminders</summary>
     </key>
     <key name="custom-attention-reminders" type="i">
-      <default>5</default>
+      <default>1</default>
       <range min="1" max="30"/>
       <summary>Reminders before the attention animation stops</summary>
     </key>

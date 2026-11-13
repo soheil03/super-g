@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.3.3 - 2026-11-13
+
+### Added
+- New apps first: an app that gets installed leads the dock (before pinned and running apps) for three days. Dock settings "New apps first" and "Days a new app stays" change that. Apps already installed when you update don't count as new. Right-clicking a dock icon already opens the app menu (new window, pin or unpin, details).
+
 ## 1.3.2 - 2026-11-13
 
 ### Changed
