@@ -255,4 +255,9 @@ export function configureDockMotion(module) {
         setIf(s, 'custom-launch-intensity', 0.45);
         setIf(s, 'custom-launch-repeat', false);
     });
+    // An app asking for attention jumps three times, then rests.
+    onceOnly('dockmotion-attention', () => {
+        setIf(s, 'custom-attention-cycles', 3);
+        setIf(s, 'custom-attention-reminders', 1);
+    });
 }

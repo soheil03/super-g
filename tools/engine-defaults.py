@@ -30,11 +30,11 @@ DEFAULTS = {
     },
     'org.gnome.shell.extensions.super-g.dockmotion.gschema.xml': {
         '/org/gnome/shell/extensions/super-g/dockmotion/': {
-            'custom-attention-cycles': '2',
+            'custom-attention-cycles': '3',
             'custom-attention-intensity': '0.4',
             'custom-attention-interval': '8',
             'custom-attention-peek': 'true',
-            'custom-attention-reminders': '5',
+            'custom-attention-reminders': '1',
             'custom-attention-speed': '0.7',
             'custom-hover-duration': '150',
             'custom-hover-dynamic-spacing': 'true',

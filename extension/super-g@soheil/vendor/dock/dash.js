@@ -76,8 +76,8 @@ class DockDashItemContainer extends Dash.DashItemContainer {
             scale_x: 1,
             scale_y: 1,
             opacity: 255,
-            duration: animate ? DASH_ANIMATION_TIME : 0,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            duration: animate ? DASH_ANIMATION_TIME * 0.8 : 0,
+            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
             onComplete: () => {
                 // when the animation is ended, we simulate
                 // a hover to gain back focus and unblur the

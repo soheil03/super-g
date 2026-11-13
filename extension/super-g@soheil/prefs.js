@@ -345,6 +345,10 @@ export default class SuperGPrefs extends ExtensionPreferences {
                     switchRow(motion, 'custom-launch-enabled', 'Launch animation'),
                     switchRow(motion, 'custom-press-enabled', 'Press animation'),
                     switchRow(motion, 'custom-attention-enabled', 'Attention animation', 'When an app needs you'),
+                    spinRow(motion, 'custom-attention-cycles', 'Attention jumps', {lower: 1, upper: 10, step: 1,
+                        subtitle: 'Jumps each time an app asks for you'}),
+                    spinRow(motion, 'custom-attention-reminders', 'Attention reminders', {lower: 1, upper: 30, step: 1,
+                        subtitle: 'Times the jumps repeat before the icon rests'}),
                 ]),
             ]));
         }

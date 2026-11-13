@@ -712,3 +712,19 @@ if 'icon.updateIconGeometry()' not in s:
     open(p, 'w').write(s)
 print('minimize targets follow the dock')
 PY
+# Dock: icons and the drag placeholder open and close on a softer curve, a
+# little quicker, so a dragged app slides the row instead of snapping it.
+python3 -I - "$v/dock/dash.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = """            duration: animate ? DASH_ANIMATION_TIME : 0,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,"""
+new = """            duration: animate ? DASH_ANIMATION_TIME * 0.8 : 0,
+            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,"""
+if new not in s:
+    assert old in s, 'dash.js changed upstream: show()'
+    s = s.replace(old, new, 1)
+    open(p, 'w').write(s)
+print('softer dash item easing')
+PY

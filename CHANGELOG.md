@@ -2,6 +2,12 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.3.2 - 2026-11-13
+
+### Changed
+- An app asking for attention now jumps three times and rests, instead of ten jumps over a minute. New Dock settings "Attention jumps" and "Attention reminders" change that (existing installs are moved to 3 and 1 once).
+- Dock icons and the drag placeholder slide in and out on a softer, slightly quicker curve, so dragging an app along the dock moves the row more smoothly.
+
 ## 1.3.1 - 2026-11-09
 
 ### Fixed
