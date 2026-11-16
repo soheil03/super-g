@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Newly installed apps: the dock lists them first for a few days. The first
-// time an app is seen is recorded (not read from the .desktop file, whose
-// mtime moves with updates); on the first run every installed app counts as
-// old, so nothing floods the dock.
+// Newly installed apps, shared by the drawer (a "New" section) and, when the
+// user asks for it, the dock. The first time an app is seen is recorded (not
+// read from the .desktop file, whose mtime moves with updates); on the first
+// run every installed app counts as old, so nothing floods either.
 
 import Shell from 'gi://Shell';
 import GLib from 'gi://GLib';
@@ -11,98 +11,120 @@ import * as Files from './files.js';
 
 const FILE = `${Files.STATE}/new-apps.json`;
 const DAY = 86400000;
+// GLib timers overflow past about 24 days.
+const MAX_TIMER_MS = 2 ** 31 - 1;
 
-export class NewApps {
-    constructor(module, onChange) {
-        this._module = module;
-        this._onChange = onChange;
-        this._seen = null;
-        this._expiry = 0;
-    }
+let shared = null;
 
-    enable() {
-        const system = Shell.AppSystem.get_default();
+// One tracker for every user; it lives while anyone holds it.
+export function holdNewApps(settings) {
+    shared ??= new NewApps(settings);
+    shared.users++;
+    return shared;
+}
+
+export function releaseNewApps() {
+    if (!shared || --shared.users > 0)
+        return;
+    shared.destroy();
+    shared = null;
+}
+
+class NewApps {
+    constructor(settings) {
+        this.users = 0;
+        this._settings = settings;
+        this._listeners = new Set();
         const saved = Files.readText(FILE);
-        this._seen = saved ? (JSON.parse(saved).seen ?? {}) : null;
-        this._scan(true);
-        this._id = system.connect('installed-changed', () => this._module.guard(() => this._scan(false)));
-        this._system = system;
-        globalThis.superGNewApps = () => this.apps();
+        try {
+            this._seen = saved ? (JSON.parse(saved).seen ?? {}) : null;
+        } catch {
+            this._seen = null;
+        }
+        this._scan();
+        this._system = Shell.AppSystem.get_default();
+        this._installedId = this._system.connect('installed-changed', () => this._safely(() => this._scan()));
+        this._daysId = settings.connect('changed::new-apps-days', () => this._safely(() => this._changed()));
         this._arm();
     }
 
-    disable() {
-        if (this._id)
-            this._system.disconnect(this._id);
-        this._id = 0;
+    destroy() {
+        this._system.disconnect(this._installedId);
+        this._settings.disconnect(this._daysId);
         if (this._timer)
             GLib.source_remove(this._timer);
         this._timer = 0;
-        delete globalThis.superGNewApps;
+        this._listeners.clear();
     }
 
-    _scan(initial) {
-        const ids = Shell.AppSystem.get_default().get_installed()
-            .filter(a => a.should_show()).map(a => a.get_id());
-        const first = this._seen === null;
-        this._seen ??= {};
-        let changed = false;
-        for (const id of ids) {
-            if (id in this._seen)
-                continue;
-            this._seen[id] = first ? 0 : Date.now();
-            changed = true;
-        }
-        if (changed) {
-            Files.writeText(FILE, JSON.stringify({seen: this._seen}));
-            if (!initial) {
-                this._arm();
-                this._onChange();
-            }
-        }
+    // Called when the list changes: an install, an app ageing out, a new span.
+    subscribe(fn) {
+        this._listeners.add(fn);
+        return () => this._listeners.delete(fn);
     }
 
-    _days() {
-        return this._module.settings.get_int('dock-new-apps-days');
-    }
-
+    // Newest first.
     apps() {
-        const s = this._module.settings;
-        if (!s.get_boolean('dock-new-apps') || !this._seen)
+        if (!this._seen)
             return [];
-        const limit = Date.now() - this._days() * DAY;
+        const since = Date.now() - this._span();
         const system = Shell.AppSystem.get_default();
         return Object.entries(this._seen)
-            .filter(([, t]) => t > limit)
+            .filter(([, t]) => t > since)
             .sort((a, b) => b[1] - a[1])
             .map(([id]) => system.lookup_app(id))
-            .filter(a => a);
+            .filter(app => app && (app.get_app_info()?.should_show?.() ?? true));
     }
 
-    // One timer for the next expiry, so the dock lets go of an app on time
-    // without polling.
+    _safely(fn) {
+        try {
+            fn();
+        } catch (e) {
+            console.error('super-g: new apps', e);
+        }
+    }
+
+    _span() {
+        return this._settings.get_int('new-apps-days') * DAY;
+    }
+
+    _scan() {
+        const ids = Shell.AppSystem.get_default().get_installed()
+            .filter(info => info.should_show()).map(info => info.get_id());
+        const first = this._seen === null;
+        const seen = {...this._seen};
+        const added = ids.filter(id => !(id in seen));
+        for (const id of added)
+            seen[id] = first ? 0 : Date.now();
+        if (!added.length && !first)
+            return;
+        this._seen = seen;
+        Files.writeText(FILE, JSON.stringify({seen}));
+        if (!first && added.length)
+            this._changed();
+    }
+
+    _changed() {
+        this._arm();
+        for (const fn of this._listeners)
+            this._safely(fn);
+    }
+
+    // One timer for the next app to age out, so nothing polls.
     _arm() {
         if (this._timer)
             GLib.source_remove(this._timer);
         this._timer = 0;
-        const span = this._days() * DAY;
-        const times = Object.values(this._seen ?? {}).filter(t => t > Date.now() - span);
-        if (!times.length)
+        const span = this._span();
+        const now = Date.now();
+        const live = Object.values(this._seen ?? {}).filter(t => t > now - span);
+        if (!live.length)
             return;
-        const wait = Math.max(1000, Math.min(...times) + span - Date.now() + 1000);
-        // GLib timers cap near 24 days; 3 days is far below, but a long span isn't.
-        this._timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.min(wait, 2 ** 31 - 1), () => {
+        const wait = Math.max(1000, Math.min(...live) + span - now + 1000);
+        this._timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.min(wait, MAX_TIMER_MS), () => {
             this._timer = 0;
-            this._module.guard(() => {
-                this._onChange();
-                this._arm();
-            });
+            this._safely(() => this._changed());
             return GLib.SOURCE_REMOVE;
         });
-    }
-
-    refresh() {
-        this._arm();
-        this._onChange();
     }
 }

@@ -2,9 +2,11 @@
 // App drawer: a glass popup that grows out of the dock's apps button.
 // Search is the title (type to filter, Enter launches the first hit, Esc
 // closes), category pills filter, "All" shows a row of most-used apps and
-// then one section per category. Styles: dock-popup (default), fullscreen,
-// or overview (GNOME's own app grid, untouched). A tile dragged to the dock
-// pins its app; the drawer steps aside for that.
+// then one section per category; newly installed apps lead in a section of
+// their own. A right click (or the Menu key) opens the app's own menu.
+// Styles: dock-popup (default), fullscreen, or overview (GNOME's own app
+// grid, untouched). A tile dragged to the dock pins its app; the drawer steps
+// aside for that.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -16,6 +18,9 @@ import St from 'gi://St';
 import * as Dash from 'resource:///org/gnome/shell/ui/dash.js';
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
+import {AppMenu} from 'resource:///org/gnome/shell/ui/appMenu.js';
 
 import {Module} from '../lib/module.js';
 import * as Files from '../lib/files.js';
@@ -23,6 +28,7 @@ import {LiveStylesheet} from '../lib/stylesheet.js';
 import {resolve} from '../lib/themeGen.js';
 import {withAlpha} from '../lib/color.js';
 import {GlassLayer, glassStyle, trackPaintingView, untrackPaintingView} from '../lib/glass.js';
+import {holdNewApps, releaseNewApps} from '../lib/newApps.js';
 
 // Desktop-entry categories → drawer sections, first match wins.
 const SECTIONS = [
@@ -88,6 +94,9 @@ export default class DrawerModule extends Module {
                 this._render();
             }
         });
+        this._newApps = holdNewApps(this.settings);
+        this._unsubscribeNew = this._newApps.subscribe(() => this._rerenderOpen());
+        this.connect(this.settings, 'changed::drawer-new-apps', () => this._rerenderOpen());
         this._acceptTilesOnDocks();
         this._hookDocks();
         this._superId = global.display.connect('overlay-key', () => this.guard(() => this._onSuper()));
@@ -277,6 +286,9 @@ export default class DrawerModule extends Module {
             GObject.signal_handler_unblock(global.display, this._overviewHandler);
         this._overviewHandler = 0;
         this._dropTiles();
+        this._unsubscribeNew?.();
+        releaseNewApps();
+        this._newApps = null;
         for (const [button, state] of this._buttons)
             this._unhookButton(button, state);
         this._buttons.clear();
@@ -525,6 +537,8 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             Main.popModal(this._grab);
             this._grab = null;
         }
+        for (const {button} of this._tiles.values())
+            button._superGMenu?.menu.close(BoxPointer.PopupAnimation.NONE);
         const finish = () => {
             // The tiles outlive the drawer they were shown in.
             for (const {button} of this._tiles.values())
@@ -802,6 +816,35 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
 
     /* -------------------------------------------------------- render -- */
 
+    _rerenderOpen() {
+        if (this._open && !this._entry.get_text().trim())
+            this._render();
+    }
+
+    // GNOME's own app menu (windows, actions, pin, details), as in its grid.
+    // It hangs off the tile, outside the drawer, so the drawer's outside-press
+    // catcher never sees its clicks; the menu's grab sits over the drawer's.
+    _popupMenu(button, app) {
+        if (!button._superGMenu) {
+            const menu = new AppMenu(button, St.Side.LEFT, {favoritesSection: true, showSingleWindows: true});
+            menu.setApp(app);
+            const manager = new PopupMenu.PopupMenuManager(button);
+            manager.addMenu(menu);
+            Main.uiGroup.add_child(menu.actor);
+            menu.actor.hide();
+            // Anything chosen leaves the drawer behind.
+            menu.connect('activate', () => this.guard(() => this.close()));
+            menu.connect('open-state-changed', (_m, open) => this.guard(() => {
+                button.set_hover?.(false);
+                if (!open && this._open)
+                    global.stage.set_key_focus(button.mapped ? button : this._entry.clutter_text);
+            }));
+            button._superGMenu = {menu, manager};
+        }
+        const {menu} = button._superGMenu;
+        menu.isOpen ? menu.close() : menu.open(BoxPointer.PopupAnimation.FULL);
+    }
+
     _renderChips() {
         this._chips.destroy_all_children();
         const present = new Set(this._allApps().map(sectionOf));
@@ -856,7 +899,17 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             else
                 this._launch(app);
         });
+        // St.Button only clicks with the first button.
+        button.connect('button-press-event', (_b, event) => {
+            if (event.get_button() !== Clutter.BUTTON_SECONDARY)
+                return Clutter.EVENT_PROPAGATE;
+            this.guard(() => this._popupMenu(button, app));
+            return Clutter.EVENT_STOP;
+        });
+        button.connect('popup-menu', () => this.guard(() => this._popupMenu(button, app)));
         button.connect('destroy', () => {
+            button._superGMenu?.menu.destroy();
+            button._superGMenu = null;
             if (this._tiles.get(key)?.button === button)
                 this._tiles.delete(key);
         });
@@ -933,6 +986,8 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             }
             this._addEverywhere(query, !hits.length);
         } else if (this._section === 'All') {
+            if (this.settings.get_boolean('drawer-new-apps'))
+                add('New', this._newApps.apps().filter(app => all.includes(app)), 'new');
             if (this.settings.get_boolean('app-drawer-suggestions')) {
                 const used = Shell.AppUsage.get_default().get_most_used()
                     .filter(app => all.includes(app)).slice(0, this._columns);

@@ -301,8 +301,7 @@ export default class SuperGPrefs extends ExtensionPreferences {
                     spinRow(dock, 'dash-max-icon-size', 'Icon size', {lower: 24, upper: 96, step: 1}),
                     switchRow(s, 'dock-magnify', 'Magnification', 'Icons grow under the pointer'),
                     switchRow(s, 'dock-launch-bounce', 'Bounce on launch', 'The icon hops while its app starts'),
-                    switchRow(s, 'dock-new-apps', 'New apps first', 'Newly installed apps lead the dock for a few days'),
-                    spinRow(s, 'dock-new-apps-days', 'Days a new app stays', {lower: 1, upper: 30, step: 1}),
+                    switchRow(s, 'dock-new-apps', 'New apps in the dock', 'Newly installed apps also lead the dock while they\'re new'),
                     spinRow(s, 'dock-magnify-scale', 'Magnification size', {lower: 1.1, upper: 2.5, step: 0.05, digits: 2}),
                     spinRow(s, 'dock-magnify-reach', 'Magnification reach', {lower: 1, upper: 5, step: 0.1, digits: 1,
                         subtitle: 'Icons to each side that grow with the pointer'}),
@@ -312,6 +311,8 @@ export default class SuperGPrefs extends ExtensionPreferences {
                 group('App drawer', [
                     comboRow(s, 'app-drawer-style', 'Apps button opens', DRAWER_STYLES),
                     spinRow(s, 'app-drawer-columns', 'Columns', {lower: 4, upper: 10, step: 1}),
+                    switchRow(s, 'drawer-new-apps', 'New apps section', 'Newly installed apps, first in the drawer'),
+                    spinRow(s, 'new-apps-days', 'Days an app counts as new', {lower: 1, upper: 30, step: 1}),
                     switchRow(s, 'app-drawer-suggestions', 'Most-used apps first'),
                 ]),
                 group('Super key', [

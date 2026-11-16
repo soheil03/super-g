@@ -13,7 +13,7 @@ import {LiveStylesheet} from './stylesheet.js';
 import {resolve} from './themeGen.js';
 import {withAlpha} from './color.js';
 import {DockMagnifier} from './dockMagnify.js';
-import {NewApps} from './newApps.js';
+import {holdNewApps, releaseNewApps} from './newApps.js';
 
 const TUNED = `${Files.STATE}/tuned.json`;
 
@@ -78,8 +78,12 @@ export function configureDock(module) {
     module.cleanupExtra = () => {
         module.magnifier?.disable();
         module.magnifier = null;
-        module.newApps?.disable();
-        module.newApps = null;
+        if (module.newApps) {
+            module.newApps.unsubscribe();
+            delete globalThis.superGNewApps;
+            releaseNewApps();
+            module.newApps = null;
+        }
         sheet.clear();
         appsIcon.unpatch();
     };
@@ -93,10 +97,11 @@ export function configureDock(module) {
             for (const dock of appsIcon.dockExt.dockManager?._allDocks ?? [])
                 dock.dash?._queueRedisplay();
         };
-        module.newApps = new NewApps(module, redisplay);
-        module.newApps.enable();
-        module.connect(module.settings, 'changed::dock-new-apps', () => module.newApps?.refresh());
-        module.connect(module.settings, 'changed::dock-new-apps-days', () => module.newApps?.refresh());
+        // New apps lead the dock only when asked: the drawer is their place.
+        const tracker = holdNewApps(module.settings);
+        module.newApps = {unsubscribe: tracker.subscribe(redisplay)};
+        globalThis.superGNewApps = () => module.settings.get_boolean('dock-new-apps') ? tracker.apps() : [];
+        module.connect(module.settings, 'changed::dock-new-apps', redisplay);
     }).catch(e => module.ext.reportError(module.name, e));
 }
 

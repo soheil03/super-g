@@ -132,13 +132,17 @@
       <summary>Bounce a dock icon while its app starts</summary>
     </key>
     <key name="dock-new-apps" type="b">
-      <default>true</default>
-      <summary>List newly installed apps first in the dock</summary>
+      <default>false</default>
+      <summary>Also list newly installed apps first in the dock</summary>
     </key>
-    <key name="dock-new-apps-days" type="i">
+    <key name="drawer-new-apps" type="b">
+      <default>true</default>
+      <summary>Show a New section first in the app drawer</summary>
+    </key>
+    <key name="new-apps-days" type="i">
       <range min="1" max="30"/>
       <default>3</default>
-      <summary>Days a new app stays first in the dock</summary>
+      <summary>Days an app counts as newly installed</summary>
     </key>
     <key name="glass-refraction" type="d">
       <range min="0" max="1"/>

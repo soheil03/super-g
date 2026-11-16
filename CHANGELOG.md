@@ -2,6 +2,15 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.3.5 - 2026-11-16
+
+### Added
+- The app drawer opens with a "New" section: apps installed in the last three days, newest first. App drawer settings "New apps section" and "Days an app counts as new" change that.
+- Right-clicking an app in the drawer (or pressing the Menu key on it) opens its menu: open windows, new window, the app's own actions, pin to dock, app details. Choosing anything closes the drawer; clicking outside closes only the menu.
+
+### Changed
+- New apps no longer lead the dock by default. The Dock setting "New apps in the dock" turns that back on.
+
 ## 1.3.4 - 2026-11-13
 
 ### Fixed
