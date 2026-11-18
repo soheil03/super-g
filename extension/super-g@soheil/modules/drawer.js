@@ -97,6 +97,7 @@ export default class DrawerModule extends Module {
         this._newApps = holdNewApps(this.settings);
         this._unsubscribeNew = this._newApps.subscribe(() => this._rerenderOpen());
         this.connect(this.settings, 'changed::drawer-new-apps', () => this._rerenderOpen());
+        this.connect(this.settings, 'changed::drawer-pinned', () => this._rerenderOpen());
         this._acceptTilesOnDocks();
         this._hookDocks();
         this._superId = global.display.connect('overlay-key', () => this.guard(() => this._onSuper()));
@@ -828,6 +829,13 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
         if (!button._superGMenu) {
             const menu = new AppMenu(button, St.Side.LEFT, {favoritesSection: true, showSingleWindows: true});
             menu.setApp(app);
+            // Pinned apps lead the drawer, beside GNOME's own Pin to Dash.
+            const pinItem = new PopupMenu.PopupMenuItem('');
+            pinItem._superGPin = true;
+            pinItem.connect('activate', () => this.guard(() => this._togglePinned(app)));
+            const items = menu._getMenuItems();
+            const at = items.indexOf(menu._toggleFavoriteItem);
+            menu.addMenuItem(pinItem, at >= 0 ? at + 1 : items.length);
             const manager = new PopupMenu.PopupMenuManager(button);
             manager.addMenu(menu);
             Main.uiGroup.add_child(menu.actor);
@@ -842,7 +850,20 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             button._superGMenu = {menu, manager};
         }
         const {menu} = button._superGMenu;
+        const pinItem = menu._getMenuItems().find(i => i instanceof PopupMenu.PopupMenuItem && i._superGPin);
+        if (pinItem)
+            pinItem.label.text = this._pinned().includes(app.get_id()) ? 'Unpin from Top' : 'Pin to Top';
         menu.isOpen ? menu.close() : menu.open(BoxPointer.PopupAnimation.FULL);
+    }
+
+    _pinned() {
+        return this.settings.get_strv('drawer-pinned');
+    }
+
+    _togglePinned(app) {
+        const id = app.get_id();
+        const pinned = this._pinned();
+        this.settings.set_strv('drawer-pinned', pinned.includes(id) ? pinned.filter(p => p !== id) : [...pinned, id]);
     }
 
     _renderChips() {
@@ -986,6 +1007,8 @@ ${D} .drawer-empty { color: ${withAlpha(c.fg, 0.72)}; font-size: 11pt; padding: 
             }
             this._addEverywhere(query, !hits.length);
         } else if (this._section === 'All') {
+            const byId = new Map(all.map(app => [app.get_id(), app]));
+            add('Pinned', this._pinned().map(id => byId.get(id)).filter(Boolean), 'pinned');
             if (this.settings.get_boolean('drawer-new-apps'))
                 add('New', this._newApps.apps().filter(app => all.includes(app)), 'new');
             if (this.settings.get_boolean('app-drawer-suggestions')) {

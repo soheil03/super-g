@@ -24,7 +24,7 @@ GNOME 51 is declared in `metadata.json` but not tested yet. See the [changelog](
 | Corners | Rounded window corners with smoothing, borders and shadows | [Rounded Window Corners Reborn](https://github.com/flexagoon/rounded-window-corners) |
 | Glass | Live dual Kawase blur (Blur my Shell's passes) of what is really behind menus, dock, top bar, drawer and launcher, with edge refraction after [Liquid Glass](https://github.com/ryohsuke1231/liquid-glass), in five thicknesses or custom; or Liquid, a refracting bevel and lit rim after [liquid-dom](https://github.com/AndrewPrifer/liquid-dom), with one Clear-to-Tinted slider | Super G |
 | Lock screen | Sonoma-style clock and unlock | [WACK](https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen) |
-| App drawer | Popup from the dock, fullscreen or GNOME's overview; search, category pills, most used | Super G |
+| App drawer | Popup from the dock, fullscreen or GNOME's overview; search, category pills, most used, pinned apps on top, new apps, right-click app menu | Super G |
 | Dock | Dock with autohide, intellihide, previews, trash and mounts | [Dash to Dock](https://micheleg.github.io/dash-to-dock/) |
 | Dock motion | Hover, press, launch and attention motion for dock icons | [Flourish](https://github.com/Orsso/flourish) |
 | Windows | App title in the top bar, minimize to dock, keyboard indicator, calendar layout and more | [Kiwi](https://github.com/kem-a/kiwi-kemma) |

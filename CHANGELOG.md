@@ -2,6 +2,14 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.5.0 - 2026-11-18
+
+### Added
+- Pin apps to the top of the app drawer: right-click an app, Pin to Top (Unpin from Top to remove). Pinned apps lead the All view, in the order you pinned them.
+
+### Changed
+- Liquid glass, tuned against Apple's own panels on a vivid backdrop. Big panels (the drawer, menus) blur about 1.6 times wider, so what's behind turns into soft colour fields. In dark mode they dim what's behind by about a third and keep its colour, so white text no longer sits on bright colour. The dock and top bar stay bright and clear. The glow inside the edge is subtler, leaving a crisp rim.
+
 ## 1.4.1 - 2026-11-18
 
 ### Changed

@@ -74,7 +74,7 @@ const float LIQ_DISPERSION = 0.03;
 const float LIQ_SHARP = 0.85;
 const float LIQ_RIM_WIDTH = 1.5;
 const float LIQ_RIM = 0.7;
-const float LIQ_GLOW = 0.08;
+const float LIQ_GLOW = 0.035;
 const float LIQ_SHADE = 0.1;
 const float LIQ_REFLECT = 18.0;
 const vec2 LIQ_LIGHT = vec2(-0.70710678, -0.70710678);
@@ -898,7 +898,7 @@ class SuperGGlassLayer extends St.Widget {
         const s = this._style;
         this.uniforms = {
             size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.liquid ? s.blur * liquidBlurScale(w, h) : s.blur,
-            tint: this._thicken ? [s.tint[0], s.tint[1], s.tint[2], s.tint[3] + (1 - s.tint[3]) * this._thicken] : s.tint, saturation: s.saturation, brightness: s.brightness, rim: s.rim, outline: s.outline, grain: s.grain,
+            tint: this._thicken ? [s.tint[0], s.tint[1], s.tint[2], s.tint[3] + (1 - s.tint[3]) * this._thicken] : s.tint, saturation: s.saturation, brightness: liquidBrightness(s, w, h), rim: s.rim, outline: s.outline, grain: s.grain,
             guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, shadow: this._shadowOn ? s.shadow : null,
         };
         if (this._effect)
@@ -911,9 +911,18 @@ class SuperGGlassLayer extends St.Widget {
 // Liquid glass blurs big panels more: what shows through a drawer or a menu
 // should read as colour, not as ghosts of text, while the dock and the top
 // bar stay clear.
+const liquidSize = (w, h) => Math.min(Math.max((Math.min(w, h) - 60) / 340, 0), 1);
+
 function liquidBlurScale(w, h) {
-    const t = Math.min(Math.max((Math.min(w, h) - 60) / 340, 0), 1);
-    return 1 + t * 1.2;
+    return 1 + liquidSize(w, h) * 2.4;
+}
+
+// Dark liquid glass dims big panels, which carry text over anything; the dock
+// and the top bar stay bright and clear, as Apple's do.
+function liquidBrightness(s, w, h) {
+    if (!s.liquid || !s.lightText)
+        return s.brightness;
+    return 0.9 + (s.brightness - 0.9) * liquidSize(w, h);
 }
 
 // Thickness, as Apple names its materials: how much palette colour the glass
@@ -933,7 +942,7 @@ const isLiquid = settings => settings.get_string('glass-style') === 'liquid';
 function liquidMaterial(settings) {
     const t = settings.get_double('glass-clarity');
     const mix = (a, b) => a + (b - a) * t;
-    return {tint: mix(0.1, 0.62), blur: Math.round(mix(10, 30)), saturation: mix(1.75, 1.4)};
+    return {tint: mix(0.1, 0.62), blur: Math.round(mix(12, 30)), saturation: mix(1.6, 1.35)};
 }
 
 function material(settings) {
@@ -951,7 +960,7 @@ function material(settings) {
 export function glassAlpha(c, settings) {
     const {tint} = material(settings);
     if (isLiquid(settings))
-        return c.dark ? tint * 0.95 : tint * 1.15;
+        return c.dark ? tint * 0.75 : Math.min(tint * 1.3, 0.9);
     return c.dark ? Math.max(tint * 0.95, 0.3) : Math.min(tint * 1.25, 0.92);
 }
 
@@ -962,7 +971,9 @@ export function glassStyle(c, settings) {
     return {
         tint: [r, g, b, glassAlpha(c, settings)],
         saturation,
-        brightness: c.dark ? 0.92 : 1.04,
+        // Apple's dark glass dims what's behind by about a third and keeps its
+        // colour; ours did neither, so white text sat on bright orange.
+        brightness: isLiquid(settings) ? (c.dark ? 0.62 : 1.02) : c.dark ? 0.92 : 1.04,
         rim: c.dark ? 0.12 : 0.26,
         outline: c.dark ? 0.26 : 0.1,
         lightText: c.dark ? 1 : 0,
