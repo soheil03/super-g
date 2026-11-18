@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.4.0 - 2026-11-18
+
+### Added
+- Liquid glass, a new glass style (Appearance → Glass → Style). The edge is a curved bevel that refracts what's behind it, with a faint colour split, and a rim lit from the top left with a weaker one opposite. Ported from [liquid-dom](https://github.com/AndrewPrifer/liquid-dom) (MIT) onto Super G's live blur, with no extra redraws. It has one setting, Look, from Clear to Tinted. Frosted stays the default and keeps its settings.
+
 ## 1.3.6 - 2026-11-18
 
 ### Fixed

@@ -43,6 +43,7 @@ uniform float grain;
 uniform float guard;
 uniform float light_text;
 uniform float lens;
+uniform float liquid;
 
 // Signed distance to a rounded rectangle whose corners are superellipses
 // (exponent 2 = circle, higher = smoother "continuous" corners).
@@ -55,6 +56,30 @@ float roundedBox(vec2 p, vec2 half_size, float r, float n) {
 
 float hash(vec2 p) {
     return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// Liquid glass, after liquid-dom (Andras Prifer, MIT): the edge is a convex
+// squircle bevel and what's behind refracts through it by Snell's law, one IOR
+// per colour channel; a rim lit from the top left, and fainter from the
+// opposite side, picks up a reflection of what's just outside.
+const float LIQ_BEZEL = 14.0;
+const float LIQ_IOR = 1.5;
+const float LIQ_DISPERSION = 0.035;
+const float LIQ_RIM_WIDTH = 1.25;
+const float LIQ_REFLECT = 18.0;
+const vec2 LIQ_LIGHT = vec2(-0.70710678, -0.70710678);
+
+// Bevel height (x) and slope (y) at x = 0 (outline) .. 1 (flat top).
+vec2 liquidProfile(float x) {
+    float u = 1.0 - clamp(x, 0.0, 1.0);
+    float k = max(1.0 - u * u * u * u, 0.0001);
+    return vec2(sqrt(k), min(2.0 * u * u * u / sqrt(k), 11.43));
+}
+
+// Where a ray through the surface lands, in pixels, for one IOR.
+vec2 liquidBend(vec3 normal, float ior, float depth) {
+    vec3 ray = refract(vec3(0.0, 0.0, -1.0), normal, 1.0 / ior);
+    return ray.xy / max(-ray.z, 0.0001) * depth;
 }
 `;
 
@@ -77,7 +102,49 @@ float inside = clamp(0.5 - d / aa, 0.0, 1.0);
 // further in, as a thick curved edge does. Follows the idea of Liquid Glass
 // for GNOME Shell (ryohsuke1231, MIT).
 vec3 rgb = cogl_color_out.rgb;
-if (lens > 0.0) {
+vec3 edge_rgb = rgb;
+float liquid_rim = 0.0;
+if (liquid > 0.5) {
+    vec2 p = px - size * 0.5;
+    float small = min(size.x, size.y);
+    float bezel = min(LIQ_BEZEL, small * 0.4);
+    float inward = max(-d, 0.0);
+    // The outward normal, from a box at least as round as the bevel, so it
+    // turns through the corners instead of folding along the diagonal.
+    float rr = max(radius, bezel);
+    vec2 e = vec2(0.5, 0.0);
+    vec2 n = vec2(
+        roundedBox(p + e.xy, size * 0.5, rr, exponent) - roundedBox(p - e.xy, size * 0.5, rr, exponent),
+        roundedBox(p + e.yx, size * 0.5, rr, exponent) - roundedBox(p - e.yx, size * 0.5, rr, exponent));
+    n = length(n) > 0.0001 ? normalize(n) : vec2(0.0, -1.0);
+    if (inward < bezel) {
+        vec2 profile = liquidProfile(inward / bezel);
+        // A thick slab bends further; small surfaces (the top bar) stay subtle.
+        float depth = (min(90.0, small * 0.9) + profile.x * bezel) * lens;
+        vec3 normal = normalize(vec3(n * profile.y, 1.0));
+        float cap = small * 0.35;
+        vec2 bend_r = liquidBend(normal, LIQ_IOR + LIQ_DISPERSION, depth);
+        vec2 bend_g = liquidBend(normal, LIQ_IOR, depth);
+        vec2 bend_b = liquidBend(normal, max(LIQ_IOR - LIQ_DISPERSION, 1.0001), depth);
+        vec2 to_uv = uv_size / size;
+        vec2 st = cogl_tex_coord_in[0].st;
+        rgb = vec3(
+            texture2D(cogl_sampler0, st + clamp(bend_r, -cap, cap) * to_uv).r,
+            texture2D(cogl_sampler0, st + clamp(bend_g, -cap, cap) * to_uv).g,
+            texture2D(cogl_sampler0, st + clamp(bend_b, -cap, cap) * to_uv).b);
+    }
+    // The lit rim: strongest where the edge faces the light, a weaker one on
+    // the far side, fading inwards across a hairline band.
+    float band = 1.0 - smoothstep(LIQ_RIM_WIDTH, LIQ_RIM_WIDTH + aa, inward);
+    float fade = 1.0 - pow(clamp(inward / LIQ_RIM_WIDTH, 0.0, 1.0), 2.0);
+    float facing = pow(max(dot(n, LIQ_LIGHT), 0.0), 2.0) + 0.6 * pow(max(dot(n, -LIQ_LIGHT), 0.0), 2.0);
+    liquid_rim = clamp(facing * fade, 0.0, 1.0) * band;
+    // A bright reflection from just outside shows on the rim over dark glass.
+    vec3 reflected = texture2D(cogl_sampler0, cogl_tex_coord_in[0].st + n * LIQ_REFLECT * uv_size / size).rgb;
+    float lr = dot(reflected, vec3(0.2126, 0.7152, 0.0722));
+    float lg = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+    edge_rgb = mix(rgb, reflected, smoothstep(0.2, 0.85, lr) * (1.0 - smoothstep(0.35, 0.85, lg)));
+} else if (lens > 0.0) {
     vec2 p = px - size * 0.5;
     float band = min(18.0, min(size.x, size.y) * 0.3);
     // The direction from a rounder box than the surface, so it turns smoothly
@@ -96,9 +163,15 @@ rgb = mix(rgb, tint.rgb, mix(tint.a, max(tint.a, 0.8), clash * guard));
 
 // A fine dark outline keeps the shape readable over light content; a specular
 // rim just inside it, strongest along the top, gives the edge its light.
-float ring = clamp(1.0 - abs(d + 1.5) / 0.9, 0.0, 1.0);
-rgb += ring * rim * mix(0.35, 1.0, 1.0 - uv.y);
-rgb = mix(rgb, vec3(0.0), clamp(1.0 - abs(d + 0.6) / 0.8, 0.0, 1.0) * outline);
+if (liquid > 0.5) {
+    rgb = mix(rgb, edge_rgb, liquid_rim);
+    rgb += liquid_rim * 0.45;
+    rgb = mix(rgb, vec3(0.0), clamp(1.0 - abs(d + 0.4) / 0.6, 0.0, 1.0) * outline * 0.5);
+} else {
+    float ring = clamp(1.0 - abs(d + 1.5) / 0.9, 0.0, 1.0);
+    rgb += ring * rim * mix(0.35, 1.0, 1.0 - uv.y);
+    rgb = mix(rgb, vec3(0.0), clamp(1.0 - abs(d + 0.6) / 0.8, 0.0, 1.0) * outline);
+}
 
 rgb += (hash(px) - 0.5) * grain;
 cogl_color_out = vec4(clamp(rgb, 0.0, 1.0), 1.0) * inside;
@@ -116,7 +189,7 @@ const NO_ROOM = {left: 0, right: 0, top: 0, bottom: 0};
 // Room around the actor the shadow can reach.
 const SHADOW_PAD = 80;
 
-const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens'];
+const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens', 'liquid'];
 
 export const GlassEffect = GObject.registerClass(
 class SuperGGlassEffect extends Shell.GLSLEffect {
@@ -145,6 +218,7 @@ class SuperGGlassEffect extends Shell.GLSLEffect {
         f('guard', [u.guard]);
         f('light_text', [u.lightText]);
         f('lens', [0]);
+        f('liquid', [0]);
         f('grain', [u.grain]);
         this.queue_repaint();
     }
@@ -418,6 +492,7 @@ export const LiveGlassEffect = GObject.registerClass({
         set('guard', u.guard);
         set('light_text', u.lightText);
         set('lens', u.lens);
+        set('liquid', u.liquid ? 1 : 0);
         set('grain', u.grain);
     }
 
@@ -791,7 +866,7 @@ class SuperGGlassLayer extends St.Widget {
         this.uniforms = {
             size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.blur,
             tint: this._thicken ? [s.tint[0], s.tint[1], s.tint[2], s.tint[3] + (1 - s.tint[3]) * this._thicken] : s.tint, saturation: s.saturation, brightness: s.brightness, rim: s.rim, outline: s.outline, grain: s.grain,
-            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, shadow: this._shadowOn ? s.shadow : null,
+            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, shadow: this._shadowOn ? s.shadow : null,
         };
         if (this._effect)
             this._effect.setUniforms(this.uniforms);
@@ -810,7 +885,19 @@ const MATERIALS = {
     'ultra-thick': {tint: 0.84, blur: 56, saturation: 1.3},
 };
 
+const isLiquid = settings => settings.get_string('glass-style') === 'liquid';
+
+// Liquid glass has one control, as on Apple's: clarity, from clear (the bevel
+// and what's behind carry it) to tinted (calmer, for reading).
+function liquidMaterial(settings) {
+    const t = settings.get_double('glass-clarity');
+    const mix = (a, b) => a + (b - a) * t;
+    return {tint: mix(0.1, 0.62), blur: Math.round(mix(10, 30)), saturation: mix(1.75, 1.4)};
+}
+
 function material(settings) {
+    if (isLiquid(settings))
+        return liquidMaterial(settings);
     return MATERIALS[settings.get_string('glass-material')] ?? {
         tint: settings.get_double('glass-tint'),
         blur: settings.get_int('glass-blur'),
@@ -822,6 +909,8 @@ function material(settings) {
 // backdrop than the reverse.
 export function glassAlpha(c, settings) {
     const {tint} = material(settings);
+    if (isLiquid(settings))
+        return c.dark ? tint * 0.95 : tint * 1.15;
     return c.dark ? Math.max(tint * 0.95, 0.3) : Math.min(tint * 1.25, 0.92);
 }
 
@@ -836,7 +925,8 @@ export function glassStyle(c, settings) {
         rim: c.dark ? 0.12 : 0.26,
         outline: c.dark ? 0.26 : 0.1,
         lightText: c.dark ? 1 : 0,
-        lens: settings.get_double('glass-refraction') * 12,
+        lens: isLiquid(settings) ? 1 : settings.get_double('glass-refraction') * 12,
+        liquid: isLiquid(settings),
         shadow: surfaceShadow(settings.get_string('shadow-style'), c.dark),
         grain: 0.012,
         blur,

@@ -122,6 +122,8 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Never keep a `BEFORE_REDRAW` later alive (`return true`): mutter 18 schedules another stage update for it, so an idle shell spins through tens of thousands of empty updates a second (a full core). Per-frame work hangs off `global.stage` `before-update` (glass's `follow`). A sandbox counts this with `before-update`, not `after-paint`, and `pointer.stop()` first: the pointer pump forces frames.
 - Live shell debugging: the user turns on `global.context.unsafe_mode` in Looking Glass, then `gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Eval '<js>'`. Stopping one module (`stateObj._stop(name)`, back with `_sync()`) bisects CPU.
 
+- Liquid style (`glass-style`) lives in the same glass shader behind a `liquid` uniform, ported from liquid-dom's WGSL (`GLASS_SHADER`): squircle bevel profile, Snell refraction per channel, rim specular plus mirrored rim, reflection blend. Constants are fixed (`LIQ_*`); users get only `glass-clarity` (user's call: one Apple-like slider). liquidGL was rejected: snapshot-based and animates its highlight every frame.
+
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.
 - Every user-facing choice becomes a setting (user's rule). Show options before building visual pieces.

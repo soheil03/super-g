@@ -22,7 +22,7 @@ GNOME 51 is declared in `metadata.json` but not tested yet. See the [changelog](
 | Appearance | Palette-driven theme for GTK4/libadwaita, GTK3 and Flatpak apps, plus shell menus, quick settings, calendar, dialogs and switchers. Window button styles, floating sidebar card, corner radius, fonts, animation speed. | Super G |
 | Top bar | Floating, islands or adaptive bar, height, glass, clock format, grouped status pill, hidden accessibility icon, start on the desktop | Super G |
 | Corners | Rounded window corners with smoothing, borders and shadows | [Rounded Window Corners Reborn](https://github.com/flexagoon/rounded-window-corners) |
-| Glass | Live dual Kawase blur (Blur my Shell's passes) of what is really behind menus, dock, top bar, drawer and launcher, with edge refraction after [Liquid Glass](https://github.com/ryohsuke1231/liquid-glass), in five thicknesses or custom | Super G |
+| Glass | Live dual Kawase blur (Blur my Shell's passes) of what is really behind menus, dock, top bar, drawer and launcher, with edge refraction after [Liquid Glass](https://github.com/ryohsuke1231/liquid-glass), in five thicknesses or custom; or Liquid, a refracting bevel and lit rim after [liquid-dom](https://github.com/AndrewPrifer/liquid-dom), with one Clear-to-Tinted slider | Super G |
 | Lock screen | Sonoma-style clock and unlock | [WACK](https://github.com/rinzler69-wastaken/wack-sonoma-lockscreen) |
 | App drawer | Popup from the dock, fullscreen or GNOME's overview; search, category pills, most used | Super G |
 | Dock | Dock with autohide, intellihide, previews, trash and mounts | [Dash to Dock](https://micheleg.github.io/dash-to-dock/) |

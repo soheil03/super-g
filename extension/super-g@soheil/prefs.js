@@ -13,6 +13,7 @@ const SUPER_ACTIONS = [['none', 'Nothing'], ['overview', 'Activities overview'],
     ['dock', 'Dock, then app drawer'], ['drawer', 'App drawer'], ['launcher', 'Launcher']];
 const GLASS_MATERIALS = [['ultra-thin', 'Ultra thin'], ['thin', 'Thin'], ['regular', 'Regular'],
     ['thick', 'Thick'], ['ultra-thick', 'Ultra thick'], ['custom', 'Custom']];
+const GLASS_STYLES = [['frosted', 'Frosted'], ['liquid', 'Liquid']];
 const PALETTES = [['graphite', 'Graphite neutral'], ['catppuccin', 'Catppuccin-tuned'],
     ['stone', 'Warm stone'], ['slate', 'Cool slate']];
 const ACCENTS = [['auto', 'Palette default'], ['blue', 'Blue'], ['lavender', 'Lavender'],
@@ -117,6 +118,26 @@ function spinRow(settings, key, title, {lower, upper, step, digits = 0, subtitle
     row.set({title, subtitle, digits});
     settings.bind(key, row, 'value', Gio.SettingsBindFlags.DEFAULT);
     return track(settings, key, row);
+}
+
+// A slider between two named ends, as Apple's own Clear / Tinted.
+function sliderRow(settings, key, title, [low, high]) {
+    const scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 1, 0.05);
+    scale.set({hexpand: true, draw_value: false, valign: Gtk.Align.CENTER, width_request: 220});
+    scale.add_mark(0, Gtk.PositionType.BOTTOM, low);
+    scale.add_mark(1, Gtk.PositionType.BOTTOM, high);
+    settings.bind(key, scale.adjustment, 'value', Gio.SettingsBindFlags.DEFAULT);
+    const row = new Adw.ActionRow({title});
+    row.add_suffix(scale);
+    return track(settings, key, row);
+}
+
+// Rows that belong to one glass style only.
+function forStyle(settings, style, rows) {
+    const sync = () => rows.forEach(r => (r.visible = settings.get_string('glass-style') === style));
+    settings.connect('changed::glass-style', sync);
+    sync();
+    return rows;
 }
 
 function fontRow(settings, key, title) {
@@ -255,6 +276,9 @@ export default class SuperGPrefs extends ExtensionPreferences {
                 comboRow(s, 'title-weight', 'Title weight', WEIGHTS, {int: true}),
             ], 'Open apps pick up window changes after a restart.'),
             group('Glass', [
+                comboRow(s, 'glass-style', 'Style', GLASS_STYLES, {subtitle: 'Liquid bends what is behind through a curved edge'}),
+                ...forStyle(s, 'liquid', [sliderRow(s, 'glass-clarity', 'Look', ['Clear', 'Tinted'])]),
+                ...forStyle(s, 'frosted', [
                 comboRow(s, 'glass-material', 'Thickness', GLASS_MATERIALS, {subtitle: 'How much the glass hides what is behind it'}),
                 spinRow(s, 'glass-refraction', 'Edge refraction', {lower: 0, upper: 1, step: 0.05, digits: 2,
                     subtitle: 'How much the rim bends what is behind it'}),
@@ -263,6 +287,7 @@ export default class SuperGPrefs extends ExtensionPreferences {
                     subtitle: 'How much palette colour the glass carries'}),
                 spinRow(s, 'glass-saturation', 'Vibrancy', {lower: 0.5, upper: 2.5, step: 0.05, digits: 2}),
                 spinRow(s, 'glass-blur', 'Blur', {lower: 8, upper: 120, step: 2}),
+                ]),
                 ]),
                 switchRow(s, 'glass-overview', 'Blurred overview background'),
             ]),

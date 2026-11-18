@@ -144,6 +144,16 @@
       <default>3</default>
       <summary>Days an app counts as newly installed</summary>
     </key>
+    <key name="glass-style" type="s">
+      <choices><choice value="frosted"/><choice value="liquid"/></choices>
+      <default>'frosted'</default>
+      <summary>Glass style: frosted (blur, tint and thickness), or liquid (a curved edge that refracts what's behind)</summary>
+    </key>
+    <key name="glass-clarity" type="d">
+      <range min="0" max="1"/>
+      <default>0.3</default>
+      <summary>Liquid glass, from clear (0) to tinted (1)</summary>
+    </key>
     <key name="glass-refraction" type="d">
       <range min="0" max="1"/>
       <default>0.5</default>
