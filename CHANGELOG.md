@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.3.6 - 2026-11-18
+
+### Fixed
+- gnome-shell no longer burns a CPU core while the desktop is idle. Glass followed its surfaces with a repeating redraw callback, and GNOME 50's compositor answered it with tens of thousands of empty stage updates a second (up to 98% CPU and half the GPU on a Surface Laptop Studio). Glass now follows on real frames only.
+
 ## 1.3.5 - 2026-11-16
 
 ### Added

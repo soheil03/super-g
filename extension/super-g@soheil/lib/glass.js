@@ -206,6 +206,31 @@ export function untrackPaintingView() {
     }
 }
 
+// Layers follow their surfaces on every stage update. Not with a repeating
+// BEFORE_REDRAW later: mutter 18 schedules a new update for one that stays,
+// so the stage spun through empty updates (tens of thousands a second, a
+// whole core) whenever nothing drew.
+const followers = new Set();
+let followId = 0;
+
+function follow(layer) {
+    followers.add(layer);
+    followId ||= global.stage.connect('before-update', () => {
+        for (const l of followers) {
+            if (l.mapped || l._track)
+                l._sync();
+        }
+    });
+}
+
+function unfollow(layer) {
+    followers.delete(layer);
+    if (!followers.size && followId) {
+        global.stage.disconnect(followId);
+        followId = 0;
+    }
+}
+
 function paintSource(context) {
     if (paintingView) {
         const {x, y} = paintingView.layout;
@@ -549,11 +574,7 @@ class SuperGGlassLayer extends St.Widget {
 
         // Follow our on-screen position every frame while shown; cheap, and
         // it keeps the wallpaper still while menus and the dock move.
-        this._laterId = global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
-            if (this.mapped || this._track)
-                this._sync();
-            return true;
-        });
+        follow(this);
         if (live)
             this.connect('notify::mapped', () => {
                 if (this.mapped)
@@ -656,9 +677,7 @@ class SuperGGlassLayer extends St.Widget {
     }
 
     _teardown() {
-        if (this._laterId)
-            global.compositor.get_laters().remove(this._laterId);
-        this._laterId = 0;
+        unfollow(this);
         if (this._redrawId)
             GLib.source_remove(this._redrawId);
         this._redrawId = 0;

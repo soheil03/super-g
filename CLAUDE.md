@@ -119,6 +119,9 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 
 - Minimize modes (`minimize-to-dock`): tiles, or into the app icon. The icon mode keeps Kiwi's strip for the Trash alone (`parkWindows` false, after the Downloads stack) and hands minimize targets back to Dash to Dock's icons; the dock refreshes them when its slider moves, except while a strip `_parksWindows`. Check targets with `win.get_icon_geometry()` against the icon.
 
+- Never keep a `BEFORE_REDRAW` later alive (`return true`): mutter 18 schedules another stage update for it, so an idle shell spins through tens of thousands of empty updates a second (a full core). Per-frame work hangs off `global.stage` `before-update` (glass's `follow`). A sandbox counts this with `before-update`, not `after-paint`, and `pointer.stop()` first: the pointer pump forces frames.
+- Live shell debugging: the user turns on `global.context.unsafe_mode` in Looking Glass, then `gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell --method org.gnome.Shell.Eval '<js>'`. Stopping one module (`stateObj._stop(name)`, back with `_sync()`) bisects CPU.
+
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.
 - Every user-facing choice becomes a setting (user's rule). Show options before building visual pieces.
