@@ -58,47 +58,28 @@ float hash(vec2 p) {
     return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-vec4 sharpSample(vec2 st) {
-    return texture2D(cogl_sampler0, st);
-}
-
-// Liquid glass, after liquid-dom (Andras Prifer, MIT): the edge is a convex
-// squircle bevel and what's behind refracts through it by Snell's law, one IOR
-// per colour channel; a rim lit from the top left, and fainter from the
-// opposite side, picks up a reflection of what's just outside.
-const float LIQ_BEZEL_MIN = 10.0;
-const float LIQ_BEZEL_MAX = 24.0;
-const float LIQ_DEPTH = 1.6;
-const float LIQ_IOR = 1.5;
-const float LIQ_DISPERSION = 0.03;
-const float LIQ_SHARP = 0.85;
-const float LIQ_RIM_WIDTH = 1.5;
-const float LIQ_RIM = 0.7;
+// Liquid glass, after liquid-dom (Andras Prifer, MIT), tuned against Apple's:
+// a bevel that pulls the blurred material outwards (never folding it over), a
+// slight colour split, a hairline rim lit from the top left and fainter
+// opposite, and a reflection of what's just outside on that rim.
+const float LIQ_BEZEL_MIN = 8.0;
+const float LIQ_BEZEL_MAX = 16.0;
+const float LIQ_PULL = 0.42;
+const float LIQ_DISPERSION = 0.06;
+const float LIQ_RIM_WIDTH = 1.0;
+const float LIQ_RIM = 0.55;
+const float LIQ_RIM_BASE = 0.3;
+const float LIQ_RIM_FAR = 0.55;
 const float LIQ_GLOW = 0.035;
 const float LIQ_SHADE = 0.1;
 const float LIQ_REFLECT = 18.0;
 const vec2 LIQ_LIGHT = vec2(-0.70710678, -0.70710678);
-
-// Bevel height (x) and slope (y) at x = 0 (outline) .. 1 (flat top).
-vec2 liquidProfile(float x) {
-    float u = 1.0 - clamp(x, 0.0, 1.0);
-    float k = max(1.0 - u * u * u * u, 0.0001);
-    return vec2(sqrt(k), min(2.0 * u * u * u / sqrt(k), 11.43));
-}
-
-// Where a ray through the surface lands, in pixels, for one IOR.
-vec2 liquidBend(vec3 normal, float ior, float depth) {
-    vec3 ray = refract(vec3(0.0, 0.0, -1.0), normal, 1.0 / ior);
-    return ray.xy / max(-ray.z, 0.0001) * depth;
-}
 `;
 
 // The live pipeline sets uniforms one float at a time (array uniforms from
 // JS are unreliable on some Mutter versions), so it declares scalars and
 // rebuilds the vectors.
 const LIVE_DECLARATIONS = DECLARATIONS
-    // Layer 1 holds the unblurred copy.
-    .replace('return texture2D(cogl_sampler0, st);', 'return texture2D(cogl_sampler1, st);')
     .replace('uniform vec2 size;', 'uniform float size_x;\nuniform float size_y;\nvec2 size = vec2(0.0);')
     .replace('uniform vec2 uv_origin;', 'uniform float uv_x;\nuniform float uv_y;\nvec2 uv_origin = vec2(0.0);')
     .replace('uniform vec2 uv_size;', 'uniform float uv_w;\nuniform float uv_h;\nvec2 uv_size = vec2(1.0);')
@@ -123,7 +104,7 @@ if (liquid > 0.5) {
     float small = min(size.x, size.y);
     // The bevel grows with the surface, so a big panel gets a real lens edge
     // and the top bar a fine one.
-    float bezel = min(clamp(small * 0.1, LIQ_BEZEL_MIN, LIQ_BEZEL_MAX), small * 0.4);
+    float bezel = min(clamp(small * 0.06, LIQ_BEZEL_MIN, LIQ_BEZEL_MAX), small * 0.4);
     float inward = max(-d, 0.0);
     // The outward normal, from a box at least as round as the bevel, so it
     // turns through the corners instead of folding along the diagonal.
@@ -135,31 +116,30 @@ if (liquid > 0.5) {
     n = length(n) > 0.0001 ? normalize(n) : vec2(0.0, -1.0);
     float x = clamp(inward / bezel, 0.0, 1.0);
     if (inward < bezel) {
-        vec2 profile = liquidProfile(x);
-        // The slab's depth follows the bevel: liquid-dom's fixed 90 px pulled
-        // pixels from far inside a large panel and smeared them along the edge.
-        float depth = (bezel * LIQ_DEPTH + profile.x * bezel) * lens;
-        vec3 normal = normalize(vec3(n * profile.y, 1.0));
-        float cap = bezel * 1.6;
+        // The edge pulls what's behind outwards, as a curved rim does: a point
+        // shows what lies further in. The pull grows as (1 - x)^2 and stays
+        // under half the bevel, so the mapping never folds back on itself: past
+        // that, liquid-dom's Snell depth mirrored text along the edge.
+        float pull = LIQ_PULL * bezel * (1.0 - x) * (1.0 - x) * lens;
         vec2 to_uv = uv_size / size;
         vec2 st = cogl_tex_coord_in[0].st;
-        vec2 sr = st + clamp(liquidBend(normal, LIQ_IOR + LIQ_DISPERSION, depth), -cap, cap) * to_uv;
-        vec2 sg = st + clamp(liquidBend(normal, LIQ_IOR, depth), -cap, cap) * to_uv;
-        vec2 sb = st + clamp(liquidBend(normal, max(LIQ_IOR - LIQ_DISPERSION, 1.0001), depth), -cap, cap) * to_uv;
-        vec3 soft = vec3(texture2D(cogl_sampler0, sr).r, texture2D(cogl_sampler0, sg).g, texture2D(cogl_sampler0, sb).b);
-        // The lens shows what's behind sharp, as real glass does at its edge;
-        // the blur takes over towards the flat middle.
-        vec3 crisp = vec3(sharpSample(sr).r, sharpSample(sg).g, sharpSample(sb).b);
-        rgb = mix(soft, crisp, LIQ_SHARP * pow(1.0 - x, 1.5));
+        vec2 inwards = -n * to_uv;
+        // A slight colour split, red bending least, as glass disperses light.
+        rgb = vec3(
+            texture2D(cogl_sampler0, st + inwards * pull * (1.0 - LIQ_DISPERSION)).r,
+            texture2D(cogl_sampler0, st + inwards * pull).g,
+            texture2D(cogl_sampler0, st + inwards * pull * (1.0 + LIQ_DISPERSION)).b);
     }
     // Light from the top left: a hairline rim, brightest where the edge faces
     // it, fainter opposite and a trace all round, plus a soft glow inside the
     // lit bevel.
-    float band = 1.0 - smoothstep(LIQ_RIM_WIDTH, LIQ_RIM_WIDTH + aa, inward);
-    float fade = 1.0 - pow(clamp(inward / LIQ_RIM_WIDTH, 0.0, 1.0), 2.0);
+    // One even hairline: at least a device pixel wide, feathered by one more.
+    float rim_w = max(LIQ_RIM_WIDTH, aa);
+    float band = 1.0 - smoothstep(rim_w, rim_w + aa, inward);
+    float fade = 1.0 - 0.5 * clamp(inward / rim_w, 0.0, 1.0);
     float lit = max(dot(n, LIQ_LIGHT), 0.0);
     float far = max(dot(n, -LIQ_LIGHT), 0.0);
-    float facing = 0.18 + 0.82 * pow(lit, 1.5) + 0.5 * pow(far, 1.5);
+    float facing = LIQ_RIM_BASE + (1.0 - LIQ_RIM_BASE) * pow(lit, 1.5) + LIQ_RIM_FAR * pow(far, 1.5);
     liquid_rim = clamp(facing * fade, 0.0, 1.0) * band;
     liquid_glow = (1.0 - x) * (1.0 - x) * (0.3 + 0.7 * lit) * step(inward, bezel);
     // The bevel turned from the light is a touch darker, which keeps the edge
@@ -177,7 +157,9 @@ if (liquid > 0.5) {
     // through the corner instead of folding along the diagonal.
     vec2 q = max(abs(p) - size * 0.5 + band, vec2(0.0001));
     float t = clamp(1.0 + d / band, 0.0, 1.0);
-    vec2 pull = -sign(p) * normalize(q) * lens * t * t * t;
+    // Under a third of the band, so the pull never folds what's behind over
+    // (refraction at 1 mirrored text along the edge).
+    vec2 pull = -sign(p) * normalize(q) * min(lens, band * 0.3) * t * t * t;
     rgb = texture2D(cogl_sampler0, cogl_tex_coord_in[0].st + pull / size * uv_size).rgb;
 }
 float luma = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -275,11 +257,6 @@ function shaderTemplates(context) {
     const glass = Cogl.Pipeline.new(context);
     glass.set_layer_filters(0, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
     glass.set_layer_wrap_mode(0, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
-    // The sharp copy for liquid glass's lens; it only feeds the snippet.
-    glass.set_layer_texture(1, Cogl.Texture2D.new_with_size(context, 1, 1));
-    glass.set_layer_combine(1, 'RGBA = REPLACE(PREVIOUS)');
-    glass.set_layer_filters(1, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
-    glass.set_layer_wrap_mode(1, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
     glass.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, LIVE_DECLARATIONS,
         `size = vec2(size_x, size_y);\nuv_origin = vec2(uv_x, uv_y);\nuv_size = vec2(uv_w, uv_h);\ntint = vec4(tint_r, tint_g, tint_b, tint_a);\n${CODE}`));
     templates = {context, glass, shadow: shadowTemplate(context), passes: new Map()};
@@ -434,7 +411,6 @@ export const LiveGlassEffect = GObject.registerClass({
             const templates = shaderTemplates(context);
             this._glass = templates.glass.copy();
             this._glass.set_layer_texture(0, this._up[0].texture);
-            this._glass.set_layer_texture(1, this._down[0].texture);
             const shadow = templates.shadow.copy();
             shadow.set_layer_texture(0, this._up[0].texture);
             this._shadow = new ShadowPainter(shadow);
@@ -592,23 +568,18 @@ export const LiveGlassEffect = GObject.registerClass({
         const clip = paintContext.get_redraw_clip?.();
         let clean = true;
         if (clip) {
-            // Region rectangles don't overlap, so summed intersections tell
-            // whether the redraw covers the whole glass.
+            // The glass, in stage coordinates and rounded outwards, must lie
+            // wholly inside the redraw: the rest of the buffer still holds an
+            // older frame, our own glass included, and copying that froze the
+            // glass on its own past output. Summing rectangles scaled to device
+            // pixels counted their rounded overlaps twice at 133% and passed.
             const {x: ox, y: oy, scale} = source;
-            let covered = 0;
-            const it = new Mtk.RegionIterator();
-            for (it.init(clip); !it.at_end(); it.next()) {
-                const r = it.rectangle;
-                const x1 = Math.max(box.ax1, Math.floor((r.x - ox) * scale));
-                const y1 = Math.max(box.ay1, Math.floor((r.y - oy) * scale));
-                const x2 = Math.min(box.ax2, Math.ceil((r.x + r.width - ox) * scale));
-                const y2 = Math.min(box.ay2, Math.ceil((r.y + r.height - oy) * scale));
-                if (x2 > x1 && y2 > y1)
-                    covered += (x2 - x1) * (y2 - y1);
-            }
-            clean = covered >= (box.ax2 - box.ax1) * (box.ay2 - box.ay1);
+            const x1 = Math.floor(ox + box.ax1 / scale), y1 = Math.floor(oy + box.ay1 / scale);
+            const x2 = Math.ceil(ox + box.ax2 / scale), y2 = Math.ceil(oy + box.ay2 / scale);
+            const overlap = clip.contains_rectangle(new Mtk.Rectangle({x: x1, y: y1, width: x2 - x1, height: y2 - y1}));
+            clean = overlap === Mtk.RegionOverlap.IN;
             // Damage only around the glass (its shadow) needs no new copy.
-            if (!clean && covered > 0)
+            if (overlap === Mtk.RegionOverlap.PART)
                 this._layer.queueFullRedraw();
         }
 

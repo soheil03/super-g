@@ -2,6 +2,15 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.5.1 - 2026-11-18
+
+### Fixed
+- Glass stayed frozen on an old picture (the wallpaper behind a window you had since opened, for example). On a real GPU only the changed part of the screen is redrawn, and the rest of the buffer still holds an older frame, Super G's own glass included. The check for whether a redraw covered the whole glass rounded to 133% and counted overlaps twice, so the glass copied and re-blurred its own past output. It now asks mutter's region directly whether the glass lies inside the redraw. Both Frosted and Liquid styles.
+- Text along a glass edge no longer shows mirrored. Both styles' edge lens could bend harder than the distance it covered and fold what's behind over itself.
+
+### Changed
+- Liquid glass edge, after Apple's: the bevel bends the blurred material rather than mixing in sharp pixels (which made the blur look as if it stopped short of the edge). The bevel is narrower (8 to 16 px), with a fainter colour split and an even hairline rim all round, brightest at the top left.
+
 ## 1.5.0 - 2026-11-18
 
 ### Added
