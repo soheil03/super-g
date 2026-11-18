@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.4.1 - 2026-11-18
+
+### Changed
+- Liquid glass looks closer to Apple's. The curved edge now shows what's behind it sharp, rather than smeared, and bends it by an amount that follows the edge's own width, so large panels no longer streak. Big panels (the drawer, menus) blur more, so text behind them reads as colour instead of ghosts, while the dock and top bar stay clear. The lit rim is brighter, with a soft glow inside the lit edge and a slight shade on the far side, so the edge shows over light windows too.
+
 ## 1.4.0 - 2026-11-18
 
 ### Added

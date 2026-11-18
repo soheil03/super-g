@@ -58,14 +58,24 @@ float hash(vec2 p) {
     return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+vec4 sharpSample(vec2 st) {
+    return texture2D(cogl_sampler0, st);
+}
+
 // Liquid glass, after liquid-dom (Andras Prifer, MIT): the edge is a convex
 // squircle bevel and what's behind refracts through it by Snell's law, one IOR
 // per colour channel; a rim lit from the top left, and fainter from the
 // opposite side, picks up a reflection of what's just outside.
-const float LIQ_BEZEL = 14.0;
+const float LIQ_BEZEL_MIN = 10.0;
+const float LIQ_BEZEL_MAX = 24.0;
+const float LIQ_DEPTH = 1.6;
 const float LIQ_IOR = 1.5;
-const float LIQ_DISPERSION = 0.035;
-const float LIQ_RIM_WIDTH = 1.25;
+const float LIQ_DISPERSION = 0.03;
+const float LIQ_SHARP = 0.85;
+const float LIQ_RIM_WIDTH = 1.5;
+const float LIQ_RIM = 0.7;
+const float LIQ_GLOW = 0.08;
+const float LIQ_SHADE = 0.1;
 const float LIQ_REFLECT = 18.0;
 const vec2 LIQ_LIGHT = vec2(-0.70710678, -0.70710678);
 
@@ -87,6 +97,8 @@ vec2 liquidBend(vec3 normal, float ior, float depth) {
 // JS are unreliable on some Mutter versions), so it declares scalars and
 // rebuilds the vectors.
 const LIVE_DECLARATIONS = DECLARATIONS
+    // Layer 1 holds the unblurred copy.
+    .replace('return texture2D(cogl_sampler0, st);', 'return texture2D(cogl_sampler1, st);')
     .replace('uniform vec2 size;', 'uniform float size_x;\nuniform float size_y;\nvec2 size = vec2(0.0);')
     .replace('uniform vec2 uv_origin;', 'uniform float uv_x;\nuniform float uv_y;\nvec2 uv_origin = vec2(0.0);')
     .replace('uniform vec2 uv_size;', 'uniform float uv_w;\nuniform float uv_h;\nvec2 uv_size = vec2(1.0);')
@@ -104,10 +116,14 @@ float inside = clamp(0.5 - d / aa, 0.0, 1.0);
 vec3 rgb = cogl_color_out.rgb;
 vec3 edge_rgb = rgb;
 float liquid_rim = 0.0;
+float liquid_glow = 0.0;
+float liquid_shade = 0.0;
 if (liquid > 0.5) {
     vec2 p = px - size * 0.5;
     float small = min(size.x, size.y);
-    float bezel = min(LIQ_BEZEL, small * 0.4);
+    // The bevel grows with the surface, so a big panel gets a real lens edge
+    // and the top bar a fine one.
+    float bezel = min(clamp(small * 0.1, LIQ_BEZEL_MIN, LIQ_BEZEL_MAX), small * 0.4);
     float inward = max(-d, 0.0);
     // The outward normal, from a box at least as round as the bevel, so it
     // turns through the corners instead of folding along the diagonal.
@@ -117,28 +133,38 @@ if (liquid > 0.5) {
         roundedBox(p + e.xy, size * 0.5, rr, exponent) - roundedBox(p - e.xy, size * 0.5, rr, exponent),
         roundedBox(p + e.yx, size * 0.5, rr, exponent) - roundedBox(p - e.yx, size * 0.5, rr, exponent));
     n = length(n) > 0.0001 ? normalize(n) : vec2(0.0, -1.0);
+    float x = clamp(inward / bezel, 0.0, 1.0);
     if (inward < bezel) {
-        vec2 profile = liquidProfile(inward / bezel);
-        // A thick slab bends further; small surfaces (the top bar) stay subtle.
-        float depth = (min(90.0, small * 0.9) + profile.x * bezel) * lens;
+        vec2 profile = liquidProfile(x);
+        // The slab's depth follows the bevel: liquid-dom's fixed 90 px pulled
+        // pixels from far inside a large panel and smeared them along the edge.
+        float depth = (bezel * LIQ_DEPTH + profile.x * bezel) * lens;
         vec3 normal = normalize(vec3(n * profile.y, 1.0));
-        float cap = small * 0.35;
-        vec2 bend_r = liquidBend(normal, LIQ_IOR + LIQ_DISPERSION, depth);
-        vec2 bend_g = liquidBend(normal, LIQ_IOR, depth);
-        vec2 bend_b = liquidBend(normal, max(LIQ_IOR - LIQ_DISPERSION, 1.0001), depth);
+        float cap = bezel * 1.6;
         vec2 to_uv = uv_size / size;
         vec2 st = cogl_tex_coord_in[0].st;
-        rgb = vec3(
-            texture2D(cogl_sampler0, st + clamp(bend_r, -cap, cap) * to_uv).r,
-            texture2D(cogl_sampler0, st + clamp(bend_g, -cap, cap) * to_uv).g,
-            texture2D(cogl_sampler0, st + clamp(bend_b, -cap, cap) * to_uv).b);
+        vec2 sr = st + clamp(liquidBend(normal, LIQ_IOR + LIQ_DISPERSION, depth), -cap, cap) * to_uv;
+        vec2 sg = st + clamp(liquidBend(normal, LIQ_IOR, depth), -cap, cap) * to_uv;
+        vec2 sb = st + clamp(liquidBend(normal, max(LIQ_IOR - LIQ_DISPERSION, 1.0001), depth), -cap, cap) * to_uv;
+        vec3 soft = vec3(texture2D(cogl_sampler0, sr).r, texture2D(cogl_sampler0, sg).g, texture2D(cogl_sampler0, sb).b);
+        // The lens shows what's behind sharp, as real glass does at its edge;
+        // the blur takes over towards the flat middle.
+        vec3 crisp = vec3(sharpSample(sr).r, sharpSample(sg).g, sharpSample(sb).b);
+        rgb = mix(soft, crisp, LIQ_SHARP * pow(1.0 - x, 1.5));
     }
-    // The lit rim: strongest where the edge faces the light, a weaker one on
-    // the far side, fading inwards across a hairline band.
+    // Light from the top left: a hairline rim, brightest where the edge faces
+    // it, fainter opposite and a trace all round, plus a soft glow inside the
+    // lit bevel.
     float band = 1.0 - smoothstep(LIQ_RIM_WIDTH, LIQ_RIM_WIDTH + aa, inward);
     float fade = 1.0 - pow(clamp(inward / LIQ_RIM_WIDTH, 0.0, 1.0), 2.0);
-    float facing = pow(max(dot(n, LIQ_LIGHT), 0.0), 2.0) + 0.6 * pow(max(dot(n, -LIQ_LIGHT), 0.0), 2.0);
+    float lit = max(dot(n, LIQ_LIGHT), 0.0);
+    float far = max(dot(n, -LIQ_LIGHT), 0.0);
+    float facing = 0.18 + 0.82 * pow(lit, 1.5) + 0.5 * pow(far, 1.5);
     liquid_rim = clamp(facing * fade, 0.0, 1.0) * band;
+    liquid_glow = (1.0 - x) * (1.0 - x) * (0.3 + 0.7 * lit) * step(inward, bezel);
+    // The bevel turned from the light is a touch darker, which keeps the edge
+    // readable where a white rim can't show (light glass over light windows).
+    liquid_shade = (1.0 - x) * (1.0 - x) * far * step(inward, bezel);
     // A bright reflection from just outside shows on the rim over dark glass.
     vec3 reflected = texture2D(cogl_sampler0, cogl_tex_coord_in[0].st + n * LIQ_REFLECT * uv_size / size).rgb;
     float lr = dot(reflected, vec3(0.2126, 0.7152, 0.0722));
@@ -165,7 +191,8 @@ rgb = mix(rgb, tint.rgb, mix(tint.a, max(tint.a, 0.8), clash * guard));
 // rim just inside it, strongest along the top, gives the edge its light.
 if (liquid > 0.5) {
     rgb = mix(rgb, edge_rgb, liquid_rim);
-    rgb += liquid_rim * 0.45;
+    rgb *= 1.0 - liquid_shade * LIQ_SHADE;
+    rgb += liquid_rim * LIQ_RIM + liquid_glow * LIQ_GLOW;
     rgb = mix(rgb, vec3(0.0), clamp(1.0 - abs(d + 0.4) / 0.6, 0.0, 1.0) * outline * 0.5);
 } else {
     float ring = clamp(1.0 - abs(d + 1.5) / 0.9, 0.0, 1.0);
@@ -248,6 +275,11 @@ function shaderTemplates(context) {
     const glass = Cogl.Pipeline.new(context);
     glass.set_layer_filters(0, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
     glass.set_layer_wrap_mode(0, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
+    // The sharp copy for liquid glass's lens; it only feeds the snippet.
+    glass.set_layer_texture(1, Cogl.Texture2D.new_with_size(context, 1, 1));
+    glass.set_layer_combine(1, 'RGBA = REPLACE(PREVIOUS)');
+    glass.set_layer_filters(1, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
+    glass.set_layer_wrap_mode(1, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
     glass.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, LIVE_DECLARATIONS,
         `size = vec2(size_x, size_y);\nuv_origin = vec2(uv_x, uv_y);\nuv_size = vec2(uv_w, uv_h);\ntint = vec4(tint_r, tint_g, tint_b, tint_a);\n${CODE}`));
     templates = {context, glass, shadow: shadowTemplate(context), passes: new Map()};
@@ -402,6 +434,7 @@ export const LiveGlassEffect = GObject.registerClass({
             const templates = shaderTemplates(context);
             this._glass = templates.glass.copy();
             this._glass.set_layer_texture(0, this._up[0].texture);
+            this._glass.set_layer_texture(1, this._down[0].texture);
             const shadow = templates.shadow.copy();
             shadow.set_layer_texture(0, this._up[0].texture);
             this._shadow = new ShadowPainter(shadow);
@@ -864,7 +897,7 @@ class SuperGGlassLayer extends St.Widget {
         const r = Math.min(radius * exponent / 2, w / 2, h / 2);
         const s = this._style;
         this.uniforms = {
-            size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.blur,
+            size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.liquid ? s.blur * liquidBlurScale(w, h) : s.blur,
             tint: this._thicken ? [s.tint[0], s.tint[1], s.tint[2], s.tint[3] + (1 - s.tint[3]) * this._thicken] : s.tint, saturation: s.saturation, brightness: s.brightness, rim: s.rim, outline: s.outline, grain: s.grain,
             guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, shadow: this._shadowOn ? s.shadow : null,
         };
@@ -874,6 +907,14 @@ class SuperGGlassLayer extends St.Widget {
             this.queue_redraw();
     }
 });
+
+// Liquid glass blurs big panels more: what shows through a drawer or a menu
+// should read as colour, not as ghosts of text, while the dock and the top
+// bar stay clear.
+function liquidBlurScale(w, h) {
+    const t = Math.min(Math.max((Math.min(w, h) - 60) / 340, 0), 1);
+    return 1 + t * 1.2;
+}
 
 // Thickness, as Apple names its materials: how much palette colour the glass
 // carries, how far it blurs, how much colour it lets through.
