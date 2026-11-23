@@ -69,7 +69,9 @@ const WINDOW_LAYERS = {
 };
 const SURFACE_LAYERS = {
     subtle: [6, 12, 0.16, 2, 4, 0.07, 0.5, 1, 0.06],
-    standard: [10, 18, 0.24, 3, 6, 0.1, 0.5, 1, 0.08],
+    // Measured under Apple's floating panels: about 40% darker right below
+    // the edge, back to the backdrop over some 15 px; less at the sides.
+    standard: [14, 20, 0.28, 5, 8, 0.2, 1, 2, 0.12],
     deep: [14, 24, 0.32, 4, 7, 0.12, 0.5, 1.2, 0.1],
 };
 // A dark window on a dark desktop needs more to lift off it.

@@ -71,16 +71,19 @@ const float LIQ_BEZEL_MAX = 12.0;
 const float LIQ_PULL = 0.46;
 const float LIQ_DISPERSION = 0.06;
 const float LIQ_RIM_WIDTH = 1.0;
-const float LIQ_RIM = 0.6;
-const float LIQ_RIM_BASE = 0.22;
-const float LIQ_RIM_FAR = 0.7;
+const float LIQ_RIM = 0.45;
+const float LIQ_RIM_TOP = 0.25;
+const float LIQ_RIM_BOTTOM = 1.0;
 const float LIQ_GLOW = 0.04;
 const float LIQ_SHADE = 0.05;
-const float LIQ_HAIRLINE = 0.2;
+const float LIQ_HAIRLINE = 0.08;
 const float LIQ_CLEAR = 0.45;
-const float LIQ_SHEEN = 0.07;
+const float LIQ_SHEEN = 0.04;
 const float LIQ_REFLECT = 18.0;
-const vec2 LIQ_LIGHT = vec2(-0.70710678, -0.70710678);
+// Light from straight above, as measured on Apple's panels: the top edge
+// lit, the bottom edge brighter still (light carried through the glass),
+// the sides unlit.
+const vec2 LIQ_LIGHT = vec2(0.0, -1.0);
 `;
 
 // The live pipeline sets uniforms one float at a time (array uniforms from
@@ -156,11 +159,12 @@ if (liquid > 0.5) {
     float band = smoothstep(0.25 * aa, aa, inward) * (1.0 - smoothstep(aa + rim_w, 2.0 * aa + rim_w, inward));
     float lit = max(dot(n, LIQ_LIGHT), 0.0);
     float far = max(dot(n, -LIQ_LIGHT), 0.0);
-    float facing = LIQ_RIM_BASE + (1.0 - LIQ_RIM_BASE) * lit * lit + LIQ_RIM_FAR * far * far;
+    float facing = LIQ_RIM_TOP * pow(lit, 4.0) + LIQ_RIM_BOTTOM * pow(far, 4.0);
     liquid_rim = clamp(facing, 0.0, 1.0) * band;
-    liquid_hair = 1.0 - smoothstep(0.0, aa, inward);
+    // Only light glass needs the fine dark edge; Apple's dark glass has none.
+    liquid_hair = (1.0 - smoothstep(0.0, aa, inward)) * (1.0 - light_text);
     // Narrow, and only where the light falls: a wide glow made a thick band.
-    liquid_glow = exp(-inward / 2.0) * lit * lit;
+    liquid_glow = exp(-inward / 2.0) * pow(lit, 4.0);
     // The bevel turned from the light is a touch darker, which keeps the edge
     // readable where a white rim can't show (light glass over light windows).
     liquid_shade = (1.0 - x) * (1.0 - x) * far * step(inward, bezel);
@@ -228,13 +232,10 @@ if (liquid > 0.5) {
     rgb *= 1.0 - liquid_shade * LIQ_SHADE;
     // Screen, not add: the light shows on dark glass and never burns light
     // glass into a flat white band.
-    // A broad reflection, quiet in the middle: a soft sheen under the top
-    // edge and in the lit corner, a faint one in the far corner.
+    // A broad reflection, quiet in the middle: a soft sheen under the top.
     vec2 sq = (uv - vec2(0.5, -0.15)) / vec2(0.9, 0.55);
-    float diag = dot(px, -LIQ_LIGHT) / dot(size, -LIQ_LIGHT);
-    float sheen = 0.6 * (1.0 - smoothstep(0.0, 1.0, length(sq)))
-        + 0.5 * (1.0 - smoothstep(0.0, 0.28, diag)) + 0.15 * smoothstep(0.75, 1.0, diag);
-    vec3 light = vec3(clamp(liquid_rim * LIQ_RIM + liquid_glow * LIQ_GLOW + sheen * LIQ_SHEEN, 0.0, 1.0));
+    float sheen = 1.0 - smoothstep(0.0, 1.0, length(sq));
+    vec3 light = vec3(clamp((liquid_rim * LIQ_RIM + liquid_glow * LIQ_GLOW) * rim + sheen * LIQ_SHEEN, 0.0, 1.0));
     rgb = 1.0 - (1.0 - rgb) * (1.0 - light);
     rgb *= 1.0 - liquid_hair * LIQ_HAIRLINE;
 } else {
@@ -959,7 +960,9 @@ class SuperGGlassLayer extends St.Widget {
         const vibrant = s.liquid && this._chrome;
         this.uniforms = {
             size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.liquid ? liquidBlur(s.blur, k) : s.blur,
-            tint: layerTint(this, s, k), saturation: vibrant ? s.saturation * 1.3 : s.saturation, brightness: liquidBrightness(s, k, vibrant), rim: s.rim, outline: s.outline, grain: s.grain,
+            // Liquid glass reads rim as the specular's strength: faint on the
+            // dock and the bar, which on Apple's show almost none.
+            tint: layerTint(this, s, k), saturation: vibrant ? s.saturation * 1.3 : s.saturation, brightness: liquidBrightness(s, k, vibrant), rim: s.liquid ? (this._chrome ? 0.4 : 1) : s.rim, outline: s.outline, grain: s.grain,
             guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, calm: this._live && s.liquid ? liquidCalm(k, this._chrome) : 0, shadow: this._shadowOn ? s.shadow : null,
         };
         if (this._effect)

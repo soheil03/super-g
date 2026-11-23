@@ -27,6 +27,9 @@ const SHADOW = {
     light: [0.07, 0.09, 0.16, 0.02, 0.035, 0.12, 0.004, 0.008, 0.16],
     dark: [0.07, 0.09, 0.32, 0.02, 0.035, 0.2, 0.004, 0.008, 0.3],
 };
+// The tile's share of the icon box, as Apple's grid: an 824 px tile on a
+// 1024 px canvas. A plate filling the whole box crowded the dock and grids.
+const TILE_SHARE = 0.82;
 const SAMPLE = 48;
 const OPAQUE = 200;
 // Neutral plates, top and bottom of a faint vertical gradient, as Apple's
@@ -211,7 +214,15 @@ export default class IconsModule extends Module {
             return icon;
         const gicon = icon.gicon ?? app.get_icon();
         const look = this._plateLook(this._look(app, gicon), shape);
-        const plate = new IconPlate(icon, size, look);
+        const inner = v => Math.round(v * TILE_SHARE);
+        const plate = new IconPlate(icon, inner(size), look);
+        // Same outer size as the icon it replaces: the rest is margin.
+        const frame = v => {
+            const m = (v - inner(v)) / 2;
+            plate.set({margin_left: Math.floor(m), margin_right: Math.ceil(m), margin_top: Math.floor(m), margin_bottom: Math.ceil(m)});
+            plate.set_size(inner(v), inner(v));
+        };
+        frame(size);
         // The icon follows the size the plate really has: callers resize it.
         // A tile's art is loaded at twice that, for the dock's magnification.
         let shown = 0;
@@ -236,8 +247,8 @@ export default class IconsModule extends Module {
         }
         Object.defineProperty(plate, 'icon_size', {
             configurable: true,
-            get: () => plate.width,
-            set: v => plate.set_size(v, v),
+            get: () => Math.round(plate.width / TILE_SHARE),
+            set: v => frame(v),
         });
         return plate;
     }

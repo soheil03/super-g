@@ -2,6 +2,14 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.12.0 - 2026-11-24
+
+### Changed
+- Glass edges measured against Apple's panels pixel by pixel: light comes from straight above, so only the top edge is lit (faintly) and the bottom edge carries the brighter reflection; the sides get none, and dark glass loses the fine dark outline. The old all-round bright line read as a drawn plastic border.
+- Floating panels cast Apple's deeper drop shadow (about 40% darker right below the edge, fading over some 15 px); the dock casts none, and the dock and the top bar carry only a faint rim, as Apple's do.
+- Icon tiles take 82% of their icon box, as Apple's 824 px tile on a 1024 px canvas: plates filling the whole box crowded the dock and every grid. The drawer's icons grew to keep the same visible size as Apple's apps panel.
+- Drawer, as Apple's apps panel: 34 px corners, darker pill controls, a neutral selected chip instead of an accent one, pure white medium-weight labels, and no focus ring around the search field (the theme's ring was forced with !important).
+
 ## 1.11.0 - 2026-11-24
 
 ### Added

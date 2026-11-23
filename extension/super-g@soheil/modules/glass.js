@@ -445,7 +445,7 @@ export default class GlassModule extends Module {
                 const bg = dock.dash?._background;
                 if (!bg)
                     continue;
-                const glass = new GlassLayer({style: this._style, shapeSource: bg, smoothing: 0.25, guard: 0.35, chrome: true,
+                const glass = new GlassLayer({style: this._style, shapeSource: bg, smoothing: 0.25, guard: 0.35, chrome: true, shadow: false,
                     reach: {left: DOCK_REACH, right: DOCK_REACH, top: DOCK_REACH, bottom: DOCK_REACH}});
                 bg.insert_child_at_index(glass, 0);
                 glass.add_constraint(new Clutter.BindConstraint({
