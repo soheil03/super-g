@@ -233,7 +233,10 @@ ${D} .show-apps .overview-icon, ${D} .show-apps:hover .overview-icon, ${D} .show
   background-color: transparent; box-shadow: none; }
 ${D} .overview-icon { background-color: transparent !important; box-shadow: none; }
 ${D} .overview-tile, ${D} .overview-tile:hover, ${D} .overview-tile:focus { background-color: transparent; }
-${D} .app-grid-running-dot { background-color: ${c.fg}; width: 5px; height: 5px; border-radius: 3px; margin: 0; }
+/* The dock shows the wallpaper dimmed, so a theme-coloured dot vanished on it:
+   white with a dark halo reads on any backdrop, as Apple's. */
+${D} .app-grid-running-dot { background-color: rgba(255,255,255,0.92); width: 5px; height: 5px; border-radius: 3px; margin: 0;
+  box-shadow: 0 0 2px rgba(0,0,0,0.55); }
 ${D} .dash-separator { background-color: ${dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)'} !important; }
 /* The engine sizes its length; the margins must leave the dock's height alone. */
 ${D}.bottom .dash-separator, ${D}.top .dash-separator { width: 1px; margin: 7px 5px; }

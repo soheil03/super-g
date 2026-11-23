@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.12.1 - 2026-11-24
+
+### Fixed
+- Dock running dots are white with a dark halo: the theme's dark dot vanished on the dimmed dock.
+
 ## 1.12.0 - 2026-11-24
 
 ### Changed
