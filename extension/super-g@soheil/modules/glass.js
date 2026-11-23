@@ -145,7 +145,7 @@ export default class GlassModule extends Module {
             return self._origPointerClose.call(this, ...args);
         };
 
-        this._panelGlass = new GlassLayer({style: this._style, shapeSource: Main.panel, track: Main.panel, smoothing: 0, shadow: false, guard: 0});
+        this._panelGlass = new GlassLayer({style: this._style, shapeSource: Main.panel, track: Main.panel, smoothing: 0, shadow: false, guard: 0, chrome: true});
         Main.layoutManager.uiGroup.insert_child_below(this._panelGlass, Main.layoutManager.panelBox);
         this._islands = [];
         this._syncPanelGlass();
@@ -296,7 +296,7 @@ export default class GlassModule extends Module {
             return;
         for (const group of panelIslands()) {
             const glass = new GlassLayer({style: this._style, radius: 999, track: new Island(group),
-                smoothing: 0, shadow: false, guard: 0});
+                smoothing: 0, shadow: false, guard: 0, chrome: true});
             Main.layoutManager.uiGroup.insert_child_below(glass, Main.layoutManager.panelBox);
             this._islands.push(glass);
         }
@@ -445,7 +445,7 @@ export default class GlassModule extends Module {
                 const bg = dock.dash?._background;
                 if (!bg)
                     continue;
-                const glass = new GlassLayer({style: this._style, shapeSource: bg, smoothing: 0.25, guard: 0.35,
+                const glass = new GlassLayer({style: this._style, shapeSource: bg, smoothing: 0.25, guard: 0.35, chrome: true,
                     reach: {left: DOCK_REACH, right: DOCK_REACH, top: DOCK_REACH, bottom: DOCK_REACH}});
                 bg.insert_child_at_index(glass, 0);
                 glass.add_constraint(new Clutter.BindConstraint({

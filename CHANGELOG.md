@@ -2,6 +2,15 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.8.0 - 2026-11-23
+
+### Changed
+- Liquid glass reads by role, not size: everything that carries text in the theme's colour (menus, the calendar, quick settings, notification banners, OSDs, switchers, dialogs, the drawer) always gets the full reading treatment, so small surfaces like a banner no longer show sharp windows behind their text. The dock and the top bar stay clear.
+- Liquid glass material: the brightness squeeze no longer reads as milk; the colour it lifts is given back as vibrancy (clean pale blue glass over a blue backdrop, not lavender grey), and light glass sits a little brighter under text.
+- Liquid glass edge, after Apple's: a specular hairline one device pixel in, brightest facing the light with a second lobe opposite, a soft glow falling off inside the lit bevel, screen-blended so light glass never burns white, and a fine darker edge that outlines the shape over light backdrops.
+- Cards on glass (calendar events, world clocks, weather) are light platters with a fine light edge instead of grey cards.
+- App icons: an icon that already is a tile (a rounded square or circle with one edge colour, like Telegram, GitKraken or a terminal) becomes the shape instead of sitting nested on a second plate; its plate takes its top and bottom edge colours and it fills up to where its corners stay inside. Glyph icons get clean neutral plates (white, graphite in dark mode) instead of tints of their own colour, which read as mud. Plates have a fine edge and a closer, softer shadow.
+
 ## 1.7.0 - 2026-11-23
 
 ### Changed

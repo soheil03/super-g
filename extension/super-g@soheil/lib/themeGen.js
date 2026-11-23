@@ -401,6 +401,12 @@ ${opts.glass ? rule('.notification-banner.super-g-glassed, .notification-banner.
 ${opts.glass ? rule('.notification-banner.super-g-glassed:hover, .notification-banner.super-g-glassed .message:hover', `background-color: ${withAlpha(c.fg, dark ? 0.06 : 0.04)};`) : ''}
 ${rule('.notification-banner .message-title, .notification-banner .message-body', `color: ${c.fg};`)}
 ${rule('.events-button, .world-clocks-button, .weather-button', `border-radius: 16px; background-color: ${tile}; color: ${c.fg};`)}
+${opts.glass
+        // On glass, cards are lighter platters with a fine light edge, as on
+        // Apple's: a grey card darkened the glass under its text.
+        ? rule(['.events-button', '.world-clocks-button', '.weather-button'].map(b => `.super-g-glassed ${b}`).join(', '),
+            `background-color: ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.45)'}; box-shadow: inset 0 0 0 1px ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.6)'};`)
+        : ''}
 
 ${rule('.modal-dialog', 'border-radius: 24px;')}
 ${rule('.modal-dialog-linked-button', 'border-radius: 999px;')}

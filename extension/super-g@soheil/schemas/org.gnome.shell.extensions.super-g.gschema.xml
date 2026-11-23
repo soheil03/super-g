@@ -35,7 +35,7 @@
         <choice value="neutral"/>
       </choices>
       <default>"auto"</default>
-      <summary>Plate colour: taken from each icon, or one neutral tile</summary>
+      <summary>Plate colour: icons that are tiles keep their own colour, or one neutral tile for all</summary>
     </key>
     <key name="icon-scale" type="d">
       <range min="0.5" max="1"/>

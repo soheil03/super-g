@@ -14,7 +14,7 @@ const SUPER_ACTIONS = [['none', 'Nothing'], ['overview', 'Activities overview'],
 const GLASS_MATERIALS = [['ultra-thin', 'Ultra thin'], ['thin', 'Thin'], ['regular', 'Regular'],
     ['thick', 'Thick'], ['ultra-thick', 'Ultra thick'], ['custom', 'Custom']];
 const ICON_SHAPES = [['off', 'As the icon pack draws them'], ['squircle', 'Squircle'], ['circle', 'Circle'], ['rounded', 'Rounded square']];
-const ICON_PLATES = [['auto', 'From each icon'], ['neutral', 'One neutral tile']];
+const ICON_PLATES = [['auto', 'Tiles keep their colour'], ['neutral', 'One neutral tile for all']];
 const GLASS_STYLES = [['frosted', 'Frosted'], ['liquid', 'Liquid']];
 const PALETTES = [['graphite', 'Graphite neutral'], ['catppuccin', 'Catppuccin-tuned'],
     ['stone', 'Warm stone'], ['slate', 'Cool slate']];
@@ -294,7 +294,7 @@ export default class SuperGPrefs extends ExtensionPreferences {
                 switchRow(s, 'glass-overview', 'Blurred overview background'),
             ]),
             group('App icons', [
-                comboRow(s, 'icon-shape', 'Shape', ICON_SHAPES, {subtitle: 'Every app icon on one plate, like Android: squircle as Apple, circle as Google'}),
+                comboRow(s, 'icon-shape', 'Shape', ICON_SHAPES, {subtitle: 'Every app icon takes one shape: squircle as Apple, circle as Google'}),
                 comboRow(s, 'icon-plate', 'Plate colour', ICON_PLATES),
                 spinRow(s, 'icon-scale', 'Icon size on the plate', {lower: 0.5, upper: 1, step: 0.02, digits: 2}),
             ]),

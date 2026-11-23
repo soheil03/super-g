@@ -68,11 +68,13 @@ const float LIQ_BEZEL_MAX = 22.0;
 const float LIQ_PULL = 0.46;
 const float LIQ_DISPERSION = 0.06;
 const float LIQ_RIM_WIDTH = 1.0;
-const float LIQ_RIM = 0.55;
-const float LIQ_RIM_BASE = 0.3;
-const float LIQ_RIM_FAR = 0.55;
-const float LIQ_GLOW = 0.035;
-const float LIQ_SHADE = 0.1;
+const float LIQ_RIM = 0.6;
+const float LIQ_RIM_BASE = 0.22;
+const float LIQ_RIM_FAR = 0.7;
+const float LIQ_GLOW = 0.08;
+const float LIQ_SHADE = 0.12;
+const float LIQ_HAIRLINE = 0.2;
+const float LIQ_VIBRANCE = 0.45;
 const float LIQ_REFLECT = 18.0;
 const vec2 LIQ_LIGHT = vec2(-0.70710678, -0.70710678);
 `;
@@ -100,6 +102,7 @@ vec3 edge_rgb = rgb;
 float liquid_rim = 0.0;
 float liquid_glow = 0.0;
 float liquid_shade = 0.0;
+float liquid_hair = 0.0;
 if (liquid > 0.5) {
     vec2 p = px - size * 0.5;
     float small = min(size.x, size.y);
@@ -131,18 +134,20 @@ if (liquid > 0.5) {
             texture2D(cogl_sampler0, st + inwards * pull).g,
             texture2D(cogl_sampler0, st + inwards * pull * (1.0 + LIQ_DISPERSION)).b);
     }
-    // Light from the top left: a hairline rim, brightest where the edge faces
-    // it, fainter opposite and a trace all round, plus a soft glow inside the
-    // lit bevel.
-    // One even hairline: at least a device pixel wide, feathered by one more.
+    // Light from the top left, as on Apple's: a specular hairline brightest
+    // where the edge faces the light, a second lobe opposite (light carried
+    // through the glass and reflected back) and a trace all round, plus a soft
+    // glow that falls off inside the lit bevel. The hairline sits one device
+    // pixel in, behind a fine darker edge (liquid_hair) that outlines the
+    // shape over light backdrops, where a white rim can't show.
     float rim_w = max(LIQ_RIM_WIDTH, aa);
-    float band = 1.0 - smoothstep(rim_w, rim_w + aa, inward);
-    float fade = 1.0 - 0.5 * clamp(inward / rim_w, 0.0, 1.0);
+    float band = smoothstep(0.25 * aa, aa, inward) * (1.0 - smoothstep(aa + rim_w, 2.0 * aa + rim_w, inward));
     float lit = max(dot(n, LIQ_LIGHT), 0.0);
     float far = max(dot(n, -LIQ_LIGHT), 0.0);
-    float facing = LIQ_RIM_BASE + (1.0 - LIQ_RIM_BASE) * pow(lit, 1.5) + LIQ_RIM_FAR * pow(far, 1.5);
-    liquid_rim = clamp(facing * fade, 0.0, 1.0) * band;
-    liquid_glow = (1.0 - x) * (1.0 - x) * (0.3 + 0.7 * lit) * step(inward, bezel);
+    float facing = LIQ_RIM_BASE + (1.0 - LIQ_RIM_BASE) * lit * lit + LIQ_RIM_FAR * far * far;
+    liquid_rim = clamp(facing, 0.0, 1.0) * band;
+    liquid_hair = 1.0 - smoothstep(0.0, aa, inward);
+    liquid_glow = exp(-inward / max(bezel * 0.3, 2.0)) * (0.15 + 0.85 * lit * lit + 0.45 * far * far);
     // The bevel turned from the light is a touch darker, which keeps the edge
     // readable where a white rim can't show (light glass over light windows).
     liquid_shade = (1.0 - x) * (1.0 - x) * far * step(inward, bezel);
@@ -171,9 +176,13 @@ rgb = mix(vec3(luma), rgb, saturation) * brightness;
 // the dock and the bar a trace. This is what keeps Apple's clear panels legible.
 if (calm > 0.0) {
     float cl = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-    float band = mix(0.68 + 0.3 * cl, 0.05 + 0.3 * cl, light_text);
+    float band = mix(0.74 + 0.24 * cl, 0.05 + 0.3 * cl, light_text);
     rgb += (band - cl) * calm;
     luma = mix(luma, band, calm);
+    // The squeeze lifts every channel alike, which reads as milk: give the
+    // colour back as vibrancy, as Apple's materials do, so a blue backdrop
+    // makes clean pale blue glass instead of lavender grey.
+    rgb = clamp(mix(vec3(luma), rgb, 1.0 + LIQ_VIBRANCE * calm), 0.0, 1.0);
 }
 // Contrast guard: where what's behind fights the theme's text (a dark window
 // under light glass), the tint thickens. Blurred input, so it stays smooth.
@@ -183,10 +192,13 @@ rgb = mix(rgb, tint.rgb, mix(tint.a, max(tint.a, 0.8), clash * guard));
 // A fine dark outline keeps the shape readable over light content; a specular
 // rim just inside it, strongest along the top, gives the edge its light.
 if (liquid > 0.5) {
-    rgb = mix(rgb, edge_rgb, liquid_rim);
+    rgb = mix(rgb, edge_rgb, liquid_rim * 0.6);
     rgb *= 1.0 - liquid_shade * LIQ_SHADE;
-    rgb += liquid_rim * LIQ_RIM + liquid_glow * LIQ_GLOW;
-    rgb = mix(rgb, vec3(0.0), clamp(1.0 - abs(d + 0.4) / 0.6, 0.0, 1.0) * outline * 0.5);
+    // Screen, not add: the light shows on dark glass and never burns light
+    // glass into a flat white band.
+    vec3 light = vec3(clamp(liquid_rim * LIQ_RIM + liquid_glow * LIQ_GLOW, 0.0, 1.0));
+    rgb = 1.0 - (1.0 - rgb) * (1.0 - light);
+    rgb *= 1.0 - liquid_hair * LIQ_HAIRLINE;
 } else {
     float ring = clamp(1.0 - abs(d + 1.5) / 0.9, 0.0, 1.0);
     rgb += ring * rim * mix(0.35, 1.0, 1.0 - uv.y);
@@ -635,8 +647,11 @@ class SuperGGlassLayer extends St.Widget {
     // text picks its colour from the backdrop (the top bar) want none.
     // reach: the most setRoom will ever ask for.
     // thicken: 0-1, how far the tint goes towards solid, for what sits over a dim.
+    // chrome: the dock and the top bar, which carry icons or text that adapts
+    // to the backdrop. They stay clear; everything else carries text in the
+    // theme's colour and gets liquid glass's reading treatment at any size.
     _init({style, shapeSource = null, radius = null, track = null, smoothing = 0.5, live = true, shadow = true, guard = 1,
-        reach = NO_ROOM, thicken = 0}) {
+        reach = NO_ROOM, thicken = 0, chrome = false}) {
         // Only the wallpaper copy is larger than the layer and needs clipping.
         super._init({x_expand: true, y_expand: true, clip_to_allocation: !live, reactive: false});
         this._live = live;
@@ -651,6 +666,7 @@ class SuperGGlassLayer extends St.Widget {
         this.reach = {...NO_ROOM, ...reach};
         this._guard = guard;
         this._thicken = thicken;
+        this._chrome = chrome;
         this.room = {...NO_ROOM};
         this.stretch = {...NO_ROOM};
         this.active = true;
@@ -885,10 +901,11 @@ class SuperGGlassLayer extends St.Widget {
         const exponent = 2 + this._smoothing * 4;
         const r = Math.min(radius * exponent / 2, w / 2, h / 2);
         const s = this._style;
+        const k = this._chrome ? liquidSize(w, h) : 1;
         this.uniforms = {
-            size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.liquid ? liquidBlur(s.blur, w, h) : s.blur,
-            tint: layerTint(this, s, w, h), saturation: s.saturation, brightness: liquidBrightness(s, w, h), rim: s.rim, outline: s.outline, grain: s.grain,
-            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, calm: this._live && s.liquid ? liquidCalm(w, h) : 0, shadow: this._shadowOn ? s.shadow : null,
+            size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.liquid ? liquidBlur(s.blur, k) : s.blur,
+            tint: layerTint(this, s, k), saturation: s.saturation, brightness: liquidBrightness(s, k), rim: s.rim, outline: s.outline, grain: s.grain,
+            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, calm: this._live && s.liquid ? liquidCalm(k) : 0, shadow: this._shadowOn ? s.shadow : null,
         };
         if (this._effect)
             this._effect.setUniforms(this.uniforms);
@@ -897,39 +914,40 @@ class SuperGGlassLayer extends St.Widget {
     }
 });
 
-// Liquid glass blurs big panels more: what shows through a drawer or a menu
-// should read as colour, not as ghosts of text, while the dock and the top
-// bar stay clear.
+// k: how much of liquid glass's reading treatment a surface gets, 1 for
+// anything with text in the theme's colour (menus, banners, the drawer, a
+// small OSD alike: the old size rule left banners clear, with text over
+// whatever was behind), by size for the dock and the top bar.
 // Tint with the thickening for what sits over a dim, and for liquid panels a
-// floor that grows with size: a calm backdrop needs a little body under text.
-function layerTint(layer, s, w, h) {
+// floor: a calm backdrop needs a little body under text.
+function layerTint(layer, s, k) {
     let a = s.tint[3];
     if (layer._thicken)
         a += (1 - a) * layer._thicken;
     if (s.liquid)
-        a = Math.max(a, (s.lightText ? 0.22 : 0.3) * liquidSize(w, h));
+        a = Math.max(a, (s.lightText ? 0.22 : 0.3) * k);
     return [s.tint[0], s.tint[1], s.tint[2], a];
 }
 
 const liquidSize = (w, h) => Math.min(Math.max((Math.min(w, h) - 60) / 340, 0), 1);
 
-// Big panels carry text over anything, so they never go below a real frost,
-// whatever the clarity; the dock and the bar keep the user's setting.
-function liquidBlur(blur, w, h) {
-    const k = liquidSize(w, h);
-    return Math.max(blur * (1 + k * 2.4), 4 + 24 * k);
+// What shows through text-bearing glass should read as colour, never as ghosts
+// of text, so it doesn't go below a real frost whatever the clarity; the dock
+// and the bar keep the user's setting.
+function liquidBlur(blur, k) {
+    return Math.max(blur * (1 + k * 2.4), 4 + 30 * k);
 }
 
-function liquidCalm(w, h) {
-    return 0.1 + 0.8 * liquidSize(w, h);
+function liquidCalm(k) {
+    return 0.1 + 0.8 * k;
 }
 
-// Dark liquid glass dims big panels, which carry text over anything; the dock
-// and the top bar stay bright and clear, as Apple's do.
-function liquidBrightness(s, w, h) {
+// Dark liquid glass dims what carries text; the dock and the top bar stay
+// bright and clear, as Apple's do.
+function liquidBrightness(s, k) {
     if (!s.liquid || !s.lightText)
         return s.brightness;
-    return 0.9 + (s.brightness - 0.9) * liquidSize(w, h);
+    return 0.9 + (s.brightness - 0.9) * k;
 }
 
 // Thickness, as Apple names its materials: how much palette colour the glass

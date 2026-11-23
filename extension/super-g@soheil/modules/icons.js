@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Unified app icons, as Android's adaptive icons: every app icon sits on a
-// plate of one shape (squircle, circle or rounded square), whatever the icon
-// pack draws. One hook, Shell.App.create_icon_texture, so the dock, the drawer,
+// Unified app icons, as Apple's: every app icon takes one shape (squircle,
+// circle or rounded square), whatever the icon pack draws. Icons that are a
+// tile already become the shape; the rest sit on a neutral plate. One hook, Shell.App.create_icon_texture, so the dock, the drawer,
 // the overview grid and the switchers all agree. No shader: plain St, which
 // also keeps this working on GNOME 51.
 
@@ -21,16 +21,29 @@ const SHAPES = {
 };
 const SAMPLE = 48;
 const OPAQUE = 200;
-const NEUTRAL = {light: [244, 244, 247], dark: [58, 58, 64]};
-
-const saturation = ([r, g, b]) => {
-    const max = Math.max(r, g, b);
-    return max === 0 ? 0 : (max - Math.min(r, g, b)) / max;
+// Neutral plates, top and bottom of a faint vertical gradient, as Apple's
+// tiles for icons that bring no background of their own.
+const NEUTRAL = {
+    light: [[255, 255, 255], [238, 240, 244]],
+    dark: [[70, 72, 80], [44, 45, 52]],
 };
+// An edge colour this close (0-255, per channel) along a side counts as one.
+const EVEN = 30;
 
-// What the icon looks like, from a small render: whether it fills its square
-// (then its own colour is the plate, so the corners dissolve) and its
-// strongest colour otherwise.
+const luma = c => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+const average = list => [0, 1, 2].map(j => list.reduce((t, c) => t + c[j], 0) / list.length);
+const spread = list => {
+    const mean = average(list);
+    return Math.max(...list.map(c => Math.max(...[0, 1, 2].map(j => Math.abs(c[j] - mean[j])))));
+};
+const apart = (a, b) => Math.max(...[0, 1, 2].map(j => Math.abs(a[j] - b[j])));
+
+// What the icon looks like, from a small render. A tile is an icon that
+// already is a plate: a rounded square or a circle filling most of its square,
+// whose edge runs one colour along each side (a gradient from top to bottom is
+// fine). It gets drawn large on a plate of its own edge colours, so it takes
+// the shape instead of sitting on a second plate inside the first. Anything
+// else is a glyph, which gets a neutral plate.
 function analyse(pixbuf) {
     const w = pixbuf.get_width();
     const h = pixbuf.get_height();
@@ -41,26 +54,62 @@ function analyse(pixbuf) {
         const i = y * stride + x * n;
         return [px[i], px[i + 1], px[i + 2], n === 4 ? px[i + 3] : 255];
     };
-    const corners = [at(1, 1), at(w - 2, 1), at(1, h - 2), at(w - 2, h - 2)];
-    const full = corners.every(c => c[3] >= OPAQUE);
-    let sum = [0, 0, 0];
-    let weight = 0;
-    for (let y = 0; y < h; y += 2) {
-        for (let x = 0; x < w; x += 2) {
+    let [x1, y1, x2, y2, opaque] = [w, h, -1, -1, 0];
+    const glyph = [];
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
             const c = at(x, y);
             if (c[3] < OPAQUE)
                 continue;
-            // Vivid pixels speak for a glyph; greys and near blacks barely.
-            const s = saturation(c);
-            const k = full ? 1 : 0.05 + s * s * (Math.max(c[0], c[1], c[2]) / 255);
-            sum = sum.map((t, j) => t + c[j] * k);
-            weight += k;
+            opaque++;
+            x1 = Math.min(x1, x);
+            y1 = Math.min(y1, y);
+            x2 = Math.max(x2, x);
+            y2 = Math.max(y2, y);
+            if ((x + y) % 3 === 0)
+                glyph.push(c);
         }
     }
-    if (!weight)
-        return {full, rgb: null, vivid: 0};
-    const rgb = sum.map(t => Math.round(t / weight));
-    return {full, rgb, vivid: saturation(rgb)};
+    if (x2 < 0)
+        return {tile: null, glyphLuma: 0.5};
+    const glyphLuma = luma(average(glyph));
+    const bw = x2 - x1 + 1, bh = y2 - y1 + 1;
+    const coverage = opaque / (bw * bh);
+    const extent = Math.max(bw, bh) / Math.max(w, h);
+    if (Math.abs(bw - bh) > 0.08 * Math.max(bw, bh) || extent < 0.7 || coverage < 0.74)
+        return {tile: null, glyphLuma};
+    // A ring just inside the shape, on the middle of each side.
+    const inset = Math.max(1, Math.round(bw * 0.05));
+    const side = (fx, fy) => {
+        const out = [];
+        for (let t = 0.3; t <= 0.7; t += 0.05) {
+            const [x, y] = fx(t), c = at(Math.round(x), Math.round(y));
+            if (c[3] >= OPAQUE)
+                out.push(c);
+        }
+        return out;
+    };
+    const top = side(t => [x1 + t * bw, y1 + inset]);
+    const bottom = side(t => [x1 + t * bw, y2 - inset]);
+    const left = side(t => [x1 + inset, y1 + t * bh]);
+    const right = side(t => [x2 - inset, y1 + t * bh]);
+    if ([top, bottom, left, right].some(l => l.length < 5 || spread(l) > EVEN))
+        return {tile: null, glyphLuma};
+    const [ct, cb, cl, cr] = [top, bottom, left, right].map(average);
+    const middle = ct.map((v, j) => (v + cb[j]) / 2);
+    if (apart(cl, cr) > EVEN || apart(cl, middle) > 1.4 * EVEN)
+        return {tile: null, glyphLuma};
+    // The tile's own corner radius, as a part of its size, from how much of
+    // its square it covers: a circle 0.5, a square 0.
+    const radius = Math.min(0.5, Math.sqrt(Math.max(0, 1 - coverage) / (4 - Math.PI)));
+    return {tile: {top: ct.map(Math.round), bottom: cb.map(Math.round), extent, radius}, glyphLuma};
+}
+
+// How much of the plate a tile may fill: as much as keeps its corners inside
+// the plate's rounded ones, so nothing pokes out at the diagonal.
+function tileFill(plateRadius, tileRadius) {
+    const margin = Math.max(0.015, (plateRadius - tileRadius) * (Math.SQRT2 - 1) / Math.SQRT2);
+    return 1 - 2 * margin;
 }
 
 export default class IconsModule extends Module {
@@ -96,12 +145,12 @@ export default class IconsModule extends Module {
         return St.Settings.get().color_scheme === St.SystemColorScheme.PREFER_DARK;
     }
 
-    // The plate's colour for an app, remembered per icon.
+    // The plate's look for an app, remembered per icon.
     _look(app, gicon) {
         const key = app.get_id();
         if (this._looks.has(key))
             return this._looks.get(key);
-        let look = {full: false, rgb: null, vivid: 0};
+        let look = {tile: null, glyphLuma: 0.5};
         try {
             const pixbuf = this._theme.lookup_by_gicon(gicon, SAMPLE, 0)?.load_icon();
             if (pixbuf) {
@@ -116,26 +165,22 @@ export default class IconsModule extends Module {
         return look;
     }
 
-    // The plate's colour as [top, bottom] of a soft gradient, Apple style: a
-    // full-bleed icon keeps its own colour (so its corners dissolve), a glyph
-    // gets a calm plate in which it stands out, never its own colour (an orange
-    // glyph on orange vanishes).
-    _plateColours(look) {
+    // Plate gradient, edge and how much of it the icon fills. A tile keeps its
+    // own edge colours, so its edge vanishes into the plate. A glyph gets a
+    // neutral plate, never a tint of its own colour: those read as mud (brown
+    // under Chrome, olive under a calculator). A dark glyph keeps a light plate
+    // in dark mode, or it is lost.
+    _plateLook(look, radius) {
         const dark = this._dark;
-        const shade = (c, k) => c.map(v => Math.max(0, Math.min(255, Math.round(v + (k > 0 ? (255 - v) * k : v * k)))));
-        const mix = (a, c, t) => a.map((v, i) => Math.round(v + (c[i] - v) * t));
-        const lumaOf = c => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
-        let base;
-        if (look.full && look.rgb && this.settings.get_string('icon-plate') !== 'neutral') {
-            return [shade(look.rgb, 0.05), shade(look.rgb, -0.05)];
-        } else if (look.rgb && look.vivid >= 0.25 && this.settings.get_string('icon-plate') !== 'neutral') {
-            base = dark ? mix([44, 44, 50], look.rgb, 0.22) : mix([252, 252, 254], look.rgb, 0.1);
-        } else {
-            // A dark glyph needs a light plate even in dark mode, or it is lost.
-            const glyphDark = look.rgb && lumaOf(look.rgb) < 0.35;
-            base = dark && !glyphDark ? NEUTRAL.dark : NEUTRAL.light;
+        const tile = this.settings.get_string('icon-plate') !== 'neutral' ? look.tile : null;
+        if (tile) {
+            const fill = Math.min(tileFill(radius, tile.radius) / tile.extent, 1.15);
+            return {top: tile.top, bottom: tile.bottom, fill, edge: 'rgba(255, 255, 255, 0.16)'};
         }
-        return [shade(base, dark ? 0.06 : 0.0), shade(base, dark ? -0.1 : -0.05)];
+        const lightPlate = !dark || look.glyphLuma < 0.3;
+        const [top, bottom] = lightPlate ? NEUTRAL.light : NEUTRAL.dark;
+        return {top, bottom, fill: this.settings.get_double('icon-scale'),
+            edge: lightPlate ? 'rgba(0, 0, 0, 0.07)' : 'rgba(255, 255, 255, 0.09)'};
     }
 
     _wrap(app, icon, size) {
@@ -143,9 +188,8 @@ export default class IconsModule extends Module {
         if (!radius || !icon || size < 16)
             return icon;
         const look = this._look(app, icon.gicon ?? app.get_icon());
-        // A full-bleed icon already is a plate: it can fill more of this one.
-        const fill = Math.min(this.settings.get_double('icon-scale') * (look.full ? 1.08 : 1), 1);
-        const [top, bottom] = this._plateColours(look);
+        const {top, bottom, fill, edge} = this._plateLook(look, radius);
+        const shadow = this._dark ? 0.32 : 0.16;
         icon.set({x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
         const plate = new St.Bin({
             style_class: 'super-g-icon-plate',
@@ -163,11 +207,12 @@ export default class IconsModule extends Module {
                 return;
             shown = w;
             icon.icon_size = Math.round(w * fill);
-            // A fine light edge would need a second shadow, which St lacks: the
-            // gradient and one soft drop shadow carry the depth, as on Apple's.
+            // The gradient, a fine edge (light on colour, dark on white) and
+            // one soft, close shadow carry the depth, as on Apple's tiles.
             plate.set_style(`background-gradient-direction: vertical; background-gradient-start: rgb(${top.join(', ')}); `
                 + `background-gradient-end: rgb(${bottom.join(', ')}); border-radius: ${Math.round(w * radius)}px; `
-                + `box-shadow: 0 ${Math.max(1, Math.round(w * 0.03))}px ${Math.max(2, Math.round(w * 0.07))}px rgba(0, 0, 0, 0.2);`);
+                + `border: 1px solid ${edge}; `
+                + `box-shadow: 0 ${Math.max(1, Math.round(w * 0.025))}px ${Math.max(2, Math.round(w * 0.06))}px rgba(0, 0, 0, ${shadow});`);
         };
         fit();
         plate.connect('notify::width', fit);

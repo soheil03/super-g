@@ -137,3 +137,6 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Porting to a new GNOME or Ubuntu: follow `docs/UPGRADING.md`, and add any new private shell name you depend on to its table.
 - Public at github.com/soheil03/super-g. README shots in `docs/screenshots/` come from a sandbox without CLONE, so they hold no personal data: keep it that way.
 - Before an extensions.gnome.org submission: a neutral uuid, and review its rules on bundled code.
+
+- Liquid glass reading treatment (blur floor, calm, tint floor) goes by role: `GlassLayer({chrome: true})` (dock, top bar, islands) scales it by size, everything else gets all of it. Calm is followed by vibrancy (`LIQ_VIBRANCE`), or the lift reads as milk. Rim light is screen-blended, with a darker hairline (`LIQ_HAIRLINE`) outside it for light backdrops.
+- Icons: `analyse` tells tiles (square-ish, coverage ≥ 0.74, one edge colour per side) from glyphs. Tiles get a plate of their top/bottom edge colours and `tileFill` keeps their corners inside the plate's (St can't clip). Glyph plates are neutral: tinted ones read as mud.
