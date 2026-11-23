@@ -2,6 +2,14 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.9.0 - 2026-11-24
+
+### Changed
+- Liquid glass has real thickness at its edge: the bevel shows the actual backdrop, bent further and only lightly diffused (the first level of the blur, already computed), while the middle stays frosted and quiet. A window edge or bright grass behind a panel now bends along its rim, as through Apple's glass, instead of the panel reading as a flat tint.
+- Liquid glass adds a broad, quiet reflection: a soft sheen under the top edge and in the lit corner, a faint one opposite. Light glass whitens a little less and gets less vibrancy, so it stays near white rather than pastel; dark glass keeps its colour.
+- App icon plates are drawn by the GPU (lib/iconPlate.js): true continuous-corner squircles, a three-layer soft shadow (wide ambient, mid, tight contact line) instead of St's single CPU-blurred halo, and a specular rim over the icon, bright along the top with a faint reflection along the bottom, plus a hairline that holds a white tile's shape.
+- Icons that are tiles are drawn by the plate from their own pixels, cropped past their edge and cut to the shape, the way Apple masks full-bleed art: no more nested squares or the icon's own lighter ring inside ours (terminal, Obsidian, GitKraken).
+
 ## 1.8.0 - 2026-11-23
 
 ### Changed

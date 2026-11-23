@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Unified app icons, as Apple's: every app icon takes one shape (squircle,
 // circle or rounded square), whatever the icon pack draws. Icons that are a
-// tile already become the shape; the rest sit on a neutral plate. One hook, Shell.App.create_icon_texture, so the dock, the drawer,
-// the overview grid and the switchers all agree. No shader: plain St, which
-// also keeps this working on GNOME 51.
+// tile already become the shape; the rest sit on a neutral plate. One hook,
+// Shell.App.create_icon_texture, so the dock, the drawer, the overview grid and
+// the switchers all agree. The plate is drawn by the GPU (lib/iconPlate.js).
 
 import Clutter from 'gi://Clutter';
 import GdkPixbuf from 'gi://GdkPixbuf';
@@ -11,13 +11,21 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {IconPlate} from '../lib/iconPlate.js';
 import {Module} from '../lib/module.js';
 
-// Corner radius as a part of the plate.
+// Corner radius as a part of the plate, and the corner's exponent: Apple's
+// tiles have continuous corners (a superellipse), not circular ones.
 const SHAPES = {
-    squircle: 0.30,
-    circle: 0.5,
-    rounded: 0.2,
+    squircle: {radius: 0.45, exponent: 4.2},
+    circle: {radius: 0.5, exponent: 2},
+    rounded: {radius: 0.22, exponent: 2},
+};
+// Shadow layers, [drop, sigma] as parts of the plate and alpha: a wide soft
+// ambient one, a mid one, and a tight contact line that seats the tile.
+const SHADOW = {
+    light: [0.07, 0.09, 0.16, 0.02, 0.035, 0.12, 0.004, 0.008, 0.16],
+    dark: [0.07, 0.09, 0.32, 0.02, 0.035, 0.2, 0.004, 0.008, 0.3],
 };
 const SAMPLE = 48;
 const OPAQUE = 200;
@@ -29,6 +37,9 @@ const NEUTRAL = {
 };
 // An edge colour this close (0-255, per channel) along a side counts as one.
 const EVEN = 30;
+// How much of a tile's edge is cut away on each side: icon art often has a
+// lighter ring or bevel there, which would show inside our shape.
+const TILE_CROP = 0.05;
 
 const luma = c => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
 const average = list => [0, 1, 2].map(j => list.reduce((t, c) => t + c[j], 0) / list.length);
@@ -79,7 +90,7 @@ function analyse(pixbuf) {
     if (Math.abs(bw - bh) > 0.08 * Math.max(bw, bh) || extent < 0.7 || coverage < 0.74)
         return {tile: null, glyphLuma};
     // A ring just inside the shape, on the middle of each side.
-    const inset = Math.max(1, Math.round(bw * 0.05));
+    const inset = Math.max(1, Math.round(bw * TILE_CROP));
     const side = (fx, fy) => {
         const out = [];
         for (let t = 0.3; t <= 0.7; t += 0.05) {
@@ -103,13 +114,6 @@ function analyse(pixbuf) {
     // its square it covers: a circle 0.5, a square 0.
     const radius = Math.min(0.5, Math.sqrt(Math.max(0, 1 - coverage) / (4 - Math.PI)));
     return {tile: {top: ct.map(Math.round), bottom: cb.map(Math.round), extent, radius}, glyphLuma};
-}
-
-// How much of the plate a tile may fill: as much as keeps its corners inside
-// the plate's rounded ones, so nothing pokes out at the diagonal.
-function tileFill(plateRadius, tileRadius) {
-    const margin = Math.max(0.015, (plateRadius - tileRadius) * (Math.SQRT2 - 1) / Math.SQRT2);
-    return 1 - 2 * margin;
 }
 
 export default class IconsModule extends Module {
@@ -165,54 +169,60 @@ export default class IconsModule extends Module {
         return look;
     }
 
-    // Plate gradient, edge and how much of it the icon fills. A tile keeps its
+    // Plate colours, rim and how much of it the icon fills. A tile keeps its
     // own edge colours, so its edge vanishes into the plate. A glyph gets a
     // neutral plate, never a tint of its own colour: those read as mud (brown
     // under Chrome, olive under a calculator). A dark glyph keeps a light plate
     // in dark mode, or it is lost.
-    _plateLook(look, radius) {
+    _plateLook(look, shape) {
         const dark = this._dark;
         const tile = this.settings.get_string('icon-plate') !== 'neutral' ? look.tile : null;
+        const base = {...shape, shadow: SHADOW[dark ? 'dark' : 'light']};
         if (tile) {
-            const fill = Math.min(tileFill(radius, tile.radius) / tile.extent, 1.15);
-            return {top: tile.top, bottom: tile.bottom, fill, edge: 'rgba(255, 255, 255, 0.16)'};
+            // Cut to our shape: its own edge is cropped away.
+            const fill = 1 / ((1 - 2 * TILE_CROP) * tile.extent);
+            const light = luma(tile.top) > 0.75;
+            return {...base, top: tile.top, bottom: tile.bottom, fill, tile: true, spec: light ? 0.35 : 0.4, hair: light ? 0.1 : 0.05};
         }
         const lightPlate = !dark || look.glyphLuma < 0.3;
         const [top, bottom] = lightPlate ? NEUTRAL.light : NEUTRAL.dark;
-        return {top, bottom, fill: this.settings.get_double('icon-scale'),
-            edge: lightPlate ? 'rgba(0, 0, 0, 0.07)' : 'rgba(255, 255, 255, 0.09)'};
+        return {...base, top, bottom, fill: this.settings.get_double('icon-scale'),
+            spec: lightPlate ? 0.6 : 0.3, hair: lightPlate ? 0.1 : 0.0};
+    }
+
+    // A tile's pixels at the size they are drawn, or null (the icon then shows).
+    _art(gicon, size) {
+        try {
+            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            const px = Math.min(512, Math.ceil(size * scale * 2));
+            const pixbuf = this._theme.lookup_by_gicon(gicon, px, 0)?.load_icon();
+            if (!pixbuf)
+                return null;
+            return pixbuf.get_width() === px && pixbuf.get_height() === px ? pixbuf
+                : pixbuf.scale_simple(px, px, GdkPixbuf.InterpType.HYPER);
+        } catch {
+            return null;
+        }
     }
 
     _wrap(app, icon, size) {
-        const radius = SHAPES[this.settings.get_string('icon-shape')];
-        if (!radius || !icon || size < 16)
+        const shape = SHAPES[this.settings.get_string('icon-shape')];
+        if (!shape || !icon || size < 16)
             return icon;
-        const look = this._look(app, icon.gicon ?? app.get_icon());
-        const {top, bottom, fill, edge} = this._plateLook(look, radius);
-        const shadow = this._dark ? 0.32 : 0.16;
-        icon.set({x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
-        const plate = new St.Bin({
-            style_class: 'super-g-icon-plate',
-            width: size,
-            height: size,
-            x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.CENTER,
-            child: icon,
-        });
-        // Radius and icon follow the size the plate really has: callers resize it.
+        const gicon = icon.gicon ?? app.get_icon();
+        const look = this._plateLook(this._look(app, gicon), shape);
+        const plate = new IconPlate(icon, size, look);
+        // The icon follows the size the plate really has: callers resize it.
+        // A tile's art is loaded at twice that, for the dock's magnification.
         let shown = 0;
         const fit = () => {
             const w = Math.round(plate.width);
             if (!w || w === shown)
                 return;
             shown = w;
-            icon.icon_size = Math.round(w * fill);
-            // The gradient, a fine edge (light on colour, dark on white) and
-            // one soft, close shadow carry the depth, as on Apple's tiles.
-            plate.set_style(`background-gradient-direction: vertical; background-gradient-start: rgb(${top.join(', ')}); `
-                + `background-gradient-end: rgb(${bottom.join(', ')}); border-radius: ${Math.round(w * radius)}px; `
-                + `border: 1px solid ${edge}; `
-                + `box-shadow: 0 ${Math.max(1, Math.round(w * 0.025))}px ${Math.max(2, Math.round(w * 0.06))}px rgba(0, 0, 0, ${shadow});`);
+            icon.icon_size = Math.round(w * Math.min(look.fill, 1));
+            if (look.tile)
+                plate.setArt(this._art(gicon, w * look.fill));
         };
         fit();
         plate.connect('notify::width', fit);

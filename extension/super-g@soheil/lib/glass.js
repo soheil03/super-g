@@ -28,6 +28,9 @@ import {getKawaseConfiguration} from '../vendor/blur/effects/blur/kawase_samplin
 import {getTextureCapacity, largestViewSize, TextureRegion, textureFits} from '../vendor/blur/render/shader/texture_region.js';
 
 const DECLARATIONS = `
+// Where the bevel reads its clearer backdrop: live glass has a lightly
+// blurred level of its copy there, the wallpaper backdrop only its one.
+#define EDGE_TEX cogl_sampler0
 uniform vec2 size;
 uniform vec2 uv_origin;
 uniform vec2 uv_size;
@@ -74,7 +77,8 @@ const float LIQ_RIM_FAR = 0.7;
 const float LIQ_GLOW = 0.08;
 const float LIQ_SHADE = 0.12;
 const float LIQ_HAIRLINE = 0.2;
-const float LIQ_VIBRANCE = 0.45;
+const float LIQ_CLEAR = 0.6;
+const float LIQ_SHEEN = 0.07;
 const float LIQ_REFLECT = 18.0;
 const vec2 LIQ_LIGHT = vec2(-0.70710678, -0.70710678);
 `;
@@ -83,6 +87,7 @@ const vec2 LIQ_LIGHT = vec2(-0.70710678, -0.70710678);
 // JS are unreliable on some Mutter versions), so it declares scalars and
 // rebuilds the vectors.
 const LIVE_DECLARATIONS = DECLARATIONS
+    .replace('#define EDGE_TEX cogl_sampler0', '#define EDGE_TEX cogl_sampler1')
     .replace('uniform vec2 size;', 'uniform float size_x;\nuniform float size_y;\nvec2 size = vec2(0.0);')
     .replace('uniform vec2 uv_origin;', 'uniform float uv_x;\nuniform float uv_y;\nvec2 uv_origin = vec2(0.0);')
     .replace('uniform vec2 uv_size;', 'uniform float uv_w;\nuniform float uv_h;\nvec2 uv_size = vec2(1.0);')
@@ -103,6 +108,8 @@ float liquid_rim = 0.0;
 float liquid_glow = 0.0;
 float liquid_shade = 0.0;
 float liquid_hair = 0.0;
+vec3 clear_rgb = rgb;
+float clear_w = 0.0;
 if (liquid > 0.5) {
     vec2 p = px - size * 0.5;
     float small = min(size.x, size.y);
@@ -133,6 +140,11 @@ if (liquid > 0.5) {
             texture2D(cogl_sampler0, st + inwards * pull * (1.0 - LIQ_DISPERSION)).r,
             texture2D(cogl_sampler0, st + inwards * pull).g,
             texture2D(cogl_sampler0, st + inwards * pull * (1.0 + LIQ_DISPERSION)).b);
+        // The rim is where the glass is thick and curved: it shows the real
+        // backdrop, bent further and barely diffused, while the middle stays
+        // frosted and quiet. This is what makes it read as glass, not a tint.
+        clear_rgb = texture2D(EDGE_TEX, st + inwards * pull * 1.2).rgb;
+        clear_w = pow(1.0 - x, 2.5);
     }
     // Light from the top left, as on Apple's: a specular hairline brightest
     // where the edge faces the light, a second lobe opposite (light carried
@@ -182,7 +194,8 @@ if (calm > 0.0) {
     // The squeeze lifts every channel alike, which reads as milk: give the
     // colour back as vibrancy, as Apple's materials do, so a blue backdrop
     // makes clean pale blue glass instead of lavender grey.
-    rgb = clamp(mix(vec3(luma), rgb, 1.0 + LIQ_VIBRANCE * calm), 0.0, 1.0);
+    // Less on light glass, which should stay near white rather than pastel.
+    rgb = clamp(mix(vec3(luma), rgb, 1.0 + mix(0.2, 0.5, light_text) * calm), 0.0, 1.0);
 }
 // Contrast guard: where what's behind fights the theme's text (a dark window
 // under light glass), the tint thickens. Blurred input, so it stays smooth.
@@ -192,11 +205,20 @@ rgb = mix(rgb, tint.rgb, mix(tint.a, max(tint.a, 0.8), clash * guard));
 // A fine dark outline keeps the shape readable over light content; a specular
 // rim just inside it, strongest along the top, gives the edge its light.
 if (liquid > 0.5) {
+    vec3 lum3 = vec3(0.2126, 0.7152, 0.0722);
+    vec3 clear = mix(vec3(dot(clear_rgb, lum3)), clear_rgb, saturation) * brightness;
+    rgb = mix(rgb, mix(clear, tint.rgb, tint.a * 0.5), clear_w * LIQ_CLEAR);
     rgb = mix(rgb, edge_rgb, liquid_rim * 0.6);
     rgb *= 1.0 - liquid_shade * LIQ_SHADE;
     // Screen, not add: the light shows on dark glass and never burns light
     // glass into a flat white band.
-    vec3 light = vec3(clamp(liquid_rim * LIQ_RIM + liquid_glow * LIQ_GLOW, 0.0, 1.0));
+    // A broad reflection, quiet in the middle: a soft sheen under the top
+    // edge and in the lit corner, a faint one in the far corner.
+    vec2 sq = (uv - vec2(0.5, -0.15)) / vec2(0.9, 0.55);
+    float diag = dot(px, -LIQ_LIGHT) / dot(size, -LIQ_LIGHT);
+    float sheen = 0.6 * (1.0 - smoothstep(0.0, 1.0, length(sq)))
+        + 0.5 * (1.0 - smoothstep(0.0, 0.28, diag)) + 0.15 * smoothstep(0.75, 1.0, diag);
+    vec3 light = vec3(clamp(liquid_rim * LIQ_RIM + liquid_glow * LIQ_GLOW + sheen * LIQ_SHEEN, 0.0, 1.0));
     rgb = 1.0 - (1.0 - rgb) * (1.0 - light);
     rgb *= 1.0 - liquid_hair * LIQ_HAIRLINE;
 } else {
@@ -286,6 +308,10 @@ function shaderTemplates(context) {
     const glass = Cogl.Pipeline.new(context);
     glass.set_layer_filters(0, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
     glass.set_layer_wrap_mode(0, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
+    // The bevel's clearer backdrop, sampled by hand (EDGE_TEX).
+    glass.set_layer_filters(1, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
+    glass.set_layer_wrap_mode(1, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
+    glass.set_layer_combine(1, 'RGBA = REPLACE(PREVIOUS)');
     glass.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, LIVE_DECLARATIONS,
         `size = vec2(size_x, size_y);\nuv_origin = vec2(uv_x, uv_y);\nuv_size = vec2(uv_w, uv_h);\ntint = vec4(tint_r, tint_g, tint_b, tint_a);\n${CODE}`));
     templates = {context, glass, shadow: shadowTemplate(context), passes: new Map()};
@@ -440,6 +466,7 @@ export const LiveGlassEffect = GObject.registerClass({
             const templates = shaderTemplates(context);
             this._glass = templates.glass.copy();
             this._glass.set_layer_texture(0, this._up[0].texture);
+            this._glass.set_layer_texture(1, this._down[1].texture);
             const shadow = templates.shadow.copy();
             shadow.set_layer_texture(0, this._up[0].texture);
             this._shadow = new ShadowPainter(shadow);
@@ -939,7 +966,7 @@ function liquidBlur(blur, k) {
 }
 
 function liquidCalm(k) {
-    return 0.1 + 0.8 * k;
+    return 0.1 + 0.65 * k;
 }
 
 // Dark liquid glass dims what carries text; the dock and the top bar stay
