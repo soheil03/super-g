@@ -27,7 +27,7 @@ import * as Files from '../lib/files.js';
 import {LiveStylesheet} from '../lib/stylesheet.js';
 import {resolve} from '../lib/themeGen.js';
 import {withAlpha} from '../lib/color.js';
-import {GlassLayer, glassStyle, trackPaintingView, untrackPaintingView} from '../lib/glass.js';
+import {GlassLayer, glassStyle, shellDark, trackPaintingView, untrackPaintingView} from '../lib/glass.js';
 import {holdNewApps, releaseNewApps} from '../lib/newApps.js';
 
 // Desktop-entry categories → drawer sections, first match wins.
@@ -367,7 +367,7 @@ export default class DrawerModule extends Module {
     /* ------------------------------------------------------- styling -- */
 
     _colors() {
-        const dark = this._iface.get_string('color-scheme') === 'prefer-dark';
+        const dark = shellDark(this.settings, this._iface);
         return resolve(this._tokens, {
             palette: this.settings.get_string('palette'), accent: this.settings.get_string('accent'),
         }, dark);

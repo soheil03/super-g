@@ -19,7 +19,7 @@ import * as WorkspaceSwitcherPopup from 'resource:///org/gnome/shell/ui/workspac
 import {Module} from '../lib/module.js';
 import * as Files from '../lib/files.js';
 import {resolve} from '../lib/themeGen.js';
-import {GlassLayer, glassStyle, wrapWithGlass, unwrap, trackPaintingView, untrackPaintingView, barOverFullscreen} from '../lib/glass.js';
+import {GlassLayer, glassStyle, shellDark, wrapWithGlass, unwrap, trackPaintingView, untrackPaintingView, barOverFullscreen} from '../lib/glass.js';
 
 // A title button with nothing to title (no focused window) keeps its place.
 function isBlank(actor) {
@@ -259,7 +259,7 @@ export default class GlassModule extends Module {
     }
 
     _computeStyle() {
-        const dark = this._iface.get_string('color-scheme') === 'prefer-dark';
+        const dark = shellDark(this.settings, this._iface);
         const c = resolve(this._tokens, {
             palette: this.settings.get_string('palette'), accent: this.settings.get_string('accent'),
         }, dark);

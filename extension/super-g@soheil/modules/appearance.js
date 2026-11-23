@@ -12,6 +12,7 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import {Module, moduleOn} from '../lib/module.js';
 import * as Files from '../lib/files.js';
 import * as Gen from '../lib/themeGen.js';
+import {shellDark} from '../lib/glass.js';
 
 const IFACE = 'org.gnome.desktop.interface';
 // Settings that end up in gtk.css as colours and shapes.
@@ -261,8 +262,29 @@ export default class AppearanceModule extends Module {
             return [];
         // Not the ones our modules generate: they use no accent to mirror, and each
         // swap of one (the top bar, the dock) would rebuild this sheet for nothing.
-        const custom = (theme.get_custom_stylesheets() ?? []).filter(f => !f.get_path()?.startsWith(`${Files.CACHE}/`));
+        const custom = (theme.get_custom_stylesheets() ?? []).filter(f => !f.get_path()?.startsWith(`${Files.CACHE}/`) &&
+            !f.equal(this._darkSheet ?? Gio.File.new_for_path('/')));
         return [theme.default_stylesheet, theme.application_stylesheet, ...custom].filter(Boolean);
+    }
+
+    // The shell theme's own dark variant (Yaru-dark, gnome-shell-dark.css), for
+    // glass in 'wallpaper' tone while the system is light: our sheet styles the
+    // surfaces, but dozens of details inside them (message headers, buttons,
+    // switches) come from the theme and would stay grey on the dark glass.
+    _darkVariant(sheets) {
+        for (const f of sheets) {
+            const uri = f.get_uri();
+            const candidates = [];
+            if (uri.includes('gnome-shell-light.css'))
+                candidates.push(uri.replace('gnome-shell-light.css', 'gnome-shell-dark.css'));
+            const named = uri.match(/^(.*\/theme\/)([^/]+)\/gnome-shell\.css$/);
+            if (named && !named[2].endsWith('-dark'))
+                candidates.push(`${named[1]}${named[2]}-dark/gnome-shell.css`);
+            const found = candidates.map(u => Gio.File.new_for_uri(u)).find(c => c.query_exists(null));
+            if (found)
+                return found;
+        }
+        return null;
     }
 
     _currentShellSource() {
@@ -277,11 +299,17 @@ export default class AppearanceModule extends Module {
         const theme = St.ThemeContext.get_for_stage(global.stage).get_theme();
         const sheets = this._themeSheets();
         this._shellSource = this._currentShellSource();
-        const css = Gen.shellCss(this._tokens, this._opts(), this._dark, sheets.map(f => Files.readFile(f)).join('\n'));
+        const dark = shellDark(this.settings, this._iface);
+        const variant = dark && !this._dark ? this._darkVariant(sheets) : null;
+        const css = Gen.shellCss(this._tokens, this._opts(), dark, [...sheets, variant].filter(Boolean).map(f => Files.readFile(f)).join('\n'));
         // Every setting comes through here; reloading restyles the whole shell.
-        if (this._shellSheet && css === this._shellCss)
+        if (this._shellSheet && css === this._shellCss && variant?.get_uri() === this._darkSheet?.get_uri())
             return;
         this._unloadShell();
+        if (variant) {
+            this._darkSheet = variant;
+            theme.load_stylesheet(variant);
+        }
         this._shellCss = css;
         // A fresh file name each time, so St never serves a cached sheet.
         const path = `${Files.CACHE}/shell-${GLib.get_monotonic_time()}-${this._serial++}.css`;
@@ -291,9 +319,14 @@ export default class AppearanceModule extends Module {
     }
 
     _unloadShell() {
+        const theme = St.ThemeContext.get_for_stage(global.stage).get_theme();
+        if (this._darkSheet) {
+            theme?.unload_stylesheet(this._darkSheet);
+            this._darkSheet = null;
+        }
         if (!this._shellSheet)
             return;
-        St.ThemeContext.get_for_stage(global.stage).get_theme()?.unload_stylesheet(this._shellSheet);
+        theme?.unload_stylesheet(this._shellSheet);
         Files.remove(this._shellSheet.get_path());
         this._shellSheet = null;
     }

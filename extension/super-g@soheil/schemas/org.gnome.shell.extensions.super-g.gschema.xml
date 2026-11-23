@@ -180,6 +180,11 @@
       <default>'frosted'</default>
       <summary>Glass style: frosted (blur, tint and thickness), or liquid (a curved edge that refracts what's behind)</summary>
     </key>
+    <key name="glass-tone" type="s">
+      <choices><choice value="wallpaper"/><choice value="theme"/></choices>
+      <default>'wallpaper'</default>
+      <summary>Shell glass tone: the wallpaper dimmed with white text in light mode too, as Apple's floating panels, or follow light and dark</summary>
+    </key>
     <key name="glass-clarity" type="d">
       <range min="0" max="1"/>
       <default>0.3</default>

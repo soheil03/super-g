@@ -2,6 +2,16 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.11.0 - 2026-11-24
+
+### Added
+- Glass tone (Settings, Glass): "Wallpaper, as Apple" (default) gives the shell's glass (the drawer, menus, quick settings, the calendar, notifications) Apple's floating-panel material in light mode too: the wallpaper dimmed and saturated, with white text, while apps stay light. "Follow light and dark" keeps the old light glass. In wallpaper tone on a light system the shell theme's own dark variant (Yaru-dark, gnome-shell-dark.css) loads under our sheet, so headers, buttons and switches inside the glass match.
+- `tools/shell-test.sh` takes `WALLPAPER=/path/to/image`, to calibrate against a reference screenshot's backdrop.
+
+### Changed
+- Calibrated on the backdrop of an Apple screenshot: over the same orange, the drawer now lands at the same brightness as Apple's apps panel (luma 0.36-0.48 against 0.35-0.46). Dark glass keeps a mid-tone wallpaper's own brightness and colour instead of murk, and dims harder over a white window, so white text stays strong there.
+- The dock and the top bar are Apple's vibrant material: what's behind, slightly dimmed and more saturated, never lifted towards white. The dock's lens edge is wider, so its ends bend what's behind as Apple's do.
+
 ## 1.10.0 - 2026-11-24
 
 ### Changed

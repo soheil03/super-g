@@ -115,7 +115,7 @@ if (liquid > 0.5) {
     float small = min(size.x, size.y);
     // The bevel grows with the surface, so a big panel gets a real lens edge
     // and the top bar a fine one.
-    float bezel = min(clamp(small * 0.03, LIQ_BEZEL_MIN, LIQ_BEZEL_MAX), small * 0.4);
+    float bezel = min(clamp(small * 0.12, LIQ_BEZEL_MIN, LIQ_BEZEL_MAX), small * 0.4);
     float inward = max(-d, 0.0);
     // The outward normal, from a box at least as round as the bevel, so it
     // turns through the corners instead of folding along the diagonal.
@@ -189,7 +189,12 @@ rgb = mix(vec3(luma), rgb, saturation) * brightness;
 // the dock and the bar a trace. This is what keeps Apple's clear panels legible.
 if (calm > 0.0) {
     float cl = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-    float band = mix(0.74 + 0.24 * cl, 0.05 + 0.3 * cl, light_text);
+    // Dark glass keeps a mid-tone backdrop's own brightness, as Apple's panels
+    // over a bright wallpaper are that wallpaper dimmed, not murk (measured on
+    // Apple's: an orange at 0.65 luma shows at about 0.4). Brighter than that,
+    // a white window, it dims harder again, or white text goes weak on grey.
+    float dark_band = mix(0.04 + 0.8 * cl, 0.4 - (cl - 0.45), smoothstep(0.38, 0.52, cl));
+    float band = mix(0.74 + 0.24 * cl, dark_band, light_text);
     float target = mix(cl, band, calm);
     // Move the brightness, keep the hue: the colour around it is scaled to
     // fit, never clipped (an added lift clipped blue and turned navy into
@@ -210,7 +215,7 @@ if (calm > 0.0) {
 }
 // Contrast guard: where what's behind fights the theme's text (a dark window
 // under light glass), the tint thickens. Blurred input, so it stays smooth.
-float clash = mix(1.0 - smoothstep(0.12, 0.5, luma), smoothstep(0.55, 0.9, luma), light_text);
+float clash = mix(1.0 - smoothstep(0.12, 0.5, luma), smoothstep(0.42, 0.7, luma), light_text);
 rgb = mix(rgb, tint.rgb, mix(tint.a, max(tint.a, 0.8), clash * guard));
 
 // A fine dark outline keeps the shape readable over light content; a specular
@@ -260,6 +265,15 @@ const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 't
 // that need them stay off there (extension.js checks this) instead of the whole
 // extension failing to load.
 export const SHADERS_OK = typeof Shell.GLSLEffect === 'function';
+
+// Whether the shell's glass surfaces use the dark palette. Apple's floating
+// panels (apps panel, widgets, Control Center) are the wallpaper dimmed with
+// white text in light mode too; 'wallpaper' tone does that while apps stay
+// light, 'theme' follows light and dark.
+export function shellDark(settings, iface) {
+    return iface.get_string('color-scheme') === 'prefer-dark' ||
+        (settings.get_boolean('module-glass') && SHADERS_OK && settings.get_string('glass-tone') === 'wallpaper');
+}
 
 export const GlassEffect = GObject.registerClass(
 class SuperGGlassEffect extends (SHADERS_OK ? Shell.GLSLEffect : Clutter.OffscreenEffect) {
@@ -940,10 +954,13 @@ class SuperGGlassLayer extends St.Widget {
         const r = Math.min(radius * exponent / 2, w / 2, h / 2);
         const s = this._style;
         const k = this._chrome ? liquidSize(w, h) : 1;
+        // The dock and the bar are Apple's vibrant material: what's behind,
+        // slightly dimmed and more saturated, never lifted towards white.
+        const vibrant = s.liquid && this._chrome;
         this.uniforms = {
             size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.liquid ? liquidBlur(s.blur, k) : s.blur,
-            tint: layerTint(this, s, k), saturation: s.saturation, brightness: liquidBrightness(s, k), rim: s.rim, outline: s.outline, grain: s.grain,
-            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, calm: this._live && s.liquid ? liquidCalm(k) : 0, shadow: this._shadowOn ? s.shadow : null,
+            tint: layerTint(this, s, k), saturation: vibrant ? s.saturation * 1.3 : s.saturation, brightness: liquidBrightness(s, k, vibrant), rim: s.rim, outline: s.outline, grain: s.grain,
+            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, calm: this._live && s.liquid ? liquidCalm(k, this._chrome) : 0, shadow: this._shadowOn ? s.shadow : null,
         };
         if (this._effect)
             this._effect.setUniforms(this.uniforms);
@@ -963,7 +980,7 @@ function layerTint(layer, s, k) {
     if (layer._thicken)
         a += (1 - a) * layer._thicken;
     if (s.liquid)
-        a = Math.max(a, (s.lightText ? 0.12 : 0.15) * k);
+        a = Math.max(a, (s.lightText ? 0.06 : 0.15) * k);
     return [s.tint[0], s.tint[1], s.tint[2], a];
 }
 
@@ -977,15 +994,15 @@ function liquidBlur(blur, k) {
     return Math.max(blur * (1 + k * 0.6), 3 + 4 * k);
 }
 
-function liquidCalm(k) {
-    return 0.1 + 0.65 * k;
+function liquidCalm(k, chrome) {
+    return (chrome ? 0 : 0.1) + 0.65 * k;
 }
 
 // Dark liquid glass dims what carries text; the dock and the top bar stay
 // bright and clear, as Apple's do.
-function liquidBrightness(s, k) {
+function liquidBrightness(s, k, vibrant) {
     if (!s.liquid || !s.lightText)
-        return s.brightness;
+        return vibrant ? 0.9 : s.brightness;
     return 0.9 + (s.brightness - 0.9) * k;
 }
 
