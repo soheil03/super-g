@@ -14,6 +14,7 @@ import AppearanceModule from './modules/appearance.js';
 import PanelModule from './modules/panel.js';
 import GlassModule from './modules/glass.js';
 import DrawerModule from './modules/drawer.js';
+import IconsModule from './modules/icons.js';
 import {engine} from './lib/engine.js';
 import {SHADERS_OK} from './lib/glass.js';
 import {configureDock, configureDockMotion, onceOnly} from './lib/dockStyle.js';
@@ -30,6 +31,7 @@ const NEEDS_SHADERS = new Set(['glass', 'drawer', 'corners']);
 
 const MODULES = {
     appearance: AppearanceModule,
+    icons: IconsModule,
     corners: engine('corners', 'rounded-window-corners@fxgn', ['rounded-window-corners@fxgn'], {
         configure() {
             configureCorners(this);

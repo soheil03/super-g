@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.6.0 - 2026-11-23
+
+### Added
+- Unified app icons (Settings, App icons): every app icon sits on one plate shape, squircle as Apple, circle as Google or rounded square, whatever the icon pack draws, as on Android. The plate takes its colour from each icon (a full-bleed icon is its own plate, a glyph gets its strongest colour, a grey one a neutral tile), or one neutral tile for all. The dock, the overview grid, the drawer and switchers agree, since it hooks `Shell.App.create_icon_texture`. Plain St with no shader, so it also works on GNOME 51. Off by default. The Trash and Downloads items keep their own look.
+
 ## 1.5.2 - 2026-11-23
 
 ### Fixed

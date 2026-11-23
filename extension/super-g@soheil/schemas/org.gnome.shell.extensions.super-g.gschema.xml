@@ -15,6 +15,33 @@
       <default>true</default>
       <summary>Rounded window corners and shadows (Rounded Window Corners Reborn engine)</summary>
     </key>
+    <key name="module-icons" type="b">
+      <default>true</default>
+      <summary>One shape for every app icon</summary>
+    </key>
+    <key name="icon-shape" type="s">
+      <choices>
+        <choice value="off"/>
+        <choice value="squircle"/>
+        <choice value="circle"/>
+        <choice value="rounded"/>
+      </choices>
+      <default>"off"</default>
+      <summary>Shape every app icon sits on, whatever the icon pack draws</summary>
+    </key>
+    <key name="icon-plate" type="s">
+      <choices>
+        <choice value="auto"/>
+        <choice value="neutral"/>
+      </choices>
+      <default>"auto"</default>
+      <summary>Plate colour: taken from each icon, or one neutral tile</summary>
+    </key>
+    <key name="icon-scale" type="d">
+      <range min="0.5" max="1"/>
+      <default>0.74</default>
+      <summary>How much of the plate the icon fills</summary>
+    </key>
     <key name="module-drawer" type="b">
       <default>true</default>
       <summary>App drawer popup from the dock's apps button</summary>
