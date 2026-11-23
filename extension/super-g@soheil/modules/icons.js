@@ -116,18 +116,26 @@ export default class IconsModule extends Module {
         return look;
     }
 
-    _plateColour(look) {
-        const neutral = this._dark ? NEUTRAL.dark : NEUTRAL.light;
-        if (this.settings.get_string('icon-plate') === 'neutral' || !look.rgb)
-            return neutral;
-        if (look.full)
-            return look.rgb;
-        // A glyph without a background: its own colour if it has one to speak
-        // of, a neutral plate if it's grey.
-        if (look.vivid < 0.25)
-            return neutral;
-        const lift = this._dark ? 0.85 : 1.05;
-        return look.rgb.map(c => Math.min(255, Math.round(c * lift)));
+    // The plate's colour as [top, bottom] of a soft gradient, Apple style: a
+    // full-bleed icon keeps its own colour (so its corners dissolve), a glyph
+    // gets a calm plate in which it stands out, never its own colour (an orange
+    // glyph on orange vanishes).
+    _plateColours(look) {
+        const dark = this._dark;
+        const shade = (c, k) => c.map(v => Math.max(0, Math.min(255, Math.round(v + (k > 0 ? (255 - v) * k : v * k)))));
+        const mix = (a, c, t) => a.map((v, i) => Math.round(v + (c[i] - v) * t));
+        const lumaOf = c => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+        let base;
+        if (look.full && look.rgb && this.settings.get_string('icon-plate') !== 'neutral') {
+            return [shade(look.rgb, 0.05), shade(look.rgb, -0.05)];
+        } else if (look.rgb && look.vivid >= 0.25 && this.settings.get_string('icon-plate') !== 'neutral') {
+            base = dark ? mix([44, 44, 50], look.rgb, 0.22) : mix([252, 252, 254], look.rgb, 0.1);
+        } else {
+            // A dark glyph needs a light plate even in dark mode, or it is lost.
+            const glyphDark = look.rgb && lumaOf(look.rgb) < 0.35;
+            base = dark && !glyphDark ? NEUTRAL.dark : NEUTRAL.light;
+        }
+        return [shade(base, dark ? 0.06 : 0.0), shade(base, dark ? -0.1 : -0.05)];
     }
 
     _wrap(app, icon, size) {
@@ -137,7 +145,7 @@ export default class IconsModule extends Module {
         const look = this._look(app, icon.gicon ?? app.get_icon());
         // A full-bleed icon already is a plate: it can fill more of this one.
         const fill = Math.min(this.settings.get_double('icon-scale') * (look.full ? 1.08 : 1), 1);
-        const [r, g, b] = this._plateColour(look);
+        const [top, bottom] = this._plateColours(look);
         icon.set({x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
         const plate = new St.Bin({
             style_class: 'super-g-icon-plate',
@@ -155,8 +163,11 @@ export default class IconsModule extends Module {
                 return;
             shown = w;
             icon.icon_size = Math.round(w * fill);
-            plate.set_style(`background-color: rgb(${r}, ${g}, ${b}); border-radius: ${Math.round(w * radius)}px; `
-                + 'box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);');
+            // A fine light edge would need a second shadow, which St lacks: the
+            // gradient and one soft drop shadow carry the depth, as on Apple's.
+            plate.set_style(`background-gradient-direction: vertical; background-gradient-start: rgb(${top.join(', ')}); `
+                + `background-gradient-end: rgb(${bottom.join(', ')}); border-radius: ${Math.round(w * radius)}px; `
+                + `box-shadow: 0 ${Math.max(1, Math.round(w * 0.03))}px ${Math.max(2, Math.round(w * 0.07))}px rgba(0, 0, 0, 0.2);`);
         };
         fit();
         plate.connect('notify::width', fit);

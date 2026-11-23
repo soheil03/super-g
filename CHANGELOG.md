@@ -2,6 +2,12 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.7.0 - 2026-11-23
+
+### Changed
+- Liquid glass is legible on big panels (drawer, menus, calendar, dialogs) without turning frosted: a "calm" step squeezes the backdrop's brightness into the band the theme's text reads on, keeping its colour, so a white window beside a dark one no longer puts text on the wrong side of the glass. Big panels also never blur below a real frost (a window edge showed as a hard seam) and carry a little tint that grows with size. The dock and the top bar keep your Clear/Tinted setting.
+- App icon plates: a glyph icon now sits on a calm light (dark in dark mode) plate with a hint of its own colour, instead of its own colour (an orange glyph on orange vanished). Dark glyphs keep a light plate in dark mode. Plates have a soft vertical gradient and one gentle drop shadow. Full-bleed icons keep their colour.
+
 ## 1.6.0 - 2026-11-23
 
 ### Added

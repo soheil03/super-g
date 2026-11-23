@@ -44,6 +44,7 @@ uniform float guard;
 uniform float light_text;
 uniform float lens;
 uniform float liquid;
+uniform float calm;
 
 // Signed distance to a rounded rectangle whose corners are superellipses
 // (exponent 2 = circle, higher = smoother "continuous" corners).
@@ -164,6 +165,16 @@ if (liquid > 0.5) {
 }
 float luma = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
 rgb = mix(vec3(luma), rgb, saturation) * brightness;
+// Calm: squeeze the backdrop's brightness into the band the theme's text reads
+// on, so a white window beside a dark one never puts text on the wrong side
+// of it. Colour stays (it is a shift, not a gain); big panels get all of it,
+// the dock and the bar a trace. This is what keeps Apple's clear panels legible.
+if (calm > 0.0) {
+    float cl = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+    float band = mix(0.68 + 0.3 * cl, 0.05 + 0.3 * cl, light_text);
+    rgb += (band - cl) * calm;
+    luma = mix(luma, band, calm);
+}
 // Contrast guard: where what's behind fights the theme's text (a dark window
 // under light glass), the tint thickens. Blurred input, so it stays smooth.
 float clash = mix(1.0 - smoothstep(0.12, 0.5, luma), smoothstep(0.55, 0.9, luma), light_text);
@@ -198,7 +209,7 @@ const NO_ROOM = {left: 0, right: 0, top: 0, bottom: 0};
 // Room around the actor the shadow can reach.
 const SHADOW_PAD = 80;
 
-const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens', 'liquid'];
+const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens', 'liquid', 'calm'];
 
 // GNOME 51 removed Shell.GLSLEffect. Until the shaders are ported, the modules
 // that need them stay off there (extension.js checks this) instead of the whole
@@ -233,6 +244,7 @@ class SuperGGlassEffect extends (SHADERS_OK ? Shell.GLSLEffect : Clutter.Offscre
         f('light_text', [u.lightText]);
         f('lens', [0]);
         f('liquid', [0]);
+        f('calm', [0]);
         f('grain', [u.grain]);
         this.queue_repaint();
     }
@@ -507,6 +519,7 @@ export const LiveGlassEffect = GObject.registerClass({
         set('light_text', u.lightText);
         set('lens', u.lens);
         set('liquid', u.liquid ? 1 : 0);
+        set('calm', u.calm);
         set('grain', u.grain);
     }
 
@@ -873,9 +886,9 @@ class SuperGGlassLayer extends St.Widget {
         const r = Math.min(radius * exponent / 2, w / 2, h / 2);
         const s = this._style;
         this.uniforms = {
-            size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.liquid ? s.blur * liquidBlurScale(w, h) : s.blur,
-            tint: this._thicken ? [s.tint[0], s.tint[1], s.tint[2], s.tint[3] + (1 - s.tint[3]) * this._thicken] : s.tint, saturation: s.saturation, brightness: liquidBrightness(s, w, h), rim: s.rim, outline: s.outline, grain: s.grain,
-            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, shadow: this._shadowOn ? s.shadow : null,
+            size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.liquid ? liquidBlur(s.blur, w, h) : s.blur,
+            tint: layerTint(this, s, w, h), saturation: s.saturation, brightness: liquidBrightness(s, w, h), rim: s.rim, outline: s.outline, grain: s.grain,
+            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, calm: this._live && s.liquid ? liquidCalm(w, h) : 0, shadow: this._shadowOn ? s.shadow : null,
         };
         if (this._effect)
             this._effect.setUniforms(this.uniforms);
@@ -887,10 +900,28 @@ class SuperGGlassLayer extends St.Widget {
 // Liquid glass blurs big panels more: what shows through a drawer or a menu
 // should read as colour, not as ghosts of text, while the dock and the top
 // bar stay clear.
+// Tint with the thickening for what sits over a dim, and for liquid panels a
+// floor that grows with size: a calm backdrop needs a little body under text.
+function layerTint(layer, s, w, h) {
+    let a = s.tint[3];
+    if (layer._thicken)
+        a += (1 - a) * layer._thicken;
+    if (s.liquid)
+        a = Math.max(a, (s.lightText ? 0.22 : 0.3) * liquidSize(w, h));
+    return [s.tint[0], s.tint[1], s.tint[2], a];
+}
+
 const liquidSize = (w, h) => Math.min(Math.max((Math.min(w, h) - 60) / 340, 0), 1);
 
-function liquidBlurScale(w, h) {
-    return 1 + liquidSize(w, h) * 2.4;
+// Big panels carry text over anything, so they never go below a real frost,
+// whatever the clarity; the dock and the bar keep the user's setting.
+function liquidBlur(blur, w, h) {
+    const k = liquidSize(w, h);
+    return Math.max(blur * (1 + k * 2.4), 4 + 24 * k);
+}
+
+function liquidCalm(w, h) {
+    return 0.1 + 0.8 * liquidSize(w, h);
 }
 
 // Dark liquid glass dims big panels, which carry text over anything; the dock
