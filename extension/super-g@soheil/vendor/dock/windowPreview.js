@@ -28,6 +28,8 @@ import {
 
 const PREVIEW_MAX_WIDTH = 250;
 const PREVIEW_MAX_HEIGHT = 150;
+const PREVIEW_CAP_WIDTH = 300;
+const PREVIEW_CAP_HEIGHT = 190;
 
 const PREVIEW_ANIMATION_DURATION = 250;
 const MAX_PREVIEW_GENERATION_ATTEMPTS = 15;
@@ -439,6 +441,8 @@ class WindowPreviewMenuItem extends PopupMenu.PopupBaseMenuItem {
             scale = Math.min(1.0, PREVIEW_MAX_WIDTH / width, PREVIEW_MAX_HEIGHT / height);
         }
 
+        // Super G: never bigger than the box, whatever the setting.
+        scale = Math.min(scale, PREVIEW_CAP_WIDTH / width, PREVIEW_CAP_HEIGHT / height);
         scale *= St.ThemeContext.get_for_stage(global.stage).scaleFactor;
 
         // width and height that we wanna multiply by scale

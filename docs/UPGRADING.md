@@ -14,7 +14,7 @@ Add a row each time, and copy the newest one into the README.
 | 1.2.8 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell with a copy of the real settings: `tests/integration.js`, simulated module crashes. Real-desktop check still to do |
 | 1.1.0 | 26.04.1 LTS | 50.1 | 50.1 | 4.22.4 | 1.9.1 | Wayland, 133% scale, Xwayland on | Headless shell at 100% scale, real keyboard and pointer input. Real-desktop check still to do |
 
-`shell-version` in `metadata.json` also lists 51. That is a declaration, not a test.
+`shell-version` in `metadata.json` also lists 51. That is a declaration, not a test. On 51 `Shell.GLSLEffect` is gone, so glass, the drawer and window corners stay off until ported to `Clutter.ShaderEffect` (`vfunc_get_static_snippet`, uniforms set by name).
 
 ## Why it breaks
 

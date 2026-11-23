@@ -750,3 +750,25 @@ if 'Super G: new apps first' not in s:
     open(p, 'w').write(s)
 print('new apps first patched')
 PY
+# Dock: previews are a fixed fraction of the window, so a big window made a
+# preview taller than the screen (menu off screen). Cap the box like the
+# automatic mode does, whatever the scale setting says.
+python3 -I - "$v/dock/windowPreview.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = """        scale *= St.ThemeContext.get_for_stage(global.stage).scaleFactor;
+
+        // width and height"""
+new = """        // Super G: never bigger than the box, whatever the setting.
+        scale = Math.min(scale, PREVIEW_CAP_WIDTH / width, PREVIEW_CAP_HEIGHT / height);
+        scale *= St.ThemeContext.get_for_stage(global.stage).scaleFactor;
+
+        // width and height"""
+if 'Super G: never bigger' not in s:
+    assert old in s, 'windowPreview scale code changed upstream'
+    s = s.replace(old, new, 1)
+    s = s.replace("const PREVIEW_MAX_HEIGHT = 150;\n", "const PREVIEW_MAX_HEIGHT = 150;\nconst PREVIEW_CAP_WIDTH = 300;\nconst PREVIEW_CAP_HEIGHT = 190;\n", 1)
+    open(p, 'w').write(s)
+print('preview cap patched')
+PY

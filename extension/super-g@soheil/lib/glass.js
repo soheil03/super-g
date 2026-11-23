@@ -63,8 +63,8 @@ float hash(vec2 p) {
 // slight colour split, a hairline rim lit from the top left and fainter
 // opposite, and a reflection of what's just outside on that rim.
 const float LIQ_BEZEL_MIN = 8.0;
-const float LIQ_BEZEL_MAX = 16.0;
-const float LIQ_PULL = 0.42;
+const float LIQ_BEZEL_MAX = 22.0;
+const float LIQ_PULL = 0.46;
 const float LIQ_DISPERSION = 0.06;
 const float LIQ_RIM_WIDTH = 1.0;
 const float LIQ_RIM = 0.55;
@@ -200,8 +200,13 @@ const SHADOW_PAD = 80;
 
 const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens', 'liquid'];
 
+// GNOME 51 removed Shell.GLSLEffect. Until the shaders are ported, the modules
+// that need them stay off there (extension.js checks this) instead of the whole
+// extension failing to load.
+export const SHADERS_OK = typeof Shell.GLSLEffect === 'function';
+
 export const GlassEffect = GObject.registerClass(
-class SuperGGlassEffect extends Shell.GLSLEffect {
+class SuperGGlassEffect extends (SHADERS_OK ? Shell.GLSLEffect : Clutter.OffscreenEffect) {
     _init() {
         super._init();
         this._loc = Object.fromEntries(UNIFORMS.map(u => [u, this.get_uniform_location(u)]));
@@ -912,8 +917,12 @@ const isLiquid = settings => settings.get_string('glass-style') === 'liquid';
 // and what's behind carry it) to tinted (calmer, for reading).
 function liquidMaterial(settings) {
     const t = settings.get_double('glass-clarity');
-    const mix = (a, b) => a + (b - a) * t;
-    return {tint: mix(0.1, 0.62), blur: Math.round(mix(12, 30)), saturation: mix(1.6, 1.35)};
+    // Clear is nearly water: Apple's clear glass shows the pixels behind almost
+    // as they are, and the bevel does the work. The floor used to be a 12 px blur
+    // with a 1.6 saturation boost, which read as frosted.
+    const eased = Math.pow(t, 1.3);
+    const lerp = (a, b) => a + (b - a) * eased;
+    return {tint: lerp(0.02, 0.62), blur: Math.round(lerp(2, 30) * 10) / 10, saturation: lerp(1.12, 1.35)};
 }
 
 function material(settings) {

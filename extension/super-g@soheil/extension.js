@@ -15,6 +15,7 @@ import PanelModule from './modules/panel.js';
 import GlassModule from './modules/glass.js';
 import DrawerModule from './modules/drawer.js';
 import {engine} from './lib/engine.js';
+import {SHADERS_OK} from './lib/glass.js';
 import {configureDock, configureDockMotion, onceOnly} from './lib/dockStyle.js';
 import {configureBlur} from './lib/blurSetup.js';
 import {configureCorners} from './lib/cornersSetup.js';
@@ -23,6 +24,9 @@ export const HOT_CORNERS = {
     'monitor-0-bottom-left-0': {action: 'show-overview', 'barrier-size-h': 1, fullscreen: true},
     'monitor-0-bottom-left-6': {action: 'show-desktop-mon', ctrl: true},
 };
+
+// Modules built on Shell.GLSLEffect, which GNOME 51 removed.
+const NEEDS_SHADERS = new Set(['glass', 'drawer', 'corners']);
 
 const MODULES = {
     appearance: AppearanceModule,
@@ -236,6 +240,13 @@ export default class SuperG extends Extension {
     _wanted(name, Module) {
         if (!this._settings.get_boolean(`module-${name}`))
             return false;
+        if (!SHADERS_OK && NEEDS_SHADERS.has(name)) {
+            if (!this._shaderNoted) {
+                this._shaderNoted = true;
+                console.warn('super-g: Shell.GLSLEffect is gone in this GNOME; glass, drawer and window corners stay off');
+            }
+            return false;
+        }
         if (this._settings.get_strv('broken-modules').includes(name))
             return false;
         if (Main.sessionMode.isLocked && Module.runsWhenLocked && !Module.runsWhenLocked(this.path))

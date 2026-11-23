@@ -3,10 +3,16 @@
 // clean up, and routes errors from callbacks to the extension's kill switch.
 
 import GLib from 'gi://GLib';
+import Shell from 'gi://Shell';
+
+// GNOME 51 has no Shell.GLSLEffect: those modules can't run there.
+const NO_SHADERS = typeof Shell.GLSLEffect !== 'function';
 
 // Whether another module is really running, not just switched on: surfaces
 // that leave their looks to it must stay readable after it crashes.
 export function moduleOn(settings, name) {
+    if (NO_SHADERS && ['glass', 'drawer', 'corners'].includes(name))
+        return false;
     return settings.get_boolean(`module-${name}`) && !settings.get_strv('broken-modules').includes(name);
 }
 

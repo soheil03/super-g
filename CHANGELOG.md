@@ -2,6 +2,15 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.5.2 - 2026-11-23
+
+### Fixed
+- The All Windows preview menu could be taller than the screen and sit partly off it. Previews were a fixed fraction of each window, so a large window gave a huge preview. They are now capped to a 300 x 190 box whatever the scale setting says.
+- GNOME 51 (Fedora 45): the extension failed to load with "class heritage ... GLSLEffect is not an object", since GNOME 51 removed `Shell.GLSLEffect`. It now loads there with glass, the app drawer and window corners switched off until their shaders are ported to `Clutter.ShaderEffect`. Reported by Balazsmi in issue 1.
+
+### Changed
+- Liquid glass at Clear is now actually clear: about a 2 px blur, almost no tint and a mild saturation (it was 12 px, 1.6 saturation). A wider bevel with a stronger pull.
+
 ## 1.5.1 - 2026-11-18
 
 ### Fixed
