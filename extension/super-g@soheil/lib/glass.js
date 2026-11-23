@@ -66,18 +66,18 @@ float hash(vec2 p) {
 // a bevel that pulls the blurred material outwards (never folding it over), a
 // slight colour split, a hairline rim lit from the top left and fainter
 // opposite, and a reflection of what's just outside on that rim.
-const float LIQ_BEZEL_MIN = 8.0;
-const float LIQ_BEZEL_MAX = 22.0;
+const float LIQ_BEZEL_MIN = 6.0;
+const float LIQ_BEZEL_MAX = 12.0;
 const float LIQ_PULL = 0.46;
 const float LIQ_DISPERSION = 0.06;
 const float LIQ_RIM_WIDTH = 1.0;
 const float LIQ_RIM = 0.6;
 const float LIQ_RIM_BASE = 0.22;
 const float LIQ_RIM_FAR = 0.7;
-const float LIQ_GLOW = 0.08;
-const float LIQ_SHADE = 0.12;
+const float LIQ_GLOW = 0.04;
+const float LIQ_SHADE = 0.05;
 const float LIQ_HAIRLINE = 0.2;
-const float LIQ_CLEAR = 0.6;
+const float LIQ_CLEAR = 0.45;
 const float LIQ_SHEEN = 0.07;
 const float LIQ_REFLECT = 18.0;
 const vec2 LIQ_LIGHT = vec2(-0.70710678, -0.70710678);
@@ -115,7 +115,7 @@ if (liquid > 0.5) {
     float small = min(size.x, size.y);
     // The bevel grows with the surface, so a big panel gets a real lens edge
     // and the top bar a fine one.
-    float bezel = min(clamp(small * 0.06, LIQ_BEZEL_MIN, LIQ_BEZEL_MAX), small * 0.4);
+    float bezel = min(clamp(small * 0.03, LIQ_BEZEL_MIN, LIQ_BEZEL_MAX), small * 0.4);
     float inward = max(-d, 0.0);
     // The outward normal, from a box at least as round as the bevel, so it
     // turns through the corners instead of folding along the diagonal.
@@ -159,7 +159,8 @@ if (liquid > 0.5) {
     float facing = LIQ_RIM_BASE + (1.0 - LIQ_RIM_BASE) * lit * lit + LIQ_RIM_FAR * far * far;
     liquid_rim = clamp(facing, 0.0, 1.0) * band;
     liquid_hair = 1.0 - smoothstep(0.0, aa, inward);
-    liquid_glow = exp(-inward / max(bezel * 0.3, 2.0)) * (0.15 + 0.85 * lit * lit + 0.45 * far * far);
+    // Narrow, and only where the light falls: a wide glow made a thick band.
+    liquid_glow = exp(-inward / 2.0) * lit * lit;
     // The bevel turned from the light is a touch darker, which keeps the edge
     // readable where a white rim can't show (light glass over light windows).
     liquid_shade = (1.0 - x) * (1.0 - x) * far * step(inward, bezel);
@@ -189,13 +190,23 @@ rgb = mix(vec3(luma), rgb, saturation) * brightness;
 if (calm > 0.0) {
     float cl = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
     float band = mix(0.74 + 0.24 * cl, 0.05 + 0.3 * cl, light_text);
-    rgb += (band - cl) * calm;
-    luma = mix(luma, band, calm);
-    // The squeeze lifts every channel alike, which reads as milk: give the
-    // colour back as vibrancy, as Apple's materials do, so a blue backdrop
-    // makes clean pale blue glass instead of lavender grey.
-    // Less on light glass, which should stay near white rather than pastel.
-    rgb = clamp(mix(vec3(luma), rgb, 1.0 + mix(0.2, 0.5, light_text) * calm), 0.0, 1.0);
+    float target = mix(cl, band, calm);
+    // Move the brightness, keep the hue: the colour around it is scaled to
+    // fit, never clipped (an added lift clipped blue and turned navy into
+    // cyan). Light glass, under dark text, keeps a little less of it, as
+    // Apple's light material is soft blue-white over blue; dark glass gets
+    // more, as vibrancy.
+    vec3 chroma = rgb - cl;
+    float hi = max(max(chroma.r, chroma.g), chroma.b);
+    float lo = min(min(chroma.r, chroma.g), chroma.b);
+    float gain = mix(1.0 - 0.2 * calm, 1.0 + 0.5 * calm, light_text);
+    if (hi > 0.0)
+        gain = min(gain, (1.0 - target) / hi);
+    // Dark glass may clip at black: fitting there washed it grey.
+    if (lo < 0.0 && light_text < 0.5)
+        gain = min(gain, target / -lo);
+    rgb = max(target + chroma * gain, 0.0);
+    luma = target;
 }
 // Contrast guard: where what's behind fights the theme's text (a dark window
 // under light glass), the tint thickens. Blurred input, so it stays smooth.
@@ -952,17 +963,18 @@ function layerTint(layer, s, k) {
     if (layer._thicken)
         a += (1 - a) * layer._thicken;
     if (s.liquid)
-        a = Math.max(a, (s.lightText ? 0.22 : 0.3) * k);
+        a = Math.max(a, (s.lightText ? 0.12 : 0.15) * k);
     return [s.tint[0], s.tint[1], s.tint[2], a];
 }
 
 const liquidSize = (w, h) => Math.min(Math.max((Math.min(w, h) - 60) / 340, 0), 1);
 
-// What shows through text-bearing glass should read as colour, never as ghosts
-// of text, so it doesn't go below a real frost whatever the clarity; the dock
-// and the bar keep the user's setting.
+// Apple's glass diffuses lightly: over sharp lines its Control Center still
+// shows them as soft streaks, and calm (not blur) keeps text legible. Text
+// panels get a little more than the dock and the bar, never a frost: at 34 px
+// it read as a thick, blurry slab.
 function liquidBlur(blur, k) {
-    return Math.max(blur * (1 + k * 2.4), 4 + 30 * k);
+    return Math.max(blur * (1 + k * 0.6), 3 + 4 * k);
 }
 
 function liquidCalm(k) {

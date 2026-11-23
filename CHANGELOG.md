@@ -2,6 +2,12 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.10.0 - 2026-11-24
+
+### Changed
+- Liquid glass retuned against Apple's Control Center: it is clear, not frosted. Text panels blur about 7 px instead of 34 (the backdrop shows through as soft streaks, as on Apple's), the rim's lens band is at most 12 px instead of 22, the inner glow is a narrow line where the light falls rather than a wide band, and the tint floor is halved. Legibility comes from the brightness squeeze, not from blur.
+- The squeeze moves brightness and keeps hue: colour is scaled to fit instead of clipped, so light glass over a navy wallpaper is soft blue-white rather than saturated cyan. Light glass keeps a little less colour, dark glass a little more.
+
 ## 1.9.0 - 2026-11-24
 
 ### Changed
