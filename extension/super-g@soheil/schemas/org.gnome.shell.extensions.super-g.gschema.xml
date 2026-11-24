@@ -182,8 +182,8 @@
     </key>
     <key name="glass-tone" type="s">
       <choices><choice value="wallpaper"/><choice value="theme"/></choices>
-      <default>'wallpaper'</default>
-      <summary>Shell glass tone: the wallpaper dimmed with white text in light mode too, as Apple's floating panels, or follow light and dark</summary>
+      <default>'theme'</default>
+      <summary>Shell glass tone in light mode: light glass with dark text, as Apple's (theme), or dimmed panels with white text (wallpaper)</summary>
     </key>
     <key name="shell-scheme-set" type="b">
       <default>false</default>

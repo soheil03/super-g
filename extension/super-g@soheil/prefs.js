@@ -29,7 +29,7 @@ const PANEL_STYLES = [['floating', 'Floating bar'], ['islands', 'Islands'], ['ad
 const PANEL_HEIGHTS = [[24, 'Compact (24 px)'], [28, 'Default (28 px)'], [32, 'Comfortable (32 px)'],
     [36, 'Large (36 px)'], [40, 'Extra large (40 px)']];
 const STATUS_STYLES = [['grouped', 'Grouped pill'], ['bare', 'Bare icons']];
-const GLASS_TONES = [['wallpaper', 'Wallpaper, as Apple'], ['theme', 'Follow light and dark']];
+const GLASS_TONES = [['theme', 'Light, as Apple'], ['wallpaper', 'Dark panels']];
 const DRAWER_STYLES = [['dock-popup', 'Popup from the dock'], ['fullscreen', 'Full screen'], ['overview', 'GNOME app grid']];
 const DOCK_POSITIONS = [['BOTTOM', 'Bottom'], ['LEFT', 'Left'], ['RIGHT', 'Right']];
 const INDICATORS = [['DOT', 'Small dot'], ['DOTS', 'Dots per window'], ['DASHES', 'Dashes'], ['DEFAULT', 'GNOME default']];
@@ -280,7 +280,7 @@ export default class SuperGPrefs extends ExtensionPreferences {
             ], 'Open apps pick up window changes after a restart.'),
             group('Glass', [
                 comboRow(s, 'glass-style', 'Style', GLASS_STYLES, {subtitle: 'Liquid bends what is behind through a curved edge'}),
-                comboRow(s, 'glass-tone', 'Tone in light mode', GLASS_TONES, {subtitle: 'Menus, quick settings and the drawer: dimmed wallpaper with white text, or light'}),
+                comboRow(s, 'glass-tone', 'Tone in light mode', GLASS_TONES, {subtitle: 'Menus, quick settings and the drawer: light glass with dark text, or dimmed with white text'}),
                 ...forStyle(s, 'liquid', [sliderRow(s, 'glass-clarity', 'Look', ['Clear', 'Tinted'])]),
                 ...forStyle(s, 'frosted', [
                 comboRow(s, 'glass-material', 'Thickness', GLASS_MATERIALS, {subtitle: 'How much the glass hides what is behind it'}),

@@ -2,6 +2,14 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.14.0 - 2026-11-24
+
+### Changed
+- Liquid glass follows a written recipe, measured on Apple's macOS 27 dock and sliders and checked against Kyant's Backdrop and Liquid Glass Studio ([docs/LIQUID_GLASS.md](docs/LIQUID_GLASS.md)). The rule: glass never darkens light content in light mode.
+- The dock and the top bar no longer go grey over light windows and wallpapers. They are what's behind, more saturated, under a light veil (dark purple 0.16 -> 0.26 luma, as Apple's 0.15 -> 0.23; light stays light where it used to drop from 0.83 to 0.5). The contrast guard and the brightness cut that did it are off for them: no fixed-colour text sits on them.
+- Their rim is lit all round, near-white top and bottom and about half that on the sides, screen-blended so it takes the backdrop's colour, with light scattered under it. Their blur is 2 px, so the wallpaper's grain shows through.
+- Menus, quick settings, the calendar and the drawer are light glass with dark text in light mode (glass tone "Light, as Apple", now the default). The lift reaches Apple's light material (about 0.8 luma over a dark backdrop instead of a milky 0.68), and hue is kept. "Dark panels" is still a choice.
+
 ## 1.13.0 - 2026-11-24
 
 ### Added

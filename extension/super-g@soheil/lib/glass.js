@@ -48,6 +48,7 @@ uniform float light_text;
 uniform float lens;
 uniform float liquid;
 uniform float calm;
+uniform float chrome;
 
 // Signed distance to a rounded rectangle whose corners are superellipses
 // (exponent 2 = circle, higher = smoother "continuous" corners).
@@ -84,6 +85,11 @@ const float LIQ_REFLECT = 18.0;
 // lit, the bottom edge brighter still (light carried through the glass),
 // the sides unlit.
 const vec2 LIQ_LIGHT = vec2(0.0, -1.0);
+// Chrome's rim on its sides, against 1 at the top and bottom, and the light
+// scattered under it (about +0.1 over five points on Apple's slider).
+const float LIQ_CHROME_SIDE = 0.55;
+const float LIQ_CHROME_GLOW = 0.1;
+const float LIQ_CHROME_GLOW_REACH = 3.0;
 `;
 
 // The live pipeline sets uniforms one float at a time (array uniforms from
@@ -160,11 +166,17 @@ if (liquid > 0.5) {
     float lit = max(dot(n, LIQ_LIGHT), 0.0);
     float far = max(dot(n, -LIQ_LIGHT), 0.0);
     float facing = LIQ_RIM_TOP * pow(lit, 4.0) + LIQ_RIM_BOTTOM * pow(far, 4.0);
+    // Chrome (the dock, the bar, small controls) is lit all round, as on
+    // Apple's dock and sliders: a near-white line top and bottom, about half
+    // that on the sides. Big panels keep the quiet top-faint profile.
+    float ends = pow(max(lit, far), 2.0);
+    facing = mix(facing, LIQ_CHROME_SIDE + (1.0 - LIQ_CHROME_SIDE) * ends, chrome);
     liquid_rim = clamp(facing, 0.0, 1.0) * band;
     // Only light glass needs the fine dark edge; Apple's dark glass has none.
     liquid_hair = (1.0 - smoothstep(0.0, aa, inward)) * (1.0 - light_text);
     // Narrow, and only where the light falls: a wide glow made a thick band.
-    liquid_glow = exp(-inward / 2.0) * pow(lit, 4.0);
+    liquid_glow = mix(exp(-inward / 2.0) * pow(lit, 4.0) * LIQ_GLOW,
+        exp(-inward / LIQ_CHROME_GLOW_REACH) * ends * LIQ_CHROME_GLOW, chrome);
     // The bevel turned from the light is a touch darker, which keeps the edge
     // readable where a white rim can't show (light glass over light windows).
     liquid_shade = (1.0 - x) * (1.0 - x) * far * step(inward, bezel);
@@ -198,8 +210,10 @@ if (calm > 0.0) {
     // Apple's: an orange at 0.65 luma shows at about 0.4). Brighter than that,
     // a white window, it dims harder again, or white text goes weak on grey.
     float dark_band = mix(0.04 + 0.8 * cl, max(0.4 - 1.8 * (cl - 0.45), 0.06), smoothstep(0.38, 0.52, cl));
-    float band = mix(0.74 + 0.24 * cl, dark_band, light_text);
-    float target = mix(cl, band, calm);
+    // Light glass lifts to Apple's light material, about 0.8 over a dark
+    // backdrop: at 0.74 with a quarter of the dark left through it read milky.
+    float band = mix(0.82 + 0.16 * cl, dark_band, light_text);
+    float target = mix(cl, band, mix(min(calm * 1.2, 1.0), calm, light_text));
     // Move the brightness, keep the hue: the colour around it is scaled to
     // fit, never clipped (an added lift clipped blue and turned navy into
     // cyan). Light glass, under dark text, keeps a little less of it, as
@@ -235,7 +249,7 @@ if (liquid > 0.5) {
     // A broad reflection, quiet in the middle: a soft sheen under the top.
     vec2 sq = (uv - vec2(0.5, -0.15)) / vec2(0.9, 0.55);
     float sheen = 1.0 - smoothstep(0.0, 1.0, length(sq));
-    vec3 light = vec3(clamp((liquid_rim * LIQ_RIM + liquid_glow * LIQ_GLOW) * rim + sheen * LIQ_SHEEN, 0.0, 1.0));
+    vec3 light = vec3(clamp((liquid_rim * LIQ_RIM * rim + liquid_glow) + sheen * LIQ_SHEEN, 0.0, 1.0));
     rgb = 1.0 - (1.0 - rgb) * (1.0 - light);
     rgb *= 1.0 - liquid_hair * LIQ_HAIRLINE;
 } else {
@@ -260,17 +274,17 @@ const NO_ROOM = {left: 0, right: 0, top: 0, bottom: 0};
 // Room around the actor the shadow can reach.
 const SHADOW_PAD = 80;
 
-const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens', 'liquid', 'calm'];
+const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens', 'liquid', 'calm', 'chrome'];
 
 // GNOME 51 removed Shell.GLSLEffect. Until the shaders are ported, the modules
 // that need them stay off there (extension.js checks this) instead of the whole
 // extension failing to load.
 export const SHADERS_OK = typeof Shell.GLSLEffect === 'function';
 
-// Whether the shell's glass surfaces use the dark palette. Apple's floating
-// panels (apps panel, widgets, Control Center) are the wallpaper dimmed with
-// white text in light mode too; 'wallpaper' tone does that while apps stay
-// light, 'theme' follows light and dark.
+// Whether the shell's glass surfaces use the dark palette. 'theme' (default)
+// follows light and dark: Apple's light glass is the backdrop under a white
+// veil, and dark panels over a white window can only be grey. 'wallpaper'
+// keeps dimmed panels with white text in light mode too.
 export function shellDark(settings, iface) {
     return iface.get_string('color-scheme') === 'prefer-dark' ||
         (settings.get_boolean('module-glass') && SHADERS_OK && settings.get_string('glass-tone') === 'wallpaper');
@@ -305,6 +319,7 @@ class SuperGGlassEffect extends (SHADERS_OK ? Shell.GLSLEffect : Clutter.Offscre
         f('lens', [0]);
         f('liquid', [0]);
         f('calm', [0]);
+        f('chrome', [0]);
         f('grain', [u.grain]);
         this.queue_repaint();
     }
@@ -586,6 +601,7 @@ export const LiveGlassEffect = GObject.registerClass({
         set('lens', u.lens);
         set('liquid', u.liquid ? 1 : 0);
         set('calm', u.calm);
+        set('chrome', u.chrome ? 1 : 0);
         set('grain', u.grain);
     }
 
@@ -957,14 +973,17 @@ class SuperGGlassLayer extends St.Widget {
         const s = this._style;
         const k = this._chrome ? liquidSize(w, h) : 1;
         // The dock and the bar are Apple's vibrant material: what's behind,
-        // slightly dimmed and more saturated, never lifted towards white.
+        // more saturated under a light veil, never dimmed (docs/LIQUID_GLASS.md).
         const vibrant = s.liquid && this._chrome;
         this.uniforms = {
             size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.liquid ? liquidBlur(s.blur, k) : s.blur,
-            // Liquid glass reads rim as the specular's strength: faint on the
-            // dock and the bar, which on Apple's show almost none.
-            tint: layerTint(this, s, k), saturation: vibrant ? s.saturation * 1.3 : s.saturation, brightness: liquidBrightness(s, k, vibrant), rim: s.liquid ? (this._chrome ? 0.4 : 1) : s.rim, outline: s.outline, grain: s.grain,
-            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, calm: this._live && s.liquid ? liquidCalm(k, this._chrome) : 0, shadow: this._shadowOn ? s.shadow : null,
+            // Liquid glass reads rim as the specular's strength.
+            tint: vibrant ? chromeTint(s) : layerTint(this, s, k), saturation: vibrant ? s.saturation * 1.3 : s.saturation,
+            brightness: vibrant ? 1 : liquidBrightness(s, k), rim: s.liquid ? (this._chrome ? CHROME_RIM : 1) : s.rim, outline: s.outline, grain: s.grain,
+            // Nothing of a fixed colour sits on chrome, so nothing to guard:
+            // the guard is what turned the dock grey over light windows.
+            guard: vibrant ? 0 : this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid,
+            calm: this._live && s.liquid && !this._chrome ? liquidCalm(k) : 0, chrome: vibrant, shadow: this._shadowOn ? s.shadow : null,
         };
         if (this._effect)
             this._effect.setUniforms(this.uniforms);
@@ -997,19 +1016,31 @@ const liquidSize = (w, h) => Math.min(Math.max((Math.min(w, h) - 60) / 340, 0), 
 function liquidBlur(blur, k) {
     // 11 px on text panels: at 7 a white window's text still ghosted through
     // the calendar and menus.
-    return Math.max(blur * (1 + k * 0.6), 3 + 8 * k);
+    // 2 px on the dock: Apple's still shows the wallpaper's grain through it.
+    return Math.max(blur * (1 + k * 0.6), 2 + 9 * k);
 }
 
-function liquidCalm(k, chrome) {
-    return (chrome ? 0 : 0.1) + 0.65 * k;
+function liquidCalm(k) {
+    return 0.1 + 0.65 * k;
 }
 
-// Dark liquid glass dims what carries text; the dock and the top bar stay
-// bright and clear, as Apple's do.
-function liquidBrightness(s, k, vibrant) {
+// Dark liquid glass dims what carries text.
+function liquidBrightness(s, k) {
     if (!s.liquid || !s.lightText)
-        return vibrant ? 0.9 : s.brightness;
+        return s.brightness;
     return 0.9 + (s.brightness - 0.9) * k;
+}
+
+// Chrome's rim: near-white top and bottom (0.45 * 1.67 = 0.75), as measured
+// on Apple's dock and sliders.
+const CHROME_RIM = 1.67;
+
+// Chrome's veil: Apple's adds about a tenth of light to what's behind (dark
+// purple 0.15 -> 0.23 luma, light lavender unchanged). Dark chrome is smoked
+// a little instead, so it still reads as the dark material.
+function chromeTint(s) {
+    const floor = s.lightText ? 0.18 : 0.1;
+    return [s.tint[0], s.tint[1], s.tint[2], Math.max(s.tint[3], floor)];
 }
 
 // Thickness, as Apple names its materials: how much palette colour the glass
