@@ -453,6 +453,17 @@ function sourceBox(actor, {fb, x: ox, y: oy, scale}, room, pad, align) {
     };
 }
 
+// Where the actor is painted now, inside a copy taken earlier: its corner in
+// the copy and device pixels per actor pixel. A held copy stays put while the
+// surface moves over it (a menu rises and grows as it opens).
+function placeIn(actor, {x: ox, y: oy, scale}, copy) {
+    const rect = actor.get_transformed_extents();
+    return {
+        ox: (rect.get_x() - ox) * scale - copy.x, oy: (rect.get_y() - oy) * scale - copy.y,
+        kx: rect.get_width() / actor.width * scale, ky: rect.get_height() / actor.height * scale,
+    };
+}
+
 // Per-frame uniforms: where the shown part lies in the copy, the texel steps of
 // the half-frost and bleed levels, and how much of the copy is real pixels.
 // half_k and wide_k take a level-0 coordinate to those levels: level L holds the
@@ -700,6 +711,11 @@ export const LiveGlassEffect = GObject.registerClass({
         // A menu fades in with its BoxPointer: without this the glass and its
         // shadow showed whole while the content was still faint.
         const fade = this._layer.get_paint_opacity() / 255;
+        // Mapped by the copy's own offset, a held backdrop rode along with the
+        // opening menu and jumped back when the hold ended.
+        const at = this._layer.holding && !source.borrowed
+            ? placeIn(actor, source, shown)
+            : {ox: shown.ox, oy: shown.oy, kx: box.scale, ky: box.scale};
 
         if (u.shadow) {
             const x = -s.left - SHADOW_PAD, y = -s.top - SHADOW_PAD;
@@ -708,15 +724,15 @@ export const LiveGlassEffect = GObject.registerClass({
             this._shadow.paint(node, {x, y, width, height,
                 box: {x1: -s.left, y1: -s.top, x2: actor.width + s.right, y2: actor.height + s.bottom},
                 radius: u.radius, exponent: u.exponent, aa: u.aa, layers: u.shadow, vibrant: u.vibrant ?? 0, fade,
-                map: [(shown.ox + x * box.scale) / this._capW * wideKu, (shown.oy + y * box.scale) / this._capH * wideKv,
-                    width * box.scale / this._capW * wideKu, height * box.scale / this._capH * wideKv,
+                map: [(at.ox + x * at.kx) / this._capW * wideKu, (at.oy + y * at.ky) / this._capH * wideKv,
+                    width * at.kx / this._capW * wideKu, height * at.ky / this._capH * wideKv,
                     used[0] * wideKu, used[1] * wideKv]});
         }
 
-        const uvX1 = (shown.ox - s.left * box.scale) / this._capW;
-        const uvY1 = (shown.oy - s.top * box.scale) / this._capH;
-        const uvX2 = (shown.ox + (actor.width + s.right) * box.scale) / this._capW;
-        const uvY2 = (shown.oy + (actor.height + s.bottom) * box.scale) / this._capH;
+        const uvX1 = (at.ox - s.left * at.kx) / this._capW;
+        const uvY1 = (at.oy - s.top * at.ky) / this._capH;
+        const uvX2 = (at.ox + (actor.width + s.right) * at.kx) / this._capW;
+        const uvY2 = (at.oy + (actor.height + s.bottom) * at.ky) / this._capH;
         // Between changes these stay on the pipeline; only a moving surface resends them.
         if (this._applied !== u) {
             this._setUniforms(u);
@@ -733,7 +749,7 @@ export const LiveGlassEffect = GObject.registerClass({
         });
         // Past the actor by EDGE_ROOM, for the contour; the shader still maps
         // the actor's own box through uv_*.
-        const ex = EDGE_ROOM * box.scale / this._capW, ey = EDGE_ROOM * box.scale / this._capH;
+        const ex = EDGE_ROOM * at.kx / this._capW, ey = EDGE_ROOM * at.ky / this._capH;
         const out = new Clutter.PipelineNode(this._glass);
         out.add_texture_rectangle(new Clutter.ActorBox({x1: -s.left - EDGE_ROOM, y1: -s.top - EDGE_ROOM,
             x2: actor.width + s.right + EDGE_ROOM, y2: actor.height + s.bottom + EDGE_ROOM}),

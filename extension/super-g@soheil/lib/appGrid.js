@@ -17,10 +17,12 @@ const PLATE_RADIUS = {squircle: 0.27, circle: 0.5, rounded: 0.22, off: 0.24};
 const PLATE_PAD = 0.1;
 const PLATE_GAP = 0.04;
 const PREVIEWS = 3;
-// The folder dialog's own grid: gaps between tiles, padding around the page.
-const FOLDER_GAP = 12;
-const FOLDER_PAD = 20;
+// The folder dialog's grid: gaps between tiles, the least padding around it.
+const FOLDER_GAP = 4;
+const FOLDER_PAD = 16;
 const FOLDER_SIDE = 3;
+// GNOME's PAGE_PREVIEW_RATIO / 2: each side's page arrow strip, of the page.
+const ARROW_SHARE = 0.1;
 const GNOME_DIALOG_SIZE = 550;
 const PLATED = 'super-g-plated';
 
@@ -34,7 +36,11 @@ export class AppGridLook {
 
     get iconSize() {
         const size = this._settings.get_int('app-grid-icon-size');
-        return size > 0 ? size : -1;
+        if (size <= 0)
+            return -1;
+        // Unshaped icons fill their whole box, where plated ones fill
+        // PLATE_SHARE of it: the same setting then drew them a fifth larger.
+        return this._settings.get_string('icon-shape') === 'off' ? Math.round(size * PLATE_SHARE) : size;
     }
 
     enable() {
@@ -57,13 +63,20 @@ export class AppGridLook {
         };
         const dialogProto = AppDisplay.AppFolderDialog.prototype;
         const origPopup = dialogProto.popup;
-        dialogProto.popup = function (...args) {
+        // Sized before the zoom reads the dialog's box, and again once shown:
+        // a dialog opened for the first time has unstyled tiles until then.
+        const size = dialog => {
             try {
-                self._sizeDialog(this);
+                self._sizeDialog(dialog);
             } catch (e) {
                 console.error('super-g: folder dialog size failed', e);
             }
-            return origPopup.apply(this, args);
+        };
+        dialogProto.popup = function (...args) {
+            size(this);
+            const result = origPopup.apply(this, args);
+            size(this);
+            return result;
         };
         this._restore.push(() => {
             viewProto.createFolderIcon = origCreate;
@@ -90,6 +103,8 @@ export class AppGridLook {
             if (!(item instanceof AppDisplay.FolderIcon))
                 continue;
             this._setGridSize(item.view._grid, size);
+            if (on)
+                this._tighten(item.view._grid);
             if (!on)
                 item.remove_style_class_name(PLATED);
             item.icon?._createIconTexture?.(item.icon.iconSize);
@@ -97,6 +112,7 @@ export class AppGridLook {
                 item._dialog._viewBox.width = item._dialog._viewBox.height = GNOME_DIALOG_SIZE;
                 const layout = item.view._grid.layoutManager;
                 layout._fixedRows = layout.rows_per_page = FOLDER_SIDE;
+                layout.column_spacing = layout.row_spacing = Math.round(layout._iconSize * 0.5);
             }
         }
     }
@@ -112,17 +128,39 @@ export class AppGridLook {
     }
 
     _sizeFolderGrid(grid) {
-        const layout = grid.layoutManager;
-        layout.columnSpacing = layout.rowSpacing = FOLDER_GAP;
+        this._tighten(grid);
         this._setGridSize(grid, this.iconSize);
+    }
+
+    // IconGrid sets both gaps to half the icon size on every style change,
+    // whatever the theme says: Apple's folders sit much closer. Off, GNOME's
+    // own gap comes back with the next style change.
+    _tighten(grid) {
+        const layout = grid?.layoutManager;
+        if (!layout)
+            return;
+        const set = () => {
+            if (this._restore.length)
+                layout.column_spacing = layout.row_spacing = FOLDER_GAP;
+        };
+        if (!grid._superGTight) {
+            grid._superGTight = true;
+            grid.connect_after('style-changed', set);
+        }
+        set();
     }
 
     // GNOME fixes the dialog at 550 px whatever the icons; with them larger
     // the 3x3 page crowded its edges, and a folder of four left a blank row.
     // It now holds as many rows as it needs, up to three. The tile's size
-    // comes from the theme (label, padding), so it's measured.
+    // comes from the theme (label, padding), so it's measured, and so is
+    // what the view keeps around the grid: the page arrows' strip on each
+    // side (a fifth of the page or an arrow, whichever is wider) and the
+    // dots below. Without those the tiles ran under the arrow and the last
+    // row was cut off.
     _sizeDialog(dialog) {
-        const grid = dialog._view?._grid;
+        const view = dialog._view;
+        const grid = view?._grid;
         const tiles = grid?.get_children().filter(c => c.visible) ?? [];
         const [tile] = tiles;
         if (!tile)
@@ -137,13 +175,28 @@ export class AppGridLook {
         const size = this.iconSize;
         if (size > 0)
             tile.icon?.setIconSize?.(size);
+        tile.ensure_style();
+        // The grid's cells are square, at the tile's larger side.
         const [, tileWidth] = tile.get_preferred_width(-1);
         const [, tileHeight] = tile.get_preferred_height(-1);
+        const cell = Math.max(tileWidth, tileHeight);
+        if (cell < Math.max(size, 0))
+            return;
         const [, header] = dialog._entryBox.get_preferred_height(-1);
+        const gridNode = grid.get_theme_node();
+        const pagePad = side => Math.max(FOLDER_PAD, gridNode.get_length(`page-padding-${side}`));
+        const across = n => n * cell + (n - 1) * layout.column_spacing;
+        const down = n => n * cell + (n - 1) * layout.row_spacing;
+        const inner = across(FOLDER_SIDE) + pagePad('left') + pagePad('right');
+        const arrows = [view._nextPageArrow, view._prevPageArrow]
+            .filter(Boolean).map(a => a.get_preferred_width(-1)[0]);
+        const arrow = Math.max(0, ...arrows);
+        const width = arrow >= ARROW_SHARE * (inner + 2 * arrow) ? inner + 2 * arrow : inner / (1 - 2 * ARROW_SHARE);
+        const [, dots] = view._pageIndicators?.get_preferred_height(width) ?? [0, 0];
         const node = dialog._viewBox.get_theme_node();
-        const side = (n, t) => n * t + (n - 1) * FOLDER_GAP + 2 * FOLDER_PAD;
-        dialog._viewBox.width = Math.ceil(side(FOLDER_SIDE, tileWidth) + node.get_horizontal_padding());
-        dialog._viewBox.height = Math.ceil(side(rows, tileHeight) + header + node.get_vertical_padding());
+        dialog._viewBox.width = Math.ceil(width + node.get_horizontal_padding());
+        dialog._viewBox.height = Math.ceil(down(rows) + pagePad('top') + pagePad('bottom') + header + dots +
+            node.get_vertical_padding());
     }
 
     // One plate the size of an app icon's, with up to nine previews in it.

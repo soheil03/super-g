@@ -113,6 +113,16 @@ function panelIslands() {
     return islands;
 }
 
+// BoxPointer opens from 0.96 scale, `-arrow-rise` off its place: the copy
+// held through that is taken at the start and must reach where it settles.
+const OPEN_SCALE = 0.96;
+function openRoom(box) {
+    const [, width] = box.get_preferred_width(-1);
+    const [, height] = box.get_preferred_height(width);
+    const reach = Math.ceil(box.get_theme_node().get_length('-arrow-rise') + (1 - OPEN_SCALE) * Math.max(width, height));
+    return {left: reach, right: reach, top: reach, bottom: reach};
+}
+
 export default class GlassModule extends Module {
     static needsDock = true;
 
@@ -147,7 +157,7 @@ export default class GlassModule extends Module {
                 self._ensureBox(this);
                 self._toneMenu(this);
                 if (args[0])
-                    self._menus.get(this)?.glass.holdFor(BoxPointer.POPUP_ANIMATION_TIME, {});
+                    self._menus.get(this)?.glass.holdFor(BoxPointer.POPUP_ANIMATION_TIME, openRoom(this));
             });
             return self._origPointerOpen.call(this, ...args);
         };

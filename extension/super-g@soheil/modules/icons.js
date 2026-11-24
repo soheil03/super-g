@@ -142,7 +142,8 @@ export default class IconsModule extends Module {
         this.connect(St.Settings.get(), 'notify::color-scheme', () => this.later('icons', 100, () => this._refresh()));
         this._grid = new AppGridLook(this.settings);
         this._grid.enable();
-        this.connect(this.settings, 'changed::app-grid-icon-size', () => this.later('grid', 100, () => this._grid.apply()));
+        for (const key of ['app-grid-icon-size', 'icon-shape'])
+            this.connect(this.settings, `changed::${key}`, () => this.later('grid', 100, () => this._grid.apply()));
         this._refresh();
         this._warmUp();
     }

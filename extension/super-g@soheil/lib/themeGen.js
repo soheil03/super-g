@@ -464,6 +464,7 @@ ${tileStates('.app-folder.super-g-plated')}
 ${rule('.super-g-folder-plate', `background-color: ${withAlpha(c.fg, dark ? 0.16 : 0.1)}; box-shadow: inset 0 0 0 1px ${withAlpha(c.fg, dark ? 0.12 : 0.08)};`)}
 ${rule('.app-folder-dialog', `background-color: ${opts.glass ? 'transparent' : withAlpha(c.window, 0.94)}; color: ${c.fg}; border-radius: 32px; border: none; box-shadow: ${opts.glass ? 'none' : `inset 0 0 0 1px ${withAlpha(c.fg, 0.08)}`};`)}
 ${opts.glass ? rule('.app-folder-dialog-container', 'background-color: transparent;') : ''}
+${rule('.app-folder-dialog .overview-tile', 'padding: 6px;')}
 ${rule('.app-folder-dialog .icon-button, .app-folder-dialog .icon-button StIcon', `color: ${c.fg};`)}
 ${rule('.app-folder-dialog .icon-button', `background-color: ${tile}; border: none; box-shadow: none;`)}
 ${rule('.app-folder-dialog .icon-button:hover, .app-folder-dialog .icon-button:focus', `background-color: ${c.controlHover}; box-shadow: none !important;`)}

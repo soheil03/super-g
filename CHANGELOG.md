@@ -2,6 +2,14 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.17.1 - 2026-11-25
+
+### Fixed
+- Folders with more than nine apps: the next-page arrow sat on the last column and the bottom row's labels were cut off. The dialog now counts the arrows' strip and the page dots, and measures its tiles once they're styled (the first open measured them unstyled).
+- Icons in an open folder sat far apart: GNOME spaces them by half the icon size whatever the theme says. They're 4 px apart now, with less padding per tile.
+- With icon shapes off, app grid icons were a fifth larger than with a shape, since a plate fills only 82% of its box. The grid now uses the same visible size either way.
+- Opening a menu or quick settings, the blurred backdrop slid with the menu and jumped back when the animation ended. The copy held through the animation is now mapped to where the menu really is on each frame.
+
 ## 1.17.0 - 2026-11-24
 
 ### Added
