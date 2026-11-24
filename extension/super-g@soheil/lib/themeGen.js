@@ -3,7 +3,7 @@
 // GTK3 (on top of adw-gtk3) and GNOME Shell. Pure functions, no GNOME imports,
 // so the same code runs in the shell, in prefs and in tools/gen.js.
 
-import {contrastOn, mix, over, onColor, withAlpha} from './color.js';
+import {contrastOn, mix, over, onColor, parse, withAlpha} from './color.js';
 
 export const DEFAULTS = {
     palette: 'catppuccin',
@@ -331,6 +331,10 @@ export function shellCss(tokens, opts, dark, themeCss = '') {
     const solid = withAlpha(c.popover, 0.96);
     const glass = withAlpha(c.popover, dark ? 0.74 : 0.62);
     const tile = c.control;
+    // Notification cards take the toggles' wash; stacked ones are clipped to the
+    // strip that peeks out (lib/notificationStack.js), so they never show
+    // through each other. The peeking strips are a touch stronger than the card,
+    // or a stack reads as one notification.
     const rule = (sel, body) => `${scoped(sel)} { ${body} }`;
     // Every state GNOME styles, or its dark tile shows through under our dark
     // text: the first search result is :highlighted, not :selected.
@@ -395,15 +399,17 @@ ${rule('.events-button .events-title, .world-clocks-button .world-clocks-header,
 ${rule('.events-button, .world-clocks-button, .weather-button', `color: ${c.fg};`)}
 ${rule('.message', `border-radius: 16px; background-color: ${tile}; color: ${c.fg};`)}
 ${rule('.message:hover', `background-color: ${c.controlHover};`)}
-${rule('.message-notification-group .message', `background-color: ${over(tile, c.popover)};`)}
-${rule('.message-notification-group .message:hover', `background-color: ${over(c.controlHover, c.popover)};`)}
-${rule('.message:second-in-stack', `background-color: ${mix(over(tile, c.popover), c.popover, 0.7)}; box-shadow: none;`)}
-${rule('.message:lower-in-stack', `background-color: ${mix(over(tile, c.popover), c.popover, 0.45)}; box-shadow: none;`)}
+${rule('.message-notification-group .message', `background-color: ${tile};`)}
+${rule('.message-notification-group .message:hover', `background-color: ${c.controlHover};`)}
+${rule('.message:second-in-stack', `background-color: ${withAlpha(tile, parse(tile).a * 1.3)}; box-shadow: none;`)}
+${rule('.message:lower-in-stack', `background-color: ${withAlpha(tile, parse(tile).a)}; box-shadow: none;`)}
 ${rule('.notification-banner', 'margin: 8px 14px;')}
 ${rule('.notification-banner, .notification-banner .message', `border-radius: 20px; background-color: ${withAlpha(c.popover, 0.97)}; color: ${c.fg}; border: none; box-shadow: 0 6px 20px rgba(0,0,0,${dark ? 0.3 : 0.12});`)}
 ${opts.glass ? rule('.notification-banner.super-g-glassed, .notification-banner.super-g-glassed .message', 'background-color: transparent; box-shadow: none;') : ''}
 ${opts.glass ? rule('.notification-banner.super-g-glassed:hover, .notification-banner.super-g-glassed .message:hover', `background-color: ${withAlpha(c.fg, dark ? 0.06 : 0.04)};`) : ''}
 ${rule('.notification-banner .message-title, .notification-banner .message-body', `color: ${c.fg};`)}
+${rule('.message .message-source-title', `color: ${withAlpha(c.fg, 0.82)};`)}
+${rule('.message .message-header .event-time, .message .message-time', `color: ${withAlpha(c.fg, 0.6)};`)}
 ${rule('.events-button, .world-clocks-button, .weather-button', `border-radius: 16px; background-color: ${tile}; color: ${c.fg};`)}
 ${opts.glass
         // On glass, cards are lighter platters with a fine light edge, as on

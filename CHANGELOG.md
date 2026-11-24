@@ -2,6 +2,18 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.15.0 - 2026-11-24
+
+### Changed
+- Liquid glass is rebuilt on Apple's own model (docs/LIQUID_GLASS.md), not tuned constants on ours. Brightness goes through a fixed band that never inverts what's behind (dark glass: black 0.08 to white 0.48; light: 0.68 to 0.97), colour is calmed to about 0.6 instead of boosted, and the fill is neutral, not the palette colour.
+- The edge is a real lens: a 20 pt rounded rim that bends and softly mirrors what's inside, frosted half as much as the face. No colour fringes.
+- Light from around the glass drifts into it (bleed), a 1 pt glint in the backdrop's own colour lights two opposite corners, and a thin dark contour outside the edge separates it from light backdrops, as on macOS 27.
+- Shadows under big glass are lighter and take the backdrop's colour. Grain, sheen and the contrast guard's patches are gone.
+- Corners follow Apple's continuous curve (exponent 3).
+- Glass clarity: 0.3 is Apple's regular glass, 1 the tinted end, 0 a clear end.
+- Notifications in Quick Settings and the calendar take the toggles' translucent wash instead of solid grey. Stacked cards are cut to the strip that peeks out, so they never show through each other.
+- Notification banners frost more of what's behind, and the app name in every notification is easier to read.
+
 ## 1.14.2 - 2026-11-24
 
 ### Docs

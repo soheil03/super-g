@@ -12,6 +12,7 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import {Module, moduleOn} from '../lib/module.js';
 import * as Files from '../lib/files.js';
 import * as Gen from '../lib/themeGen.js';
+import * as NotificationStack from '../lib/notificationStack.js';
 import {shellDark} from '../lib/glass.js';
 
 const UBUNTU_SHELL = 'org.gnome.shell.ubuntu';
@@ -71,10 +72,12 @@ export default class AppearanceModule extends Module {
             if (this._currentShellSource() !== this._shellSource)
                 this.later('shell', 100, () => this._applyShell());
         });
+        NotificationStack.enable();
         this._applyAll();
     }
 
     disable() {
+        NotificationStack.disable();
         this.cleanup();
         this._syncShellScheme(false);
         this._unloadShell();

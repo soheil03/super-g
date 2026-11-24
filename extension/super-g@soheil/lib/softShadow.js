@@ -22,7 +22,8 @@ export function uniformLocation(pipeline, name) {
 }
 
 const NAMES = ['size_x', 'size_y', 'radius', 'exponent', 'aa', 'full_x', 'full_y', 'center_x', 'center_y',
-    'tuck', 'd0', 's0', 'a0', 'd1', 's1', 'a1', 'd2', 's2', 'a2', 'fade'];
+    'tuck', 'd0', 's0', 'a0', 'd1', 's1', 'a1', 'd2', 's2', 'a2', 'fade',
+    'vibrant', 'map_x', 'map_y', 'map_w', 'map_h', 'used_u', 'used_v'];
 
 const DECLARATIONS = `
 ${NAMES.map(name => `uniform float ${name};`).join('\n')}
@@ -48,7 +49,16 @@ a *= clamp((roundedBox(p, half_size, radius, exponent) + tuck) / aa + 0.5, 0.0, 
 float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
 a = clamp(a + (noise - 0.5) / 255.0 * step(0.001, a), 0.0, 1.0);
 // Deep blue-black rather than pure black, which reads as dirt on light surfaces.
-cogl_color_out = vec4(vec3(0.02, 0.03, 0.07) * a, a);
+vec3 shade = vec3(0.02, 0.03, 0.07);
+// Liquid glass's shadow is vibrant: the blurred backdrop at 0.88 and
+// saturation 1.8 (map: where the shadow's area lies in the glass's copy).
+if (vibrant > 0.0) {
+    vec2 at = clamp(vec2(map_x, map_y) + cogl_tex_coord_in[0].st * vec2(map_w, map_h), vec2(0.0), vec2(used_u, used_v));
+    vec3 back = texture2D(cogl_sampler0, at).rgb * 0.88;
+    float y = dot(back, vec3(0.2126, 0.7152, 0.0722));
+    shade = mix(shade, clamp(vec3(y) + (back - y) * 1.8, 0.0, 1.0), vibrant);
+}
+cogl_color_out = vec4(shade * a, a);
 `;
 
 let template = null;
@@ -81,6 +91,8 @@ export function surfaceShadow(style, dark) {
     return SURFACE_LAYERS[style] ? darken(SURFACE_LAYERS[style], dark) : null;
 }
 
+const NO_MAP = [0, 0, 1, 1, 1, 1];
+
 // Sends only what changed, and skips the part under the surface.
 export class ShadowPainter {
     constructor(pipeline) {
@@ -93,9 +105,12 @@ export class ShadowPainter {
     // tuck: how far the shadow goes under an opaque surface, so no backdrop shows
     // through the row of pixels where the two edges meet.
     // fade: the snippet writes its colour itself, so the actor's opacity is ours to apply.
-    paint(node, {x, y, width, height, box, radius, exponent, aa, layers, tuck = 0, fade = 1}) {
+    // vibrant: 0-1, how much the colour comes from the pipeline's texture, at
+    // map [x, y, width, height, used width, used height] in its coordinates.
+    paint(node, {x, y, width, height, box, radius, exponent, aa, layers, tuck = 0, fade = 1, vibrant = 0, map = NO_MAP}) {
         const w = box.x2 - box.x1, h = box.y2 - box.y1;
-        const values = [w, h, radius, exponent, aa, width, height, (box.x1 + box.x2) / 2 - x, (box.y1 + box.y2) / 2 - y, tuck, ...layers, fade];
+        const values = [w, h, radius, exponent, aa, width, height, (box.x1 + box.x2) / 2 - x, (box.y1 + box.y2) / 2 - y, tuck, ...layers, fade,
+            vibrant, ...map];
         for (let i = 0; i < values.length; i++) {
             if (this._values[i] !== values[i]) {
                 this._values[i] = values[i];

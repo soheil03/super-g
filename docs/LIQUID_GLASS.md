@@ -160,7 +160,12 @@ with light text. Dark panels in light mode are not Apple's (macOS 27 panels
 follow the appearance); over a white window dark glass can only be mid-grey
 (about 0.49), which still holds white text at about 4:1.
 
-## Where ours differs (1.14.1)
+## Where ours differed (1.14.1)
+
+1.15.0 rebuilt the liquid path on this model and closes these gaps; the list
+stays as the record of why. Kept from ours: the clarity slider (0 is a clear
+end between Apple's Clear and regular, 0.3 is Apple's regular) and the
+`wallpaper` tone that puts dark glass under the light theme.
 
 Ranked by how much each costs the look. Line numbers are in
 `extension/super-g@soheil/lib/glass.js`.

@@ -18,7 +18,7 @@ import {LiveStylesheet, engineSettings, engineChildSettings} from '../lib/styles
 import {resolve} from '../lib/themeGen.js';
 import {withAlpha} from '../lib/color.js';
 import {handOver, handBack} from '../lib/engine.js';
-import {glassAlpha, barOverFullscreen} from '../lib/glass.js';
+import {glassAlpha, barOverFullscreen, liquidBarLuminance} from '../lib/glass.js';
 import {stripLuminance, currentWallpaperUri, currentImage} from '../lib/wallpaper.js';
 import {luminance, onColor, mix} from '../lib/color.js';
 
@@ -362,7 +362,8 @@ ${BOXES.map(([id]) => boxRules(`${F} #${id}`, themeFg)).join('\n')}`;
         const glassOn = this.settings.get_boolean('panel-glass') && moduleOn(this.settings, 'glass');
         const alpha = glassOn ? glassAlpha(c, this.settings) : style === 'adaptive' ? 0 : 0.8;
         const gamma = alpha * luminance(c.window) ** (1 / 2.2) + (1 - alpha) * wall ** (1 / 2.2);
-        const behind = gamma ** 2.2;
+        // Liquid glass has no tint: it maps what's behind into its band.
+        const behind = (glassOn ? liquidBarLuminance(wall, this.settings, this._iface, Main.panel.height || 32) : null) ?? gamma ** 2.2;
         const pal = this._tokens.palettes[this.settings.get_string('palette')] ?? this._tokens.palettes.catppuccin;
         const darkText = mix(pal.light.fg, '#000000', 0.45);
         const lightText = mix(pal.dark.fg, '#ffffff', 0.45);

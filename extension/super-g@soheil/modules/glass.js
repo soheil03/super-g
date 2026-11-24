@@ -165,7 +165,10 @@ export default class GlassModule extends Module {
 
         this._surfaces = new Map();
         this._hooks = [];
-        this.connect(Main.messageTray._bannerBin, 'child-added', (_bin, banner) => this.guard(() => this._ensureTracked(Main.messageTray, banner)));
+        // Banners land over anything, a white window included, and carry text the
+        // reader hasn't looked at yet: a little nearer the tinted end, so what's
+        // behind frosts away.
+        this.connect(Main.messageTray._bannerBin, 'child-added', (_bin, banner) => this.guard(() => this._ensureTracked(Main.messageTray, banner, {thicken: 0.4})));
         this._after(ModalDialog.ModalDialog.prototype, 'open', dialog => this._ensureDialog(dialog));
         this._after(OsdWindow.OsdWindow.prototype, 'show', osd => this._ensureTracked(osd, osd._hbox));
         this._after(SwitcherPopup.SwitcherPopup.prototype, 'show', popup => this._ensureSwitcher(popup));
@@ -363,11 +366,11 @@ export default class GlassModule extends Module {
 
     // For owners that place their children by hand: the glass sits just below
     // the owner and follows the surface.
-    _ensureTracked(owner, surface) {
+    _ensureTracked(owner, surface, {thicken = 0} = {}) {
         const parent = owner.get_parent();
         if (!surface || !parent || this._surfaces.has(surface))
             return;
-        const glass = new GlassLayer({style: this._style, shapeSource: surface, track: surface});
+        const glass = new GlassLayer({style: this._style, shapeSource: surface, track: surface, thicken});
         parent.insert_child_below(glass, owner);
         this._addSurface(surface, glass);
     }

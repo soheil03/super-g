@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Super G glass: a blur of what is really behind the surface, finished by
 // one shader pass that does what the stock blur can't: an anti-aliased
-// squircle outline, vibrancy (saturation and brightness lift), a palette tint,
-// a specular rim that is brightest at the top edge, a fine outline, a hollow
-// drop shadow, and a little grain against banding.
+// squircle outline and a hollow drop shadow, plus, for frosted glass,
+// vibrancy, a palette tint, a rim and a fine outline, and for liquid glass
+// Apple's model (docs/LIQUID_GLASS.md): an edge lens, a luma band with a
+// neutral fill, bleed from around the glass, a glint and a dark contour.
 
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
@@ -28,9 +29,12 @@ import {getKawaseConfiguration} from '../vendor/blur/effects/blur/kawase_samplin
 import {getTextureCapacity, largestViewSize, TextureRegion, textureFits} from '../vendor/blur/render/shader/texture_region.js';
 
 const DECLARATIONS = `
-// Where the bevel reads its clearer backdrop: live glass has a lightly
-// blurred level of its copy there, the wallpaper backdrop only its one.
-#define EDGE_TEX cogl_sampler0
+// The liquid face reads three more levels of the live copy: a half-frosted
+// one (rim and lens), the unblurred copy (the dark contour) and a very wide
+// one (bleed). The wallpaper backdrop has only its one, and never runs liquid.
+#define HALF_TEX cogl_sampler0
+#define SHARP_TEX cogl_sampler0
+#define WIDE_TEX cogl_sampler0
 uniform vec2 size;
 uniform vec2 uv_origin;
 uniform vec2 uv_size;
@@ -47,7 +51,24 @@ uniform float guard;
 uniform float light_text;
 uniform float lens;
 uniform float liquid;
-uniform float calm;
+uniform float band_lo;
+uniform float band_hi;
+uniform float band_chroma;
+uniform float bleed;
+uniform float hold;
+uniform float glint;
+uniform float contour;
+uniform float half_du;
+uniform float half_dv;
+uniform float wide_du;
+uniform float wide_dv;
+uniform float used_u;
+uniform float used_v;
+uniform float half_ku;
+uniform float half_kv;
+uniform float wide_ku;
+uniform float wide_kv;
+uniform float bleed_pull;
 
 // Signed distance to a rounded rectangle whose corners are superellipses
 // (exponent 2 = circle, higher = smoother "continuous" corners).
@@ -62,35 +83,38 @@ float hash(vec2 p) {
     return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
-// Liquid glass, after liquid-dom (Andras Prifer, MIT), tuned against Apple's:
-// a bevel that pulls the blurred material outwards (never folding it over), a
-// slight colour split, a hairline rim lit from the top left and fainter
-// opposite, and a reflection of what's just outside on that rim.
-const float LIQ_BEZEL_MIN = 6.0;
-const float LIQ_BEZEL_MAX = 12.0;
-const float LIQ_PULL = 0.46;
-const float LIQ_DISPERSION = 0.06;
-const float LIQ_RIM_WIDTH = 1.0;
-const float LIQ_RIM = 0.45;
-const float LIQ_RIM_TOP = 0.25;
-const float LIQ_RIM_BOTTOM = 1.0;
-const float LIQ_GLOW = 0.04;
-const float LIQ_SHADE = 0.05;
-const float LIQ_HAIRLINE = 0.08;
-const float LIQ_CLEAR = 0.45;
-const float LIQ_SHEEN = 0.04;
-const float LIQ_REFLECT = 18.0;
-// Light from straight above, as measured on Apple's panels: the top edge
-// lit, the bottom edge brighter still (light carried through the glass),
-// the sides unlit.
-const vec2 LIQ_LIGHT = vec2(0.0, -1.0);
+// Liquid glass is Apple's glass_background_lpf model (docs/LIQUID_GLASS.md),
+// reimplemented: lens, frost, a luma band with a neutral fill, bleed, glint,
+// contour. Lengths are in points (logical pixels).
+const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+// The bevel: 20 pt wide, pulling 3 times that at the outermost pixel along a
+// quarter circle, so it shows a mirrored, compressed copy of what lies inside.
+const float LIQ_BEVEL = 20.0;
+const float LIQ_LENS_PULL = 3.0;
+// Bleed: the wide sample's outer taps sit this many texels of its level away,
+// so it spreads about twice that level's own blur.
+const float LIQ_BLEED_TAPS = 1.5;
+// The face is held under the rim, which keeps its full brightness, over the
+// outer 1 to 2 pt.
+const float LIQ_HOLD_EDGE = 1.0;
+// The glint: a 1.1 pt band, two equal cosine lobes from the top left and the
+// bottom right (AppKit's key and fill lights), coloured by what's behind.
+const float LIQ_GLINT_WIDTH = 1.1;
+const vec2 LIQ_KEY = vec2(-0.70710678, -0.70710678);
+const float LIQ_GLINT_SAT = 1.3;
+// The contour: the unblurred backdrop at half its brightness top and bottom,
+// 36% on the side walls.
+const float LIQ_CONTOUR_FLAT = 0.5;
+const float LIQ_CONTOUR_SIDE = 0.36;
 `;
 
 // The live pipeline sets uniforms one float at a time (array uniforms from
 // JS are unreliable on some Mutter versions), so it declares scalars and
 // rebuilds the vectors.
 const LIVE_DECLARATIONS = DECLARATIONS
-    .replace('#define EDGE_TEX cogl_sampler0', '#define EDGE_TEX cogl_sampler1')
+    .replace('#define HALF_TEX cogl_sampler0', '#define HALF_TEX cogl_sampler1')
+    .replace('#define SHARP_TEX cogl_sampler0', '#define SHARP_TEX cogl_sampler2')
+    .replace('#define WIDE_TEX cogl_sampler0', '#define WIDE_TEX cogl_sampler3')
     .replace('uniform vec2 size;', 'uniform float size_x;\nuniform float size_y;\nvec2 size = vec2(0.0);')
     .replace('uniform vec2 uv_origin;', 'uniform float uv_x;\nuniform float uv_y;\nvec2 uv_origin = vec2(0.0);')
     .replace('uniform vec2 uv_size;', 'uniform float uv_w;\nuniform float uv_h;\nvec2 uv_size = vec2(1.0);')
@@ -99,152 +123,132 @@ const LIVE_DECLARATIONS = DECLARATIONS
 const CODE = `
 vec2 uv = (cogl_tex_coord_in[0].st - uv_origin) / uv_size;
 vec2 px = uv * size;
-float d = roundedBox(px - size * 0.5, size * 0.5, radius, exponent);
+vec2 p = px - size * 0.5;
+float d = roundedBox(p, size * 0.5, radius, exponent);
 float inside = clamp(0.5 - d / aa, 0.0, 1.0);
-
-// Edge lens: towards the outline the rim bends what's behind, pulling it from
-// further in, as a thick curved edge does. Follows the idea of Liquid Glass
-// for GNOME Shell (ryohsuke1231, MIT).
 vec3 rgb = cogl_color_out.rgb;
-vec3 edge_rgb = rgb;
-float liquid_rim = 0.0;
-float liquid_glow = 0.0;
-float liquid_shade = 0.0;
-float liquid_hair = 0.0;
-vec3 clear_rgb = rgb;
-float clear_w = 0.0;
+
 if (liquid > 0.5) {
-    vec2 p = px - size * 0.5;
-    float small = min(size.x, size.y);
-    // The bevel grows with the surface, so a big panel gets a real lens edge
-    // and the top bar a fine one.
-    float bezel = min(clamp(small * 0.12, LIQ_BEZEL_MIN, LIQ_BEZEL_MAX), small * 0.4);
-    float inward = max(-d, 0.0);
+    vec2 st = cogl_tex_coord_in[0].st;
+    vec2 to_uv = uv_size / size;
+    vec2 half_k = vec2(half_ku, half_kv);
+    vec2 wide_k = vec2(wide_ku, wide_kv);
+    float S = min(size.x, size.y);
+    float depth = max(-d, 0.0);
+    // Small glass shrinks the lens: at most a quarter of the short side.
+    float h = min(LIQ_BEVEL, S * 0.25);
     // The outward normal, from a box at least as round as the bevel, so it
     // turns through the corners instead of folding along the diagonal.
-    float rr = max(radius, bezel);
+    float rr = max(radius, h);
     vec2 e = vec2(0.5, 0.0);
     vec2 n = vec2(
         roundedBox(p + e.xy, size * 0.5, rr, exponent) - roundedBox(p - e.xy, size * 0.5, rr, exponent),
         roundedBox(p + e.yx, size * 0.5, rr, exponent) - roundedBox(p - e.yx, size * 0.5, rr, exponent));
     n = length(n) > 0.0001 ? normalize(n) : vec2(0.0, -1.0);
-    float x = clamp(inward / bezel, 0.0, 1.0);
-    if (inward < bezel) {
-        // The edge pulls what's behind outwards, as a curved rim does: a point
-        // shows what lies further in. The pull grows as (1 - x)^2 and stays
-        // under half the bevel, so the mapping never folds back on itself: past
-        // that, liquid-dom's Snell depth mirrored text along the edge.
-        float pull = LIQ_PULL * bezel * (1.0 - x) * (1.0 - x) * lens;
-        vec2 to_uv = uv_size / size;
-        vec2 st = cogl_tex_coord_in[0].st;
-        vec2 inwards = -n * to_uv;
-        // A slight colour split, red bending least, as glass disperses light.
-        rgb = vec3(
-            texture2D(cogl_sampler0, st + inwards * pull * (1.0 - LIQ_DISPERSION)).r,
-            texture2D(cogl_sampler0, st + inwards * pull).g,
-            texture2D(cogl_sampler0, st + inwards * pull * (1.0 + LIQ_DISPERSION)).b);
-        // The rim is where the glass is thick and curved: it shows the real
-        // backdrop, bent further and barely diffused, while the middle stays
-        // frosted and quiet. This is what makes it read as glass, not a tint.
-        clear_rgb = texture2D(EDGE_TEX, st + inwards * pull * 1.2).rgb;
-        clear_w = pow(1.0 - x, 2.5);
-    }
-    // Light from the top left, as on Apple's: a specular hairline brightest
-    // where the edge faces the light, a second lobe opposite (light carried
-    // through the glass and reflected back) and a trace all round, plus a soft
-    // glow that falls off inside the lit bevel. The hairline sits one device
-    // pixel in, behind a fine darker edge (liquid_hair) that outlines the
-    // shape over light backdrops, where a white rim can't show.
-    float rim_w = max(LIQ_RIM_WIDTH, aa);
-    float band = smoothstep(0.25 * aa, aa, inward) * (1.0 - smoothstep(aa + rim_w, 2.0 * aa + rim_w, inward));
-    float lit = max(dot(n, LIQ_LIGHT), 0.0);
-    float far = max(dot(n, -LIQ_LIGHT), 0.0);
-    float facing = LIQ_RIM_TOP * pow(lit, 4.0) + LIQ_RIM_BOTTOM * pow(far, 4.0);
-    liquid_rim = clamp(facing, 0.0, 1.0) * band;
-    // Only light glass needs the fine dark edge; Apple's dark glass has none.
-    liquid_hair = (1.0 - smoothstep(0.0, aa, inward)) * (1.0 - light_text);
-    // Narrow, and only where the light falls: a wide glow made a thick band.
-    liquid_glow = exp(-inward / 2.0) * pow(lit, 4.0);
-    // The bevel turned from the light is a touch darker, which keeps the edge
-    // readable where a white rim can't show (light glass over light windows).
-    liquid_shade = (1.0 - x) * (1.0 - x) * far * step(inward, bezel);
-    // A bright reflection from just outside shows on the rim over dark glass.
-    vec3 reflected = texture2D(cogl_sampler0, cogl_tex_coord_in[0].st + n * LIQ_REFLECT * uv_size / size).rgb;
-    float lr = dot(reflected, vec3(0.2126, 0.7152, 0.0722));
-    float lg = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-    edge_rgb = mix(rgb, reflected, smoothstep(0.2, 0.85, lr) * (1.0 - smoothstep(0.35, 0.85, lg)));
-} else if (lens > 0.0) {
-    vec2 p = px - size * 0.5;
-    float band = min(18.0, min(size.x, size.y) * 0.3);
-    // The direction from a rounder box than the surface, so it turns smoothly
-    // through the corner instead of folding along the diagonal.
-    vec2 q = max(abs(p) - size * 0.5 + band, vec2(0.0001));
-    float t = clamp(1.0 + d / band, 0.0, 1.0);
-    // Under a third of the band, so the pull never folds what's behind over
-    // (refraction at 1 mirrored text along the edge).
-    vec2 pull = -sign(p) * normalize(q) * min(lens, band * 0.3) * t * t * t;
-    rgb = texture2D(cogl_sampler0, cogl_tex_coord_in[0].st + pull / size * uv_size).rgb;
-}
-float luma = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-rgb = mix(vec3(luma), rgb, saturation) * brightness;
-// Calm: squeeze the backdrop's brightness into the band the theme's text reads
-// on, so a white window beside a dark one never puts text on the wrong side
-// of it. Colour stays (it is a shift, not a gain); big panels get all of it,
-// the dock and the bar a trace. This is what keeps Apple's clear panels legible.
-if (calm > 0.0) {
-    float cl = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-    // Dark glass keeps a mid-tone backdrop's own brightness, as Apple's panels
-    // over a bright wallpaper are that wallpaper dimmed, not murk (measured on
-    // Apple's: an orange at 0.65 luma shows at about 0.4). Brighter than that,
-    // a white window, it dims harder again, or white text goes weak on grey.
-    float dark_band = mix(0.04 + 0.8 * cl, max(0.4 - 1.8 * (cl - 0.45), 0.06), smoothstep(0.38, 0.52, cl));
-    float band = mix(0.74 + 0.24 * cl, dark_band, light_text);
-    float target = mix(cl, band, calm);
-    // Move the brightness, keep the hue: the colour around it is scaled to
-    // fit, never clipped (an added lift clipped blue and turned navy into
-    // cyan). Light glass, under dark text, keeps a little less of it, as
-    // Apple's light material is soft blue-white over blue; dark glass gets
-    // more, as vibrancy.
-    vec3 chroma = rgb - cl;
-    float hi = max(max(chroma.r, chroma.g), chroma.b);
-    float lo = min(min(chroma.r, chroma.g), chroma.b);
-    float gain = mix(1.0 - 0.2 * calm, 1.0 + 0.5 * calm, light_text);
-    if (hi > 0.0)
-        gain = min(gain, (1.0 - target) / hi);
-    // Dark glass may clip at black: fitting there washed it grey.
-    if (lo < 0.0 && light_text < 0.5)
-        gain = min(gain, target / -lo);
-    rgb = max(target + chroma * gain, 0.0);
-    luma = target;
-}
-// Contrast guard: where what's behind fights the theme's text (a dark window
-// under light glass), the tint thickens. Blurred input, so it stays smooth.
-float clash = mix(1.0 - smoothstep(0.12, 0.5, luma), smoothstep(0.42, 0.7, luma), light_text);
-rgb = mix(rgb, tint.rgb, mix(tint.a, max(tint.a, 0.8), clash * guard));
 
-// A fine dark outline keeps the shape readable over light content; a specular
-// rim just inside it, strongest along the top, gives the edge its light.
-if (liquid > 0.5) {
-    vec3 lum3 = vec3(0.2126, 0.7152, 0.0722);
-    vec3 clear = mix(vec3(dot(clear_rgb, lum3)), clear_rgb, saturation) * brightness;
-    rgb = mix(rgb, mix(clear, tint.rgb, tint.a * 0.5), clear_w * LIQ_CLEAR);
-    rgb = mix(rgb, edge_rgb, liquid_rim * 0.6);
-    rgb *= 1.0 - liquid_shade * LIQ_SHADE;
-    // Screen, not add: the light shows on dark glass and never burns light
-    // glass into a flat white band.
-    // A broad reflection, quiet in the middle: a soft sheen under the top.
-    vec2 sq = (uv - vec2(0.5, -0.15)) / vec2(0.9, 0.55);
-    float sheen = 1.0 - smoothstep(0.0, 1.0, length(sq));
-    vec3 light = vec3(clamp((liquid_rim * LIQ_RIM + liquid_glow * LIQ_GLOW) * rim + sheen * LIQ_SHEEN, 0.0, 1.0));
-    rgb = 1.0 - (1.0 - rgb) * (1.0 - light);
-    rgb *= 1.0 - liquid_hair * LIQ_HAIRLINE;
+    // Lens: offset = 3h (1 - sqrt(s (2 - s))), never sampling past the centre line.
+    float s = clamp(depth / h, 0.0, 1.0);
+    float off = LIQ_LENS_PULL * h * (1.0 - sqrt(s * (2.0 - s))) * lens;
+    off = min(off, max(S * 0.5 - depth, 0.0));
+    vec2 at = st - n * to_uv * off;
+
+    // Frost: full on the centre line, half at the rim, so the mirrored copy in
+    // the bevel stays soft. The half level is smoothed with four taps. Past the
+    // bevel the full level is the one Cogl already sampled.
+    vec3 full = off > 0.0 ? texture2D(cogl_sampler0, at).rgb : cogl_color_out.rgb;
+    float to_rim = clamp(1.0 - depth / (S * 0.5), 0.0, 1.0);
+    vec3 b = full;
+    if (to_rim > 0.0) {
+        vec2 ha = at * half_k;
+        vec2 hd = vec2(half_du, half_dv) * 0.5;
+        vec3 half_frost = 0.25 * (texture2D(HALF_TEX, ha + hd).rgb + texture2D(HALF_TEX, ha - hd).rgb +
+            texture2D(HALF_TEX, ha + vec2(hd.x, -hd.y)).rgb + texture2D(HALF_TEX, ha - vec2(hd.x, -hd.y)).rgb);
+        b = mix(full, half_frost, to_rim);
+    }
+
+    // Tone: brightness into a fixed band, chroma scaled, a neutral fill (folded
+    // into the band). Affine, so it commutes with the blur: Apple tones first.
+    float y = dot(b, LUMA);
+    vec3 face = vec3(band_lo + (band_hi - band_lo) * y) + band_chroma * (b - y);
+
+    // Bleed: light from around the glass. A very wide sample pulled outwards
+    // (along a smooth radial field: the normal flips along the diagonals),
+    // toned into 0.9-1.0 at saturation 1.2 on light glass, 0-0.5 on dark, and
+    // mixed in where the face is already bright (light) or dark (dark). The
+    // pull stops where the copy does, so no samples pile up at its edge.
+    float fy = clamp(dot(face, LUMA), 0.0, 1.0);
+    float amount = mix(0.5 * pow(fy, 4.0), 0.8 * pow(1.0 - fy, 4.0), light_text) * bleed;
+    if (amount > 0.5 / 255.0) {
+        vec2 radial = p / max(size * 0.5, vec2(1.0));
+        radial = length(radial) > 0.0001 ? normalize(radial) : vec2(0.0);
+        vec2 wa = (st + radial * to_uv * bleed_pull * to_rim * to_rim) * wide_k;
+        vec2 wd = vec2(wide_du, wide_dv) * LIQ_BLEED_TAPS;
+        vec2 lo = vec2(wide_du, wide_dv) * 0.5;
+        vec2 hi = max(vec2(used_u, used_v) * wide_k - lo, lo);
+        vec3 wb = (2.0 * texture2D(WIDE_TEX, clamp(wa, lo, hi)).rgb +
+            texture2D(WIDE_TEX, clamp(wa + wd, lo, hi)).rgb + texture2D(WIDE_TEX, clamp(wa - wd, lo, hi)).rgb +
+            texture2D(WIDE_TEX, clamp(wa + vec2(wd.x, -wd.y), lo, hi)).rgb +
+            texture2D(WIDE_TEX, clamp(wa - vec2(wd.x, -wd.y), lo, hi)).rgb) / 6.0;
+        float wy = dot(wb, LUMA);
+        vec3 lit = vec3(0.9 + 0.1 * wy) + 1.2 * (wb - wy);
+        vec3 dim = vec3(0.5 * wy) + (wb - wy);
+        face = mix(face, mix(lit, dim, light_text), amount);
+    }
+
+    // Under SDR the face is held below the rim.
+    face *= mix(1.0, hold, smoothstep(LIQ_HOLD_EDGE, 2.0 * LIQ_HOLD_EDGE, depth));
+
+    // Glint: screen-blended in the colour of what's behind, lighter and a
+    // little more saturated, so over black there is none.
+    float gw = max(LIQ_GLINT_WIDTH, aa);
+    if (glint > 0.0 && depth < gw) {
+        float gx = depth / gw;
+        float band = sqrt(max(1.0 - gx * gx, 0.0));
+        vec3 here = texture2D(HALF_TEX, st * half_k).rgb;
+        float hy = dot(here, LUMA);
+        vec3 shine = sqrt(clamp(vec3(hy) + (here - hy) * LIQ_GLINT_SAT, 0.0, 1.0));
+        face = 1.0 - (1.0 - face) * (1.0 - glint * abs(dot(n, LIQ_KEY)) * band * shine);
+    }
+    rgb = face + (hash(px) - 0.5) * grain;
+
+    // Contour: a line just outside the silhouette (the drawn rectangle reaches
+    // past the actor for it), the unblurred backdrop darkened, on light and
+    // dark glass alike. Never mixed with the face, so over near-black it
+    // stays darker than what's behind.
+    if (contour > 0.0 && d > -aa) {
+        float line = clamp(0.5 - (d - contour) / aa, 0.0, 1.0);
+        vec3 dark_edge = texture2D(SHARP_TEX, st).rgb * mix(LIQ_CONTOUR_SIDE, LIQ_CONTOUR_FLAT, n.y * n.y);
+        rgb = mix(dark_edge, clamp(rgb, 0.0, 1.0), inside / max(line, 0.0001));
+        inside = line;
+    }
 } else {
+    // Edge lens: towards the outline the rim bends what's behind, pulling it from
+    // further in, as a thick curved edge does. Follows the idea of Liquid Glass
+    // for GNOME Shell (ryohsuke1231, MIT).
+    if (lens > 0.0) {
+        float band = min(18.0, min(size.x, size.y) * 0.3);
+        // The direction from a rounder box than the surface, so it turns smoothly
+        // through the corner instead of folding along the diagonal.
+        vec2 q = max(abs(p) - size * 0.5 + band, vec2(0.0001));
+        float t = clamp(1.0 + d / band, 0.0, 1.0);
+        // Under a third of the band, so the pull never folds what's behind over
+        // (refraction at 1 mirrored text along the edge).
+        vec2 pull = -sign(p) * normalize(q) * min(lens, band * 0.3) * t * t * t;
+        rgb = texture2D(cogl_sampler0, cogl_tex_coord_in[0].st + pull / size * uv_size).rgb;
+    }
+    float luma = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+    rgb = mix(vec3(luma), rgb, saturation) * brightness;
+    // Contrast guard: where what's behind fights the theme's text (a dark window
+    // under light glass), the tint thickens. Blurred input, so it stays smooth.
+    float clash = mix(1.0 - smoothstep(0.12, 0.5, luma), smoothstep(0.42, 0.7, luma), light_text);
+    rgb = mix(rgb, tint.rgb, mix(tint.a, max(tint.a, 0.8), clash * guard));
+    // A fine dark outline keeps the shape readable over light content; a
+    // specular rim just inside it, strongest along the top, gives the edge its light.
     float ring = clamp(1.0 - abs(d + 1.5) / 0.9, 0.0, 1.0);
     rgb += ring * rim * mix(0.35, 1.0, 1.0 - uv.y);
     rgb = mix(rgb, vec3(0.0), clamp(1.0 - abs(d + 0.6) / 0.8, 0.0, 1.0) * outline);
+    rgb += (hash(px) - 0.5) * grain;
 }
-
-rgb += (hash(px) - 0.5) * grain;
 cogl_color_out = vec4(clamp(rgb, 0.0, 1.0), 1.0) * inside;
 `;
 
@@ -259,8 +263,11 @@ const NO_ROOM = {left: 0, right: 0, top: 0, bottom: 0};
 
 // Room around the actor the shadow can reach.
 const SHADOW_PAD = 80;
+// Liquid glass's contour lies just outside the actor: the glass draws this far
+// past it on every side.
+const EDGE_ROOM = 2;
 
-const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens', 'liquid', 'calm'];
+const UNIFORMS = ['size', 'uv_origin', 'uv_size', 'radius', 'exponent', 'aa', 'tint', 'saturation', 'brightness', 'rim', 'outline', 'grain', 'guard', 'light_text', 'lens', 'liquid'];
 
 // GNOME 51 removed Shell.GLSLEffect. Until the shaders are ported, the modules
 // that need them stay off there (extension.js checks this) instead of the whole
@@ -304,7 +311,6 @@ class SuperGGlassEffect extends (SHADERS_OK ? Shell.GLSLEffect : Clutter.Offscre
         f('light_text', [u.lightText]);
         f('lens', [0]);
         f('liquid', [0]);
-        f('calm', [0]);
         f('grain', [u.grain]);
         this.queue_repaint();
     }
@@ -334,10 +340,13 @@ function shaderTemplates(context) {
     const glass = Cogl.Pipeline.new(context);
     glass.set_layer_filters(0, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
     glass.set_layer_wrap_mode(0, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
-    // The bevel's clearer backdrop, sampled by hand (EDGE_TEX).
-    glass.set_layer_filters(1, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
-    glass.set_layer_wrap_mode(1, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
-    glass.set_layer_combine(1, 'RGBA = REPLACE(PREVIOUS)');
+    // Liquid glass's other levels of the copy, sampled by hand: half frost,
+    // the unblurred copy and the wide bleed level (HALF_TEX, SHARP_TEX, WIDE_TEX).
+    for (const layer of [1, 2, 3]) {
+        glass.set_layer_filters(layer, Cogl.PipelineFilter.LINEAR, Cogl.PipelineFilter.LINEAR);
+        glass.set_layer_wrap_mode(layer, Cogl.PipelineWrapMode.CLAMP_TO_EDGE);
+        glass.set_layer_combine(layer, 'RGBA = REPLACE(PREVIOUS)');
+    }
     glass.add_snippet(Cogl.Snippet.new(Cogl.SnippetHook.FRAGMENT, LIVE_DECLARATIONS,
         `size = vec2(size_x, size_y);\nuv_origin = vec2(uv_x, uv_y);\nuv_size = vec2(uv_w, uv_h);\ntint = vec4(tint_r, tint_g, tint_b, tint_a);\n${CODE}`));
     templates = {context, glass, shadow: shadowTemplate(context), passes: new Map()};
@@ -435,6 +444,56 @@ function sourceBox(actor, {fb, x: ox, y: oy, scale}, room, pad, align) {
     };
 }
 
+// Per-frame uniforms: where the shown part lies in the copy, the texel steps of
+// the half-frost and bleed levels, and how much of the copy is real pixels.
+// half_k and wide_k take a level-0 coordinate to those levels: level L holds the
+// copy in ceil(used / 2^L) of its ceil(capacity / 2^L) texels, a slightly
+// different share than level 0 has.
+const UV_UNIFORMS = ['uv_x', 'uv_y', 'uv_w', 'uv_h', 'half_du', 'half_dv', 'wide_du', 'wide_dv', 'used_u', 'used_v',
+    'half_ku', 'half_kv', 'wide_ku', 'wide_kv'];
+
+// How a level-0 coordinate scales to level L of a copy `used` texels wide in
+// targets of `cap`.
+const levelScale = (used, cap, level) => (levelSize(used, level) / levelSize(cap, level)) / (used / cap);
+
+// The down chain's level L, sampled bilinearly, is blurred by about this many
+// device pixels times 2^L.
+const LEVEL_SIGMA = 0.65;
+// Bleed: a level blurred by about a quarter of the short side (its wide taps
+// double that, about Apple's 0.56 S), no coarser than 64 pt a texel (its taps
+// then reach about Apple's 128 pt cap), and at least 2 texels across the
+// glass. Real pixels around the glass for 0.3 of the short side (at most
+// 64 pt): the outward pull, 0.35 S at most, stops there.
+const BLEED_SIGMA = 0.25;
+const BLEED_MAX_TEXEL = 64;
+const BLEED_PAD = 0.3;
+const BLEED_PAD_MAX = 64;
+const BLEED_PULL = 0.35;
+
+const bleedPad = small => Math.min(BLEED_PAD * small, BLEED_PAD_MAX);
+
+const levelFor = sigma => Math.round(Math.log2(Math.max(sigma, LEVEL_SIGMA) / LEVEL_SIGMA));
+
+// Which levels of the copy liquid glass reads, how far past the actor it
+// copies, and the grid the copy aligns to. Frosted glass keeps its own chain.
+function liquidLevels(u, sigma, passes, actor, scale) {
+    if (!u.liquid)
+        return {half: 1, deep: passes, pad: 0, align: passes};
+    const half = Math.min(passes, levelFor(sigma / 2));
+    const small = Math.min(actor.width, actor.height);
+    let deep = passes;
+    if (u.tone.bleed > 0) {
+        const most = Math.floor(Math.log2(BLEED_MAX_TEXEL * scale));
+        deep = Math.min(Math.max(levelFor(BLEED_SIGMA * small * scale), passes), Math.max(most, passes));
+        while (deep > passes && small * scale / 2 ** deep < 2)
+            deep--;
+    }
+    const pad = u.tone.bleed > 0 ? Math.ceil(bleedPad(small) * scale) : 0;
+    // The coarsest levels only feed the bleed, which is wide enough not to
+    // shimmer on a moving surface: aligning to them would copy far more.
+    return {half, deep, pad, align: Math.min(deep, passes + 2)};
+}
+
 export const LiveGlassEffect = GObject.registerClass({
     GTypeName: 'SuperGLiveGlassEffect',
 }, class LiveGlassEffect extends Clutter.Effect {
@@ -452,14 +511,16 @@ export const LiveGlassEffect = GObject.registerClass({
         this._context = null;
         this._down = this._up = this._downPass = this._upPass = [];
         this._regions = null;
-        this._glass = this._shadow = null;
-        this._applied = null;
+        this._glass = this._shadow = this._shadowPipeline = null;
+        this._levels = null;
+        this._applied = this._sampled = null;
         this._drawn = null;
     }
 
     // One target per blur level, kept while they still fit: copies change size
     // as surfaces move near the screen's edges.
-    _ensure(context, width, height, passes) {
+    // deep: the deepest down level, past `passes` for liquid glass's bleed.
+    _ensure(context, width, height, passes, deep) {
         if (this._context !== context || !textureFits(width, this._capW) || !textureFits(height, this._capH)) {
             const limit = largestViewSize();
             const sameContext = this._context === context;
@@ -476,13 +537,13 @@ export const LiveGlassEffect = GObject.registerClass({
             this._regions = new Map();
             this._glass = null;
             this._usedW = this._usedH = 0;
-            this._applied = null;
+            this._applied = this._sampled = null;
         }
         const target = level => createRenderTarget(context, levelSize(this._capW, level), levelSize(this._capH, level));
-        const fresh = this._down.length <= passes || this._usedW !== width || this._usedH !== height;
-        for (let level = this._down.length; level <= passes; level++)
+        const fresh = this._down.length <= deep || this._usedW !== width || this._usedH !== height;
+        for (let level = this._down.length; level <= deep; level++)
             this._down.push(target(level));
-        for (let level = 1; level <= passes; level++) {
+        for (let level = 1; level <= deep; level++) {
             this._downPass[level] ??= this._pass(context, this._down[level - 1], DOWNSAMPLE_DECLARATIONS, DOWNSAMPLE_CODE);
         }
         for (let level = 0; level < passes; level++) {
@@ -493,10 +554,10 @@ export const LiveGlassEffect = GObject.registerClass({
             const templates = shaderTemplates(context);
             this._glass = templates.glass.copy();
             this._glass.set_layer_texture(0, this._up[0].texture);
-            this._glass.set_layer_texture(1, this._down[1].texture);
-            const shadow = templates.shadow.copy();
-            shadow.set_layer_texture(0, this._up[0].texture);
-            this._shadow = new ShadowPainter(shadow);
+            this._glass.set_layer_texture(2, this._down[0].texture);
+            this._shadowPipeline = templates.shadow.copy();
+            this._shadow = new ShadowPainter(this._shadowPipeline);
+            this._levels = null;
             this._applied = null;
             this._uv = [];
             this._captured = false;
@@ -516,6 +577,18 @@ export const LiveGlassEffect = GObject.registerClass({
             source.update(up ? this._down[level + 1] : this._down[level - 1]);
             original?.update(this._down[level]);
         }
+    }
+
+    // Which levels the liquid face reads: half frost for the rim and lens, the
+    // deepest for bleed (and the vibrant shadow's colour).
+    _bindLevels(half, deep) {
+        if (this._levels?.half === half && this._levels.deep === deep)
+            return;
+        this._glass.set_layer_texture(1, this._down[half].texture);
+        this._glass.set_layer_texture(3, this._down[deep].texture);
+        this._shadowPipeline.set_layer_texture(0, this._down[deep].texture);
+        this._levels = {half, deep};
+        this._uv = [];
     }
 
     _pass(context, source, declarations, code, original = null) {
@@ -544,20 +617,20 @@ export const LiveGlassEffect = GObject.registerClass({
 
     // The deepest upsample mixes towards its finer level, for radii in between.
     _sampling(passes, blend) {
-        if (this._applied?.passes === passes && this._applied.blend === blend)
+        if (this._sampled?.passes === passes && this._sampled.blend === blend)
             return;
         for (let level = passes - 1; level >= 0; level--) {
             const source = level === passes - 1 ? this._down[level + 1] : this._up[level + 1];
             this._upPass[level].set_layer_texture(0, source.texture);
             setFloat(this._upPass[level], 'level_blend', level === passes - 1 ? blend : 1);
         }
-        this._applied = {passes, blend};
+        this._sampled = {passes, blend};
     }
 
     // Constant for the layer's life: parents cache their volume from this, and
     // a stale one culls what grew past it (the dock's ends and shadow, cut off).
     vfunc_modify_paint_volume(volume) {
-        const pad = this._layer.wantsShadow ? SHADOW_PAD : 0;
+        const pad = (this._layer.wantsShadow ? SHADOW_PAD : 0) + EDGE_ROOM;
         const reach = this._layer.reach;
         const origin = volume.get_origin();
         origin.x -= reach.left + pad;
@@ -585,8 +658,16 @@ export const LiveGlassEffect = GObject.registerClass({
         set('light_text', u.lightText);
         set('lens', u.lens);
         set('liquid', u.liquid ? 1 : 0);
-        set('calm', u.calm);
         set('grain', u.grain);
+        const t = u.tone;
+        set('band_lo', t?.lo ?? 0);
+        set('band_hi', t?.hi ?? 0);
+        set('band_chroma', t?.chroma ?? 0);
+        set('bleed', t?.bleed ?? 0);
+        set('hold', t?.hold ?? 1);
+        set('glint', t?.glint ?? 0);
+        set('contour', t?.contour ?? 0);
+        set('bleed_pull', t?.pull ?? 0);
     }
 
     vfunc_paint_node(node, paintContext, _flags) {
@@ -600,17 +681,26 @@ export const LiveGlassEffect = GObject.registerClass({
         if (!box)
             return;
 
-        if (u.shadow) {
-            const e = this._layer.stretch;
-            this._shadow.paint(node, {x: -e.left - SHADOW_PAD, y: -e.top - SHADOW_PAD,
-                width: actor.width + e.left + e.right + 2 * SHADOW_PAD, height: actor.height + e.top + e.bottom + 2 * SHADOW_PAD,
-                box: {x1: -e.left, y1: -e.top, x2: actor.width + e.right, y2: actor.height + e.bottom},
-                radius: u.radius, exponent: u.exponent, aa: u.aa, layers: u.shadow});
-        }
-
         // The shown part of the blurred copy: the actor, plus any stretch.
         const s = this._layer.stretch;
         const shown = this._drawn ?? box;
+        const used = [shown.width / this._capW, shown.height / this._capH];
+        const {half, deep} = this._levels;
+        const k = level => [levelScale(shown.width, this._capW, level), levelScale(shown.height, this._capH, level)];
+        const [halfKu, halfKv] = k(half), [wideKu, wideKv] = k(deep);
+
+        if (u.shadow) {
+            const x = -s.left - SHADOW_PAD, y = -s.top - SHADOW_PAD;
+            const width = actor.width + s.left + s.right + 2 * SHADOW_PAD, height = actor.height + s.top + s.bottom + 2 * SHADOW_PAD;
+            // A vibrant shadow takes its colour from the copy's widest level.
+            this._shadow.paint(node, {x, y, width, height,
+                box: {x1: -s.left, y1: -s.top, x2: actor.width + s.right, y2: actor.height + s.bottom},
+                radius: u.radius, exponent: u.exponent, aa: u.aa, layers: u.shadow, vibrant: u.vibrant ?? 0,
+                map: [(shown.ox + x * box.scale) / this._capW * wideKu, (shown.oy + y * box.scale) / this._capH * wideKv,
+                    width * box.scale / this._capW * wideKu, height * box.scale / this._capH * wideKv,
+                    used[0] * wideKu, used[1] * wideKv]});
+        }
+
         const uvX1 = (shown.ox - s.left * box.scale) / this._capW;
         const uvY1 = (shown.oy - s.top * box.scale) / this._capH;
         const uvX2 = (shown.ox + (actor.width + s.right) * box.scale) / this._capW;
@@ -620,16 +710,22 @@ export const LiveGlassEffect = GObject.registerClass({
             this._setUniforms(u);
             this._applied = u;
         }
-        const uv = [uvX1, uvY1, uvX2 - uvX1, uvY2 - uvY1];
-        ['uv_x', 'uv_y', 'uv_w', 'uv_h'].forEach((name, i) => {
+        const uv = [uvX1, uvY1, uvX2 - uvX1, uvY2 - uvY1,
+            2 ** half / this._capW, 2 ** half / this._capH, 2 ** deep / this._capW, 2 ** deep / this._capH, ...used,
+            halfKu, halfKv, wideKu, wideKv];
+        UV_UNIFORMS.forEach((name, i) => {
             if (this._uv[i] !== uv[i]) {
                 this._uv[i] = uv[i];
                 this._glass.set_uniform_1f(uniformLocation(this._glass, name), uv[i]);
             }
         });
+        // Past the actor by EDGE_ROOM, for the contour; the shader still maps
+        // the actor's own box through uv_*.
+        const ex = EDGE_ROOM * box.scale / this._capW, ey = EDGE_ROOM * box.scale / this._capH;
         const out = new Clutter.PipelineNode(this._glass);
-        out.add_texture_rectangle(new Clutter.ActorBox({x1: -s.left, y1: -s.top,
-            x2: actor.width + s.right, y2: actor.height + s.bottom}), uvX1, uvY1, uvX2, uvY2);
+        out.add_texture_rectangle(new Clutter.ActorBox({x1: -s.left - EDGE_ROOM, y1: -s.top - EDGE_ROOM,
+            x2: actor.width + s.right + EDGE_ROOM, y2: actor.height + s.bottom + EDGE_ROOM}),
+        uvX1 - ex, uvY1 - ey, uvX2 + ex, uvY2 + ey);
         node.add_child(out);
     }
 
@@ -640,11 +736,13 @@ export const LiveGlassEffect = GObject.registerClass({
         const fb = source.fb;
         const sigma = u.blur * source.scale;
         const {passes, blend} = getKawaseConfiguration(sigma * 4);
-        const box = sourceBox(actor, source, this._layer.room, Math.ceil(sigma * BLUR_REACH), 2 ** passes);
+        const {half, deep, pad, align} = liquidLevels(u, sigma, passes, actor, source.scale);
+        const box = sourceBox(actor, source, this._layer.room, Math.max(Math.ceil(sigma * BLUR_REACH), pad), 2 ** align);
         if (box.ax2 <= box.ax1 || box.ay2 <= box.ay1)
             return null;
-        this._ensure(fb.get_context(), box.width, box.height, passes);
+        this._ensure(fb.get_context(), box.width, box.height, passes, deep);
         this._sampling(passes, blend);
+        this._bindLevels(half, deep);
 
         // A partial redraw would copy our own previous frame from the
         // undamaged part. Show the last clean blur and ask for a full redraw
@@ -657,9 +755,16 @@ export const LiveGlassEffect = GObject.registerClass({
             // older frame, our own glass included, and copying that froze the
             // glass on its own past output. Summing rectangles scaled to device
             // pixels counted their rounded overlaps twice at 133% and passed.
+            // Liquid glass's bleed and vibrant shadow read the ring around it
+            // too, as far as a full redraw of the layer reaches.
             const {x: ox, y: oy, scale} = source;
-            const x1 = Math.floor(ox + box.ax1 / scale), y1 = Math.floor(oy + box.ay1 / scale);
-            const x2 = Math.ceil(ox + box.ax2 / scale), y2 = Math.ceil(oy + box.ay2 / scale);
+            const reach = this._layer.reach, shade = this._layer.wantsShadow ? SHADOW_PAD : 0;
+            // Never past the copy, which stops at the framebuffer's edge.
+            const ring = side => Math.min(pad / scale, reach[side] + shade);
+            const x1 = Math.floor(ox + Math.max(box.ax1 / scale - ring('left'), box.x / scale));
+            const y1 = Math.floor(oy + Math.max(box.ay1 / scale - ring('top'), box.y / scale));
+            const x2 = Math.ceil(ox + Math.min(box.ax2 / scale + ring('right'), (box.x + box.width) / scale));
+            const y2 = Math.ceil(oy + Math.min(box.ay2 / scale + ring('bottom'), (box.y + box.height) / scale));
             const overlap = clip.contains_rectangle(new Mtk.Rectangle({x: x1, y: y1, width: x2 - x1, height: y2 - y1}));
             clean = overlap === Mtk.RegionOverlap.IN;
             // Damage only around the glass (its shadow) needs no new copy.
@@ -670,7 +775,7 @@ export const LiveGlassEffect = GObject.registerClass({
         if (clean || !this._captured) {
             blit(fb, this._down[0].framebuffer, box.x, box.y, 0, 0, box.width, box.height);
             const bounds = {x: 0, y: 0, width: box.width, height: box.height};
-            for (let level = 1; level <= passes; level++)
+            for (let level = 1; level <= deep; level++)
                 addPassNode(node, this._down[level], this._downPass[level], bounds, `glass down ${level}`);
             for (let level = passes - 1; level >= 0; level--)
                 addPassNode(node, this._up[level], this._upPass[level], bounds, `glass up ${level}`);
@@ -950,22 +1055,37 @@ class SuperGGlassLayer extends St.Widget {
             this._bgGroup.set_position(Math.round(geo.x - x), Math.round(geo.y - y));
         }
 
+        const s = this._style;
+        const size = [w + left + right, h + top + bottom];
+        const liquid = this._live && s.liquid;
         // Squircle corners: a higher exponent with a proportionally larger
         // radius keeps about the same visual size (as in the corners engine).
-        const exponent = 2 + this._smoothing * 4;
-        const r = Math.min(radius * exponent / 2, w / 2, h / 2);
-        const s = this._style;
-        const k = this._chrome ? liquidSize(w, h) : 1;
-        // The dock and the bar are Apple's vibrant material: what's behind,
-        // slightly dimmed and more saturated, never lifted towards white.
-        const vibrant = s.liquid && this._chrome;
+        // Liquid glass fits Apple's continuous corners instead.
+        const {exponent, r} = liquid ? liquidCorners(radius, size)
+            : {exponent: 2 + this._smoothing * 4, r: Math.min(radius * (2 + this._smoothing * 4) / 2, w / 2, h / 2)};
+        const shadow = this._shadowOn ? s.shadow : null;
         this.uniforms = {
-            size: [w + left + right, h + top + bottom], radius: r, exponent, aa: 1 / scale, blur: s.liquid ? liquidBlur(s.blur, k) : s.blur,
-            // Liquid glass reads rim as the specular's strength: faint on the
-            // dock and the bar, which on Apple's show almost none.
-            tint: layerTint(this, s, k), saturation: vibrant ? s.saturation * 1.3 : s.saturation, brightness: liquidBrightness(s, k, vibrant), rim: s.liquid ? (this._chrome ? 0.4 : 1) : s.rim, outline: s.outline, grain: s.grain,
-            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid: this._live && s.liquid, calm: this._live && s.liquid ? liquidCalm(k, this._chrome) : 0, shadow: this._shadowOn ? s.shadow : null,
+            size, radius: r, exponent, aa: 1 / scale, blur: s.blur,
+            tint: layerTint(this, s), saturation: s.saturation, brightness: s.brightness, rim: s.rim, outline: s.outline, grain: s.grain,
+            guard: this._guard, lightText: s.lightText, lens: this._live ? s.lens : 0, liquid, shadow, tone: null, vibrant: 0,
         };
+        if (liquid) {
+            const small = Math.min(...size);
+            const tone = liquidTone(s.lightText > 0.5, s.clarity, small, this._thicken, this._chrome);
+            Object.assign(this.uniforms, {
+                blur: liquidFrost(s.clarity, small, this._thicken), grain: LIQ_DITHER,
+                // The flush top bar runs edge to edge: no rim, no contour, or
+                // they'd draw a box round the top of the screen.
+                tone: {...tone, hold: LIQ_HOLD, glint: s.rim > 0 ? LIQ_GLINT : 0, contour: s.outline > 0 ? LIQ_CONTOUR : 0,
+                    pull: Math.min(BLEED_PULL * small, bleedPad(small))},
+                shadow: shadow ? liquidShadow(s.shadowStyle, small) : null,
+                vibrant: smooth(LIQ_SMALL, LIQ_BIG, small) * LIQ_SHADOW_VIBRANT,
+            });
+        } else if (s.liquid) {
+            // The overview's wallpaper backdrop keeps the static glass it had.
+            Object.assign(this.uniforms, {blur: Math.max(s.blur * 1.6, 11), rim: 1,
+                tint: [...s.tint.slice(0, 3), Math.max(this.uniforms.tint[3], s.lightText ? 0.06 : 0.15)]});
+        }
         if (this._effect)
             this._effect.setUniforms(this.uniforms);
         else
@@ -973,43 +1093,151 @@ class SuperGGlassLayer extends St.Widget {
     }
 });
 
-// k: how much of liquid glass's reading treatment a surface gets, 1 for
-// anything with text in the theme's colour (menus, banners, the drawer, a
-// small OSD alike: the old size rule left banners clear, with text over
-// whatever was behind), by size for the dock and the top bar.
-// Tint with the thickening for what sits over a dim, and for liquid panels a
-// floor: a calm backdrop needs a little body under text.
-function layerTint(layer, s, k) {
+// Tint with the thickening for what sits over a dim (frosted glass).
+function layerTint(layer, s) {
     let a = s.tint[3];
     if (layer._thicken)
         a += (1 - a) * layer._thicken;
-    if (s.liquid)
-        a = Math.max(a, (s.lightText ? 0.06 : 0.15) * k);
     return [s.tint[0], s.tint[1], s.tint[2], a];
 }
 
-const liquidSize = (w, h) => Math.min(Math.max((Math.min(w, h) - 60) / 340, 0), 1);
+/* ------------------------------------------------------ liquid glass -- */
 
-// Apple's glass diffuses lightly: over sharp lines its Control Center still
-// shows them as soft streaks, and calm (not blur) keeps text legible. Text
-// panels get a little more than the dock and the bar, never a frost: at 34 px
-// it read as a thick, blurry slab.
-function liquidBlur(blur, k) {
-    // 11 px on text panels: at 7 a white window's text still ghosted through
-    // the calendar and menus.
-    return Math.max(blur * (1 + k * 0.6), 3 + 8 * k);
+// Apple's glass, after docs/LIQUID_GLASS.md. S is the short side in points.
+const smooth = (a, b, x) => {
+    const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+    return t * t * (3 - 2 * t);
+};
+const lerp = (a, b, t) => a + (b - a) * t;
+const lerpAll = (a, b, t) => a.map((v, i) => lerp(v, b[i], t));
+
+// Small controls and big glass, as AppKit sizes its inputs.
+const LIQ_SMALL = 64;
+const LIQ_BIG = 160;
+// Bleed fades in from S = 64 to S = 160.
+const LIQ_BLEED_FROM = 64;
+const LIQ_BLEED_OVER = 96;
+const LIQ_HOLD = 0.97;
+const LIQ_GLINT = 0.5;
+// Points: just outside the face.
+const LIQ_CONTOUR = 0.75;
+const LIQ_DITHER = 1 / 255;
+// Where the clarity slider sits on Apple's regular glass: the schema's
+// default. Below it the glass goes towards clear, above towards tinted.
+const LIQ_REGULAR_AT = 0.3;
+
+// [black, white, chroma]: what a flat backdrop of luma 0 and 1 shows as, and
+// how much of its colour stays (docs/LIQUID_GLASS.md, "Tone"). Totals, bleed
+// included: liquidTone solves the band under it.
+// The clear end is not Apple's Clear material (0.075 -> 1.15): that one goes
+// on media, not under text, and white text on it vanished over any light
+// window. Ours lets more brightness and colour through while the band stays
+// on the text's side: dark glass reaches 0.53 over white (white text about
+// 3.6:1, dimmer secondary text still legible), light glass 0.55 over black.
+const LIQ_BANDS = {
+    light: {clear: [0.55, 1.0, 0.8], regular: [0.70, 1.0, 0.6], tinted: [0.85, 1.0, 0.4], small: [0.89, 1.0, 0.75]},
+    // macOS 27.2's lighter dark glass, the wash more opaque towards tinted.
+    dark: {clear: [0.05, 0.53, 0.8], regular: [0.08, 0.49, 0.6], tinted: [0.08, 0.42, 0.8]},
+};
+
+// Frost in points: chrome 4.5, big panels 8.5 at regular; clear 0.65 of
+// that, tinted 2.2 times (about 18.7 on a big panel), as macOS 27's slider.
+const LIQ_FROST = {chrome: 4.5, panel: 8.5, clear: 0.65, tinted: 2.2};
+
+// What sits over a dim (a folder dialog) goes half way towards tinted.
+const clarityWith = (clarity, thicken) => clarity + (1 - clarity) * thicken * 0.5;
+
+function liquidFrost(clarity, small, thicken = 0) {
+    const t = clarityWith(clarity, thicken);
+    const regular = lerp(LIQ_FROST.chrome, LIQ_FROST.panel, smooth(48, 320, small));
+    return t <= LIQ_REGULAR_AT ? regular * lerp(LIQ_FROST.clear, 1, t / LIQ_REGULAR_AT)
+        : regular * lerp(1, LIQ_FROST.tinted, (t - LIQ_REGULAR_AT) / (1 - LIQ_REGULAR_AT));
 }
 
-function liquidCalm(k, chrome) {
-    return (chrome ? 0 : 0.1) + 0.65 * k;
+// The bleed over a flat backdrop of luma y, for a face of luma f: its toned
+// colour and how much of it the shader mixes in.
+function bleedOver(y, f, dark, fade) {
+    const c = Math.min(Math.max(f, 0), 1);
+    return dark ? {tone: 0.5 * y, amount: 0.8 * (1 - c) ** 4 * fade}
+        : {tone: 0.9 + 0.1 * y, amount: 0.5 * c ** 4 * fade};
 }
 
-// Dark liquid glass dims what carries text; the dock and the top bar stay
-// bright and clear, as Apple's do.
-function liquidBrightness(s, k, vibrant) {
-    if (!s.liquid || !s.lightText)
-        return vibrant ? 0.9 : s.brightness;
-    return 0.9 + (s.brightness - 0.9) * k;
+// The face's luma that, with the bleed mixed in, shows `target` over a flat
+// backdrop of luma y. Monotonic over the range, so bisection finds it.
+function faceFor(target, y, dark, fade) {
+    let lo = -0.2, hi = 1.3;
+    for (let i = 0; i < 32; i++) {
+        const f = (lo + hi) / 2;
+        const {tone, amount} = bleedOver(y, f, dark, fade);
+        if (f + (tone - f) * amount < target)
+            lo = f;
+        else
+            hi = f;
+    }
+    return (lo + hi) / 2;
+}
+
+// The band for a surface: lo and hi are the face at backdrop luma 0 and 1,
+// chroma its colour factor, bleed the bleed's fade with size.
+// dark: dark glass (light text); clarity 0-1; small: the short side.
+// chrome: the dock, the top bar and its islands take the surface band
+// whatever their height: Apple's small-control band is for buttons.
+export function liquidTone(dark, clarity, small, thicken = 0, chrome = false) {
+    const bands = LIQ_BANDS[dark ? 'dark' : 'light'];
+    const sm = dark || chrome ? 0 : 1 - smooth(48, LIQ_SMALL, small);
+    const regular = bands.small ? lerpAll(bands.regular, bands.small, sm) : bands.regular;
+    const tinted = bands.small ? lerpAll(bands.tinted, bands.small, sm) : bands.tinted;
+    const t = clarityWith(clarity, thicken);
+    const [black, white, chroma] = t <= LIQ_REGULAR_AT ? lerpAll(bands.clear, regular, t / LIQ_REGULAR_AT)
+        : lerpAll(regular, tinted, (t - LIQ_REGULAR_AT) / (1 - LIQ_REGULAR_AT));
+    const bleed = Math.min(Math.max((small - LIQ_BLEED_FROM) / LIQ_BLEED_OVER, 0), 1);
+    // Brightness is fitted to the totals (macOS 27.2's dark band was measured
+    // over flat colours, bleed and all); chroma is the face's own factor, as
+    // Apple's inputs give it, and the bleed brings the surroundings' on top.
+    return {lo: faceFor(black, 0, dark, bleed), hi: faceFor(white, 1, dark, bleed), chroma, bleed};
+}
+
+// Continuous corners: an exponent-3 superellipse at 1.375 times the radius.
+// A capsule stays round: over the last tenth before the radius reaches half
+// the short side, the exponent eases to 2, so the outline never jumps as a
+// surface grows through it.
+const LIQ_CAPSULE_EASE = 0.9;
+
+function liquidCorners(radius, [w, h]) {
+    const cap = Math.min(w, h) / 2;
+    const r = radius * 1.375;
+    const round = smooth(LIQ_CAPSULE_EASE * cap, cap, r);
+    return {exponent: 3 - round, r: Math.min(r, cap)};
+}
+
+// [drop, sigma, alpha] x 3. Big glass: about 25% at most, 8 pt down, fading
+// over about 48 pt, with a tight contact layer at the edge; small glass: up to
+// about 45%, tighter and darker.
+const LIQ_SHADOW = {
+    big: [8, 20, 0.3, 2, 4, 0.14, 0, 1, 0],
+    small: [3, 6, 0.32, 1, 2, 0.2, 0, 1, 0],
+};
+// How much of big glass's shadow colour is the vibrant backdrop. Apple's is
+// all of it, which over a white window darkens by 3% and leaves a panel with
+// no edge against it; 40% plain shade keeps one (about 12% at the edge).
+const LIQ_SHADOW_VIBRANT = 0.6;
+const LIQ_SHADOW_SCALE = {subtle: 0.6, standard: 1, deep: 1.4};
+
+function liquidShadow(style, small) {
+    const scale = LIQ_SHADOW_SCALE[style];
+    if (!scale)
+        return null;
+    const layers = lerpAll(LIQ_SHADOW.small, LIQ_SHADOW.big, smooth(LIQ_SMALL, LIQ_BIG, small));
+    return layers.map((v, i) => (i % 3 === 2 ? Math.min(v * scale, 0.6) : v));
+}
+
+// What the top bar's liquid glass shows over a wallpaper of linear luminance
+// `wall`, as linear luminance; null when the bar isn't liquid glass.
+export function liquidBarLuminance(wall, settings, iface, height) {
+    if (!isLiquid(settings) || !SHADERS_OK)
+        return null;
+    const {lo, hi} = liquidTone(shellDark(settings, iface), settings.get_double('glass-clarity'), height, 0, true);
+    return Math.min(Math.max(lo + (hi - lo) * wall ** (1 / 2.2), 0), 1) ** 2.2;
 }
 
 // Thickness, as Apple names its materials: how much palette colour the glass
@@ -1025,7 +1253,9 @@ const MATERIALS = {
 const isLiquid = settings => settings.get_string('glass-style') === 'liquid';
 
 // Liquid glass has one control, as on Apple's: clarity, from clear (the bevel
-// and what's behind carry it) to tinted (calmer, for reading).
+// and what's behind carry it) to tinted (calmer, for reading). Live liquid
+// glass takes its band and frost from liquidTone and liquidFrost; this only
+// feeds the overview's static wallpaper backdrop.
 function liquidMaterial(settings) {
     const t = settings.get_double('glass-clarity');
     // Clear is nearly water: Apple's clear glass shows the pixels behind almost
@@ -1071,6 +1301,8 @@ export function glassStyle(c, settings) {
         lens: isLiquid(settings) ? 1 : settings.get_double('glass-refraction') * 12,
         liquid: isLiquid(settings),
         shadow: surfaceShadow(settings.get_string('shadow-style'), c.dark),
+        shadowStyle: settings.get_string('shadow-style'),
+        clarity: settings.get_double('glass-clarity'),
         grain: 0.012,
         blur,
     };
