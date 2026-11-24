@@ -285,11 +285,14 @@ ${gtk3Buttons(opts.windowButtons, c)}
 // our selectors with its id outranks class-only rules from the theme and
 // from other extensions (e.g. Blur my Shell's popup styles) without !important.
 const ROOT = '#uiGroup';
-// A selector that starts with a class may target the root itself (Blur my
-// Shell puts its classes on uiGroup), so it also gets a compound form.
+// A selector that starts with one of the classes engines put on uiGroup itself
+// (Blur my Shell's, Kiwi's) also gets a compound form. Only those: St matches
+// every selector against every widget it styles, and a compound form for each
+// class doubled the sheet (a quick settings open spends most of its time there).
+const ROOT_CLASS = /^\.(bms-|kiwi-popup-styled|blurred-overview|overview-components-)/;
 const scoped = selector => selector.split(',').flatMap(part => {
     const s = part.trim();
-    return s.startsWith('.') ? [`${ROOT} ${s}`, `${ROOT}${s}`] : [`${ROOT} ${s}`];
+    return ROOT_CLASS.test(s) ? [`${ROOT} ${s}`, `${ROOT}${s}`] : [`${ROOT} ${s}`];
 }).join(',\n');
 
 // Rewrite every declaration that uses the system accent — in the running

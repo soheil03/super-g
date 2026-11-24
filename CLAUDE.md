@@ -29,7 +29,7 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 ## Gotchas learned
 - libadwaita: user CSS overrides `:root` vars fine, but never force `gtk-theme-name` in a GTK4 harness (GTK's built-in theme then hides everything).
 - Ubuntu's libadwaita picks Yaru styles when gtk-theme starts with `Yaru`. Our theme names avoid that.
-- Shell CSS: scope everything under `#uiGroup` (`scoped()` in themeGen) or Blur my Shell's class-based popup rules win. Accent rules are mirrored from every loaded stylesheet.
+- Shell CSS: scope everything under `#uiGroup` (`scoped()` in themeGen) or Blur my Shell's class-based popup rules win. Accent rules are mirrored from every loaded stylesheet. Shell sheet size is menu-open time (St matches every selector per widget): the compound `#uiGroup.x` form is only for classes engines put on uiGroup (`ROOT_CLASS`); add one there if a new engine does. Top bar menus are wrapped in glass while closed (`prewrap`): wrapping an open menu restyles it whole.
 - St takes actor margins from CSS. Set panel gaps in CSS, not JS. Borders add to height; use inset box-shadow.
 - Vendored engines collide (GType names) with an original loaded in the same session, so the switch needs one logout. takeover.sh does it before login.
 - vendor.sh: escape dots in schema ids before sed (they matched `/`); cross-engine references live in vendor-fixups.sh.

@@ -2,6 +2,13 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.15.2 - 2026-11-24
+
+### Performance
+- Shell stylesheet is a third smaller (87 KB to 55 KB, 1278 selectors to about 640). Each class selector was written twice in case the class sat on the UI root; only the few classes engines really put there (Blur my Shell's, Kiwi's) keep that second form. St matches every selector against every widget it styles, so every menu, dialog and overview open gets cheaper.
+- Top bar menus get their glass while closed, two seconds after start, instead of on the first click.
+- Measured in a headless shell: first Quick Settings open 175 ms to 90 ms, second 171 ms to 37 ms (GNOME alone: 56 and 24); first calendar open 49 ms to 38 ms. An idle desktop still draws no frames (0.2% CPU), and following glass surfaces costs about 6 microseconds a frame.
+
 ## 1.15.1 - 2026-11-24
 
 ### Docs

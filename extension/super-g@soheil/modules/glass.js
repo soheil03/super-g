@@ -36,6 +36,7 @@ function isBlank(actor) {
 // More than magnification can stretch the dock, at any setting.
 const DOCK_REACH = 420;
 const ISLAND_CHECK_MS = 100;
+const PREWRAP_MS = 2000;
 const CLEAR_SURFACE = 'background-color: transparent; background-image: none; border: none; box-shadow: none;';
 
 // The union of some top bar buttons, for a glass layer to follow.
@@ -144,6 +145,15 @@ export default class GlassModule extends Module {
             });
             return self._origPointerClose.call(this, ...args);
         };
+        // Wrapping reparents the menu's content, and a mapped one is restyled
+        // whole: about 30 ms on the first quick settings click. Closed, it costs
+        // under a millisecond, so give the top bar's menus glass ahead of time.
+        this.later('prewrap', PREWRAP_MS, () => {
+            for (const item of Object.values(Main.panel.statusArea)) {
+                if (item?.menu?._boxPointer && !item.menu.isOpen)
+                    this._ensureMenu(item.menu);
+            }
+        });
 
         this._panelGlass = new GlassLayer({style: this._style, shapeSource: Main.panel, track: Main.panel, smoothing: 0, shadow: false, guard: 0, chrome: true});
         Main.layoutManager.uiGroup.insert_child_below(this._panelGlass, Main.layoutManager.panelBox);
