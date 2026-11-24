@@ -312,6 +312,7 @@ export default class SuperGPrefs extends ExtensionPreferences {
                 comboRow(s, 'panel-style', 'Style', PANEL_STYLES),
                 comboRow(s, 'panel-height', 'Height', PANEL_HEIGHTS, {int: true}),
                 switchRow(s, 'panel-glass', 'Glass', 'Live blur behind the bar'),
+                switchRow(s, 'panel-menu-hover', 'Switch menus by hovering', 'While a menu is open, pointing at another item opens it; off, only a click does'),
                 switchRow(s, 'panel-adaptive-solid', 'Color over windows', 'Adaptive style: take the window color while a window touches the bar. Off stays see-through'),
                 comboRow(s, 'panel-status-style', 'Status icons', STATUS_STYLES),
                 switchRow(s, 'hide-accessibility', 'Hide accessibility icon'),

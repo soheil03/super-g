@@ -164,10 +164,12 @@ class SuperGIconPlate extends St.Widget {
 
     // A tile's pixels, drawn by the plate in place of the icon. Null gives
     // the icon back.
-    setArt(pixbuf) {
-        this._art = pixbuf;
+    setArt(load) {
+        // A loader, not pixels: the pixbuf is dropped once the GPU has it
+        // (some 80 tiles in the drawer kept twice their pixels in memory).
+        this._art = load;
         this._artPainter = null;
-        this.icon.opacity = pixbuf ? 0 : 255;
+        this.icon.opacity = load ? 0 : 255;
         this.queue_redraw();
     }
 
@@ -204,9 +206,15 @@ class SuperGIconPlate extends St.Widget {
             this._shadow = new ShadowPainter(t.shadow.copy());
         }
         if (this._art && !this._artPainter) {
-            const pipeline = plateTemplate(context).art.copy();
-            pipeline.set_layer_texture(1, textureOf(context, this._art));
-            this._artPainter = new Painter(pipeline);
+            const pixbuf = this._art();
+            if (pixbuf) {
+                const pipeline = plateTemplate(context).art.copy();
+                pipeline.set_layer_texture(1, textureOf(context, pixbuf));
+                this._artPainter = new Painter(pipeline);
+            } else {
+                this._art = null;
+                this.icon.opacity = 255;
+            }
         }
         const fade = this.get_paint_opacity() / 255;
         const aa = aaOf(this);
@@ -216,6 +224,6 @@ class SuperGIconPlate extends St.Widget {
         this._shadow.paint(node, {x: -pad, y: -pad, width: w + 2 * pad, height: h + 3 * pad,
             box: {x1: 0, y1: 0, x2: w, y2: h}, radius: r, exponent: l.exponent, aa, tuck: 1, fade,
             layers: l.shadow.map((v, i) => (i % 3 === 2 ? v : v * w))});
-        (this._art ? this._artPainter : this._fill).paint(node, w, h, this.values(0, aa, fade));
+        (this._artPainter ?? this._fill).paint(node, w, h, this.values(0, aa, fade));
     }
 });

@@ -14,6 +14,7 @@ import * as Files from '../lib/files.js';
 import * as Gen from '../lib/themeGen.js';
 import {shellDark} from '../lib/glass.js';
 
+const UBUNTU_SHELL = 'org.gnome.shell.ubuntu';
 const IFACE = 'org.gnome.desktop.interface';
 // Settings that end up in gtk.css as colours and shapes.
 const RESTART_KEYS = ['palette', 'accent', 'window-buttons', 'window-radius', 'sidebar-style', 'sidebar-radius', 'sidebar-accent-icons', 'title-weight'];
@@ -75,6 +76,7 @@ export default class AppearanceModule extends Module {
 
     disable() {
         this.cleanup();
+        this._syncShellScheme(false);
         this._unloadShell();
         if (!this.crashed) {
             Files.setManagedBlock(GTK4_MAIN, null);
@@ -291,8 +293,30 @@ export default class AppearanceModule extends Module {
         return this._themeSheets().map(f => f.get_uri()).join(' ');
     }
 
+    // True when the shell's own scheme does it (Ubuntu's org.gnome.shell.ubuntu
+    // color-scheme). We only ever move it from 'default' to 'prefer-dark' and
+    // back, remembering that we did, so a choice the user made stays theirs.
+    _syncShellScheme(dark) {
+        const source = Gio.SettingsSchemaSource.get_default();
+        if (!source?.lookup(UBUNTU_SHELL, true)?.has_key('color-scheme'))
+            return false;
+        this._ubuntuShell ??= new Gio.Settings({schema_id: UBUNTU_SHELL});
+        const current = this._ubuntuShell.get_string('color-scheme');
+        const ours = this.settings.get_boolean('shell-scheme-set');
+        if (dark && current === 'default') {
+            this.settings.set_boolean('shell-scheme-set', true);
+            this._ubuntuShell.set_string('color-scheme', 'prefer-dark');
+        } else if (!dark && ours) {
+            this.settings.set_boolean('shell-scheme-set', false);
+            if (current === 'prefer-dark')
+                this._ubuntuShell.set_string('color-scheme', 'default');
+        }
+        return dark && this._ubuntuShell.get_string('color-scheme') === 'prefer-dark';
+    }
+
     _applyShell() {
         if (!this.settings.get_boolean('theme-shell')) {
+            this._syncShellScheme(false);
             this._unloadShell();
             return;
         }
@@ -300,7 +324,12 @@ export default class AppearanceModule extends Module {
         const sheets = this._themeSheets();
         this._shellSource = this._currentShellSource();
         const dark = shellDark(this.settings, this._iface);
-        const variant = dark && !this._dark ? this._darkVariant(sheets) : null;
+        // Ubuntu can switch the shell alone to its dark theme; stacking the
+        // dark variant over the light one doubled style matching for every
+        // widget (a calendar open took 123 ms instead of 48: the jump).
+        const wantDark = dark && !this._dark;
+        const byScheme = this._syncShellScheme(wantDark);
+        const variant = wantDark && !byScheme ? this._darkVariant(sheets) : null;
         const css = Gen.shellCss(this._tokens, this._opts(), dark, [...sheets, variant].filter(Boolean).map(f => Files.readFile(f)).join('\n'));
         // Every setting comes through here; reloading restyles the whole shell.
         if (this._shellSheet && css === this._shellCss && variant?.get_uri() === this._darkSheet?.get_uri())

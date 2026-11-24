@@ -3,7 +3,7 @@
 // GTK3 (on top of adw-gtk3) and GNOME Shell. Pure functions, no GNOME imports,
 // so the same code runs in the shell, in prefs and in tools/gen.js.
 
-import {mix, over, onColor, withAlpha} from './color.js';
+import {contrastOn, mix, over, onColor, withAlpha} from './color.js';
 
 export const DEFAULTS = {
     palette: 'catppuccin',
@@ -372,6 +372,10 @@ ${rule('.quick-toggle-menu .header .icon', `background-color: ${tile}; color: ${
 ${rule('.quick-toggle-has-menu .quick-toggle-menu-button', `background-color: ${tile}; color: ${c.fg};`)}
 ${rule('.quick-toggle-has-menu .quick-toggle-menu-button:hover', `background-color: ${c.controlHover};`)}
 ${rule('.quick-toggle-has-menu .quick-toggle-menu-button:checked', `background-color: ${c.accent}; color: ${c.accentFg};`)}
+${rule('.quick-toggle:checked, .quick-toggle:checked .quick-toggle-title, .quick-toggle:checked .quick-toggle-subtitle, .quick-toggle:checked .quick-toggle-icon, .quick-toggle-has-menu .quick-toggle-menu-button:checked, .quick-toggle-has-menu .quick-toggle-menu-button:checked StIcon',
+        `color: ${contrastOn(c.accent)};`)}
+${rule('.quick-toggle:checked', `background-color: ${c.accent};`)}
+${rule('.quick-toggle:checked:hover', `background-color: ${mix(dark ? '#ffffff' : '#000000', c.accent, 0.1)};`)}
 ${rule('.quick-toggle-has-menu .quick-toggle-menu-button:checked:hover', `background-color: ${mix('#000000', c.accent, 0.08)};`)}
 ${rule('.quick-toggle-has-menu .quick-toggle-separator', `background-color: ${withAlpha(c.fg, 0.12)};`)}
 ${rule('.slider', `color: #ffffff; -barlevel-height: 6px; -barlevel-background-color: ${withAlpha(c.fg, 0.12)}; -slider-handle-radius: 9px; -slider-handle-border-width: 1px; -slider-handle-border-color: rgba(0,0,0,0.14);`)}
@@ -381,7 +385,7 @@ ${rule('.datemenu-popover .popup-menu-content, #calendarArea', 'border-radius: 2
 ${rule('.calendar .calendar-day, .calendar .calendar-day-heading, .calendar .calendar-week-number', `background-color: transparent; color: ${c.fg}; box-shadow: none; border: none;`)}
 ${rule('.calendar .calendar-day:hover, .calendar .calendar-day:focus', `background-color: ${tile};`)}
 ${rule('.calendar .calendar-nonwork-day, .calendar .calendar-other-month', `color: ${c.fgMuted};`)}
-${rule('.calendar .calendar-day.calendar-today', `background-color: ${c.accent}; color: ${c.accentFg}; font-weight: bold;`)}
+${rule('.calendar .calendar-day.calendar-today', `background-color: ${c.accent}; color: ${contrastOn(c.accent)}; font-weight: bold;`)}
 ${rule('.calendar .calendar-day-with-events', `color: ${c.fg}; font-weight: bold;`)}
 ${rule('.calendar .calendar-month-header .pager-button, .calendar .calendar-month-label', `background-color: transparent; color: ${c.fg}; box-shadow: none;`)}
 ${rule('.calendar .calendar-month-header .pager-button:hover', `background-color: ${tile};`)}

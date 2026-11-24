@@ -7,6 +7,7 @@
 
 import Clutter from 'gi://Clutter';
 import GdkPixbuf from 'gi://GdkPixbuf';
+import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -139,9 +140,32 @@ export default class IconsModule extends Module {
             this.connect(this.settings, `changed::${key}`, () => this.later('icons', 100, () => this._refresh()));
         this.connect(St.Settings.get(), 'notify::color-scheme', () => this.later('icons', 100, () => this._refresh()));
         this._refresh();
+        this._warmUp();
+    }
+
+    // Reading an icon's shape and colours costs a few ms; the drawer's first
+    // open read ~90 of them at once (230 ms of its 334). Read them ahead, a
+    // few per idle moment, at low priority.
+    _warmUp() {
+        const system = Shell.AppSystem.get_default();
+        const ids = system.get_installed().map(info => info.get_id());
+        this._warmId = GLib.idle_add(GLib.PRIORITY_LOW, () => {
+            for (let i = 0; i < 3 && ids.length; i++) {
+                const app = system.lookup_app(ids.shift());
+                if (app)
+                    this._look(app, app.get_icon());
+            }
+            if (ids.length)
+                return GLib.SOURCE_CONTINUE;
+            this._warmId = 0;
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     disable() {
+        if (this._warmId)
+            GLib.source_remove(this._warmId);
+        this._warmId = 0;
         this.cleanup();
         this._proto.create_icon_texture = this._original;
         this._looks.clear();
@@ -197,12 +221,12 @@ export default class IconsModule extends Module {
     _art(gicon, size) {
         try {
             const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-            const px = Math.min(512, Math.ceil(size * scale * 2));
+            const px = Math.min(512, Math.ceil(size * scale * 1.5));
             const pixbuf = this._theme.lookup_by_gicon(gicon, px, 0)?.load_icon();
             if (!pixbuf)
                 return null;
             return pixbuf.get_width() === px && pixbuf.get_height() === px ? pixbuf
-                : pixbuf.scale_simple(px, px, GdkPixbuf.InterpType.HYPER);
+                : pixbuf.scale_simple(px, px, GdkPixbuf.InterpType.BILINEAR);
         } catch {
             return null;
         }
@@ -224,7 +248,7 @@ export default class IconsModule extends Module {
         };
         frame(size);
         // The icon follows the size the plate really has: callers resize it.
-        // A tile's art is loaded at twice that, for the dock's magnification.
+        // A tile's art is loaded at 1.5x that, for the dock's magnification.
         let shown = 0;
         const fit = () => {
             const w = Math.round(plate.width);
@@ -233,7 +257,7 @@ export default class IconsModule extends Module {
             shown = w;
             icon.icon_size = Math.round(w * Math.min(look.fill, 1));
             if (look.tile)
-                plate.setArt(this._art(gicon, w * look.fill));
+                plate.setArt(() => this._art(gicon, w * look.fill));
         };
         fit();
         plate.connect('notify::width', fit);

@@ -4,9 +4,12 @@
 // The focused-app title comes from the windows (Kiwi) engine; this module
 // turns off that engine's own panel styling so the two don't fight.
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {PopupAnimation} from 'resource:///org/gnome/shell/ui/boxpointer.js';
 
 import {Module, moduleOn} from '../lib/module.js';
@@ -57,6 +60,8 @@ export default class PanelModule extends Module {
         handOver(this.name, REPLACES);
         this._save();
         this._quickenMenus();
+        this._syncMenuSwitch();
+        this.connect(this.settings, 'changed::panel-menu-hover', () => this._syncMenuSwitch());
 
         this.connect(this.settings, 'changed', () => this.later('apply', 120, () => this._apply()));
         this.connect(this._iface, 'changed::color-scheme', () => this._apply());
@@ -96,8 +101,65 @@ export default class PanelModule extends Module {
         });
     }
 
+    // GNOME opens whichever top bar menu the pointer crosses while one is
+    // open. Off, only a click switches (keys still move between them). Its
+    // captured-event handler is bound per menu when added, so the switch is
+    // filtered where it lands, _changeMenu, which is looked up at call time.
+    _syncMenuSwitch() {
+        this._clickOnlyMenus(!this.settings.get_boolean('panel-menu-hover'));
+    }
+
+    _clickOnlyMenus(on) {
+        const mgr = Main.panel.menuManager;
+        if (!on) {
+            if (this._menuPatched) {
+                delete mgr._changeMenu;
+                delete mgr.addMenu;
+                for (const menu of mgr._menus ?? [])
+                    menu.actor?.disconnectObject(this);
+                this._menuPatched = false;
+            }
+            return;
+        }
+        if (this._menuPatched)
+            return;
+        this._menuPatched = true;
+        const proto = PopupMenu.PopupMenuManager.prototype;
+        // Crossing events aren't the current event, so tell them apart by key
+        // focus: a keyboard move focuses the new item's button first, a hover
+        // leaves focus inside the open menu.
+        mgr._changeMenu = function (newMenu) {
+            const focus = global.stage.get_key_focus();
+            if (!focus || !newMenu.sourceActor?.contains(focus))
+                return;
+            proto._changeMenu.call(this, newMenu);
+        };
+        // A press on another item closes the open menu (GNOME's handler, which
+        // runs first) and, with hover off, would need a second click: open it.
+        const watch = menu => menu.actor?.connectObject('captured-event', (_a, event) => {
+            const type = event.type();
+            if (type !== Clutter.EventType.BUTTON_PRESS && type !== Clutter.EventType.TOUCH_BEGIN)
+                return Clutter.EVENT_PROPAGATE;
+            const target = mgr._findMenuForSource(global.stage.get_event_actor(event));
+            if (target && target !== menu) {
+                GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                    if (this._menuPatched && !target.isOpen)
+                        target.open(PopupAnimation.FULL);
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
+            return Clutter.EVENT_PROPAGATE;
+        }, this);
+        mgr._menus.forEach(watch);
+        mgr.addMenu = function (menu, position) {
+            proto.addMenu.call(this, menu, position);
+            watch(menu);
+        };
+    }
+
     disable() {
         this.cleanup();
+        this._clickOnlyMenus(false);
         this._stopTracking();
         this._sheet.clear();
         if (this._quickMenuProto) {

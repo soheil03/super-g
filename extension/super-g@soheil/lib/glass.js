@@ -197,7 +197,7 @@ if (calm > 0.0) {
     // over a bright wallpaper are that wallpaper dimmed, not murk (measured on
     // Apple's: an orange at 0.65 luma shows at about 0.4). Brighter than that,
     // a white window, it dims harder again, or white text goes weak on grey.
-    float dark_band = mix(0.04 + 0.8 * cl, 0.4 - (cl - 0.45), smoothstep(0.38, 0.52, cl));
+    float dark_band = mix(0.04 + 0.8 * cl, max(0.4 - 1.8 * (cl - 0.45), 0.06), smoothstep(0.38, 0.52, cl));
     float band = mix(0.74 + 0.24 * cl, dark_band, light_text);
     float target = mix(cl, band, calm);
     // Move the brightness, keep the hue: the colour around it is scaled to
@@ -463,10 +463,11 @@ export const LiveGlassEffect = GObject.registerClass({
         if (this._context !== context || !textureFits(width, this._capW) || !textureFits(height, this._capH)) {
             const limit = largestViewSize();
             const sameContext = this._context === context;
-            // A surface that outgrew its copy is likely still growing (a menu
-            // opening): take all the room at once rather than a step per frame.
-            this._capW = !sameContext ? width : width > this._capW ? limit.width : getTextureCapacity(width, this._capW, limit.width);
-            this._capH = !sameContext ? height : height > this._capH ? limit.height : getTextureCapacity(height, this._capH, limit.height);
+            // A surface that outgrew its copy may still be growing: leave
+            // headroom, not the whole screen. Full-view targets for a calendar
+            // whose weather row loaded cost a long first frame and memory.
+            this._capW = !sameContext ? width : getTextureCapacity(width, this._capW, limit.width);
+            this._capH = !sameContext ? height : getTextureCapacity(height, this._capH, limit.height);
             this._context = context;
             this._down = [];
             this._up = [];
@@ -994,7 +995,9 @@ const liquidSize = (w, h) => Math.min(Math.max((Math.min(w, h) - 60) / 340, 0), 
 // panels get a little more than the dock and the bar, never a frost: at 34 px
 // it read as a thick, blurry slab.
 function liquidBlur(blur, k) {
-    return Math.max(blur * (1 + k * 0.6), 3 + 4 * k);
+    // 11 px on text panels: at 7 a white window's text still ghosted through
+    // the calendar and menus.
+    return Math.max(blur * (1 + k * 0.6), 3 + 8 * k);
 }
 
 function liquidCalm(k, chrome) {

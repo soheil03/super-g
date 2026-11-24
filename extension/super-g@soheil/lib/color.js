@@ -61,6 +61,13 @@ export function luminance(str) {
 }
 
 // Foreground that reads on `bg`: white unless the background is light.
+// The text colour with the higher WCAG contrast on bg. onColor's fixed 0.42
+// threshold put white on a pale dark-mode accent at 2.4:1 (dark gets 7:1).
+export function contrastOn(bg) {
+    const l = luminance(bg);
+    return (l + 0.05) / 0.058 > 1.05 / (l + 0.05) ? '#15151c' : '#ffffff';
+}
+
 export function onColor(bg) {
     return luminance(bg) > 0.42 ? '#15151c' : '#ffffff';
 }

@@ -185,6 +185,10 @@
       <default>'wallpaper'</default>
       <summary>Shell glass tone: the wallpaper dimmed with white text in light mode too, as Apple's floating panels, or follow light and dark</summary>
     </key>
+    <key name="shell-scheme-set" type="b">
+      <default>false</default>
+      <summary>Internal: Super G switched Ubuntu's shell colour scheme to dark for the wallpaper tone</summary>
+    </key>
     <key name="glass-clarity" type="d">
       <range min="0" max="1"/>
       <default>0.3</default>
@@ -198,6 +202,10 @@
     <key name="conflicts-auto-off" type="b">
       <default>true</default>
       <summary>Switch off extensions that clash with this one; off asks first</summary>
+    </key>
+    <key name="panel-menu-hover" type="b">
+      <default>false</default>
+      <summary>While a top bar menu is open, hovering another item opens its menu (GNOME's default); off, only a click does</summary>
     </key>
     <key name="panel-glass" type="b">
       <default>false</default>

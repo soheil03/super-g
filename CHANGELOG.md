@@ -2,6 +2,21 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.13.0 - 2026-11-24
+
+### Added
+- Top bar menus switch on click only (Settings, Top bar, "Switch menus by hovering", off by default): while a menu is open, pointing at another item no longer opens it; one click on it does, and keys still move between menus.
+
+### Fixed
+- The jump when opening the date panel (and every menu): the wallpaper tone stacked the shell theme's whole dark variant over the light one, doubling style matching for every widget (opening the calendar took 123 ms instead of 48, longer than its 150 ms animation's first frames). On Ubuntu the shell now switches to its own dark theme (org.gnome.shell.ubuntu color-scheme, set only from 'default' and put back); stacking stays only as a fallback elsewhere.
+- Dark glass over a white window settles at dark graphite instead of flat grey, and text panels blur 11 px instead of 7, so a window's text no longer ghosts through menus and the calendar.
+- Quick settings toggles and their arrows pick text by real contrast: white on the pale dark-mode accent was 2.4:1, dark text is 7:1.
+
+### Performance
+- The first drawer open went from 334 ms to 122 ms: icon shapes and colours are read ahead in idle time after login.
+- Icon tiles no longer keep their pixels after the GPU has them, and load at 1.5x instead of 2x.
+- Glass no longer grows its blur targets to the whole screen when a surface outgrows them (a calendar whose weather row loaded); it leaves 25% headroom.
+
 ## 1.12.1 - 2026-11-24
 
 ### Fixed
