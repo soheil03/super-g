@@ -2,6 +2,12 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.16.0 - 2026-11-24
+
+### Added
+- Adaptive glass tone, now the default (Glass, Tone: Adaptive, Always dark, Follow light and dark). The shell stays dark glass, but a menu, quick settings, a banner, a dialog, the OSD or a switcher over something bright turns light glass with dark text. Dark glass over a bright sky turned it into a flat grey slab with white text at about 2:1; a surface now turns light where white text would fall under 3:1, and back above 3.6:1. The backdrop is judged when the surface opens, from the wallpaper image and the app theme's colour where a window covers it, so nothing is read back from the GPU. The dock and the top bar are unchanged (the bar already picks its text per box).
+- Quick settings' submenus follow their panel's tone.
+
 ## 1.15.3 - 2026-11-24
 
 ### Changed

@@ -13,7 +13,7 @@ import {Module, moduleOn} from '../lib/module.js';
 import * as Files from '../lib/files.js';
 import * as Gen from '../lib/themeGen.js';
 import * as NotificationStack from '../lib/notificationStack.js';
-import {shellDark} from '../lib/glass.js';
+import {shellDark, adaptiveTone} from '../lib/glass.js';
 
 const UBUNTU_SHELL = 'org.gnome.shell.ubuntu';
 const IFACE = 'org.gnome.desktop.interface';
@@ -159,6 +159,7 @@ export default class AppearanceModule extends Module {
             titleWeight: s.get_int('title-weight'),
             glass: moduleOn(s, 'glass'),
             overviewGlass: moduleOn(s, 'glass') && s.get_boolean('glass-overview'),
+            adaptive: adaptiveTone(s),
         };
     }
 

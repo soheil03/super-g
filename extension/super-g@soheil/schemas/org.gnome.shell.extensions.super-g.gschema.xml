@@ -181,9 +181,9 @@
       <summary>Glass style: frosted (blur, tint and thickness), or liquid (a curved edge that refracts what's behind)</summary>
     </key>
     <key name="glass-tone" type="s">
-      <choices><choice value="wallpaper"/><choice value="theme"/></choices>
-      <default>'wallpaper'</default>
-      <summary>Shell glass tone: the wallpaper dimmed with white text in light mode too, as Apple's floating panels, or follow light and dark</summary>
+      <choices><choice value="adaptive"/><choice value="wallpaper"/><choice value="theme"/></choices>
+      <default>'adaptive'</default>
+      <summary>Shell glass tone: adaptive (dark glass, each menu or banner over a bright backdrop turns light), always dark with white text as Apple's floating panels, or follow light and dark</summary>
     </key>
     <key name="shell-scheme-set" type="b">
       <default>false</default>

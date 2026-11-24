@@ -280,7 +280,13 @@ export const SHADERS_OK = typeof Shell.GLSLEffect === 'function';
 // light, 'theme' follows light and dark.
 export function shellDark(settings, iface) {
     return iface.get_string('color-scheme') === 'prefer-dark' ||
-        (settings.get_boolean('module-glass') && SHADERS_OK && settings.get_string('glass-tone') === 'wallpaper');
+        (settings.get_boolean('module-glass') && SHADERS_OK && settings.get_string('glass-tone') !== 'theme');
+}
+
+// Adaptive tone: the shell is dark, and each surface over a bright backdrop
+// turns light (modules/glass.js).
+export function adaptiveTone(settings) {
+    return settings.get_boolean('module-glass') && SHADERS_OK && settings.get_string('glass-tone') === 'adaptive';
 }
 
 export const GlassEffect = GObject.registerClass(
@@ -1239,6 +1245,19 @@ export function liquidBarLuminance(wall, settings, iface, height) {
         return null;
     const {lo, hi} = liquidTone(shellDark(settings, iface), settings.get_double('glass-clarity'), height, 0, true);
     return Math.min(Math.max(lo + (hi - lo) * wall ** (1 / 2.2), 0), 1) ** 2.2;
+}
+
+// What dark glass of short side `small` shows over a backdrop of gamma luma
+// y, as gamma luma: liquid glass maps it into its band, frosted glass lays
+// its tint over it.
+export function darkGlassFace(y, c, settings, small) {
+    if (isLiquid(settings)) {
+        const {lo, hi} = liquidTone(true, settings.get_double('glass-clarity'), small);
+        return Math.min(Math.max(lo + (hi - lo) * y, 0), 1);
+    }
+    const alpha = glassAlpha(c, settings);
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(c.window.slice(i, i + 2), 16) / 255);
+    return alpha * (0.2126 * r + 0.7152 * g + 0.0722 * b) + (1 - alpha) * y * 0.92;
 }
 
 // Thickness, as Apple names its materials: how much palette colour the glass

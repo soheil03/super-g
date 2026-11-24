@@ -18,8 +18,9 @@ import * as WorkspaceSwitcherPopup from 'resource:///org/gnome/shell/ui/workspac
 
 import {Module} from '../lib/module.js';
 import * as Files from '../lib/files.js';
-import {resolve} from '../lib/themeGen.js';
-import {GlassLayer, glassStyle, shellDark, wrapWithGlass, unwrap, trackPaintingView, untrackPaintingView, barOverFullscreen} from '../lib/glass.js';
+import {resolve, LIGHT_CLASS} from '../lib/themeGen.js';
+import {backdropLuma, warmBackdrop} from '../lib/backdrop.js';
+import {GlassLayer, glassStyle, shellDark, adaptiveTone, darkGlassFace, wrapWithGlass, unwrap, trackPaintingView, untrackPaintingView, barOverFullscreen} from '../lib/glass.js';
 
 // A title button with nothing to title (no focused window) keeps its place.
 function isBlank(actor) {
@@ -37,6 +38,11 @@ function isBlank(actor) {
 const DOCK_REACH = 420;
 const ISLAND_CHECK_MS = 100;
 const PREWRAP_MS = 2000;
+// Adaptive tone: a surface turns light glass where white text on dark glass
+// would fall under this contrast, and back once it clears the second.
+const LIGHT_BELOW = 3;
+const DARK_ABOVE = 3.6;
+const BANNER_SETTLE_MS = 50;
 const CLEAR_SURFACE = 'background-color: transparent; background-image: none; border: none; box-shadow: none;';
 
 // The union of some top bar buttons, for a glass layer to follow.
@@ -111,6 +117,8 @@ export default class GlassModule extends Module {
         this._menus = new Map();
         this._docks = new Map();
         trackPaintingView();
+        // Glass layer -> the actor carrying LIGHT_CLASS, for light ones.
+        this._light = new Map();
         this._style = this._computeStyle();
 
         this.connect(this._iface, 'changed::color-scheme', () => this._restyle());
@@ -132,6 +140,7 @@ export default class GlassModule extends Module {
         pointerProto.open = function (...args) {
             self.guard(() => {
                 self._ensureBox(this);
+                self._toneMenu(this);
                 if (args[0])
                     self._menus.get(this)?.glass.holdFor(BoxPointer.POPUP_ANIMATION_TIME, {});
             });
@@ -149,9 +158,13 @@ export default class GlassModule extends Module {
         // whole: about 30 ms on the first quick settings click. Closed, it costs
         // under a millisecond, so give the top bar's menus glass ahead of time.
         this.later('prewrap', PREWRAP_MS, () => {
+            if (adaptiveTone(this.settings))
+                warmBackdrop(this._iface.get_string('color-scheme') === 'prefer-dark');
             for (const item of Object.values(Main.panel.statusArea)) {
-                if (item?.menu?._boxPointer && !item.menu.isOpen)
+                if (item?.menu?._boxPointer && !item.menu.isOpen) {
                     this._ensureMenu(item.menu);
+                    this._toneMenu(item.menu._boxPointer);
+                }
             }
         });
 
@@ -178,10 +191,28 @@ export default class GlassModule extends Module {
         // Banners land over anything, a white window included, and carry text the
         // reader hasn't looked at yet: a little nearer the tinted end, so what's
         // behind frosts away.
-        this.connect(Main.messageTray._bannerBin, 'child-added', (_bin, banner) => this.guard(() => this._ensureTracked(Main.messageTray, banner, {thicken: 0.4})));
-        this._after(ModalDialog.ModalDialog.prototype, 'open', dialog => this._ensureDialog(dialog));
-        this._after(OsdWindow.OsdWindow.prototype, 'show', osd => this._ensureTracked(osd, osd._hbox));
-        this._after(SwitcherPopup.SwitcherPopup.prototype, 'show', popup => this._ensureSwitcher(popup));
+        this.connect(Main.messageTray._bannerBin, 'child-added', (_bin, banner) => this.guard(() => {
+            this._ensureTracked(Main.messageTray, banner, {thicken: 0.4});
+            this._toneBanner(banner);
+            // Where the banner really lands (a corner, by GNOME's setting) is
+            // known once it's laid out.
+            this.later('banner-tone', BANNER_SETTLE_MS, () => {
+                if (banner.has_allocation() && this._surfaces.has(banner))
+                    this._toneSurface(banner, Main.messageTray._bannerBin);
+            });
+        }));
+        this._after(ModalDialog.ModalDialog.prototype, 'open', dialog => {
+            this._ensureDialog(dialog);
+            this._toneSurface(dialog.dialogLayout?._dialog);
+        });
+        this._after(OsdWindow.OsdWindow.prototype, 'show', osd => {
+            this._ensureTracked(osd, osd._hbox);
+            this._toneSurface(osd._hbox);
+        });
+        this._after(SwitcherPopup.SwitcherPopup.prototype, 'show', popup => {
+            this._ensureSwitcher(popup);
+            this._toneSurface(popup._switcherList);
+        });
         this._after(WorkspaceSwitcherPopup.WorkspaceSwitcherPopup.prototype, 'display', popup => {
             for (const monitor of popup.get_children())
                 this._ensureTracked(popup, monitor._list);
@@ -227,6 +258,9 @@ export default class GlassModule extends Module {
 
     disable() {
         this.cleanup();
+        for (const holder of this._light.values())
+            holder.remove_style_class_name(LIGHT_CLASS);
+        this._light.clear();
         if (this._origOpen)
             PopupMenu.PopupMenu.prototype.open = this._origOpen;
         this._origOpen = null;
@@ -236,7 +270,8 @@ export default class GlassModule extends Module {
         if (this._origPointerClose)
             BoxPointer.BoxPointer.prototype.close = this._origPointerClose;
         this._origPointerClose = null;
-        for (const entry of this._menus.values()) {
+        for (const [box, entry] of this._menus) {
+            delete box._superGMenuActor;
             entry.child?.remove_style_class_name?.('super-g-glassed');
             unwrap(entry);
         }
@@ -271,21 +306,28 @@ export default class GlassModule extends Module {
         untrackPaintingView();
     }
 
-    _computeStyle() {
-        const dark = shellDark(this.settings, this._iface);
-        const c = resolve(this._tokens, {
+    _palette(dark) {
+        return resolve(this._tokens, {
             palette: this.settings.get_string('palette'), accent: this.settings.get_string('accent'),
         }, dark);
-        return glassStyle(c, this.settings);
+    }
+
+    _computeStyle() {
+        this._styleLight = glassStyle(this._palette(false), this.settings);
+        return glassStyle(this._palette(shellDark(this.settings, this._iface)), this.settings);
     }
 
     _restyle() {
         this._style = this._computeStyle();
+        if (!adaptiveTone(this.settings)) {
+            for (const [glass, holder] of this._light)
+                this._setLight(glass, holder, false);
+        }
         const folders = [...this._folders.values()];
         const all = [this._panelGlass, this._launcherGlass, ...this._islands, ...folders.map(f => f.glass), ...[...this._menus.values()].map(e => e.glass),
             ...this._docks.values(), ...this._surfaces.values(), ...(this._overview ?? [])];
         for (const glass of all.filter(Boolean))
-            glass.setStyle(this._style);
+            glass.setStyle(this._light.has(glass) ? this._styleLight : this._style);
         for (const folder of folders)
             folder.wash.style = this._washStyle();
         this._syncPanelGlass();
@@ -364,6 +406,84 @@ export default class GlassModule extends Module {
         this._hooks.push(() => (proto[name] = orig));
     }
 
+    /* --------------------------------------------------- adaptive tone -- */
+
+    // Light glass where dark glass would turn a bright backdrop into a grey
+    // slab under its white text; the surface's parent carries the class, so the
+    // shell sheet's light rules reach the surface and everything in it.
+    _tone(glass, holder, rect) {
+        let light = false;
+        if (adaptiveTone(this.settings) && rect?.width > 0 && rect?.height > 0) {
+            const y = backdropLuma(rect, this._iface.get_string('color-scheme') === 'prefer-dark');
+            const face = darkGlassFace(y, this._palette(true), this.settings, Math.min(rect.width, rect.height)) ** 2.2;
+            const contrast = 1.05 / (face + 0.05);
+            light = contrast < (this._light.has(glass) ? DARK_ABOVE : LIGHT_BELOW);
+        }
+        this._setLight(glass, holder, light);
+    }
+
+    _setLight(glass, holder, light) {
+        if (light === this._light.has(glass))
+            return;
+        if (light) {
+            this._light.set(glass, holder);
+            holder.add_style_class_name(LIGHT_CLASS);
+            if (!glass._toneWatched) {
+                glass._toneWatched = true;
+                glass.connect('destroy', () => this._light.delete(glass));
+            }
+        } else {
+            this._light.delete(glass);
+            holder.remove_style_class_name(LIGHT_CLASS);
+        }
+        glass.setStyle(light ? this._styleLight : this._style);
+    }
+
+    // Before it opens, a menu has no place yet: it will hang off its source.
+    _toneMenu(box) {
+        const entry = this._menus.get(box);
+        const source = box._sourceActor;
+        if (!entry || !source)
+            return;
+        const [sx, sy] = source.get_transformed_position();
+        const [sw, sh] = source.get_transformed_size();
+        const [, , w, h] = entry.child.get_preferred_size();
+        const monitor = Main.layoutManager.findMonitorForActor(source) ?? Main.layoutManager.primaryMonitor;
+        const clampX = x => Math.min(Math.max(x, monitor.x), monitor.x + monitor.width - w);
+        const clampY = y => Math.min(Math.max(y, monitor.y), monitor.y + monitor.height - h);
+        const side = box._arrowSide;
+        const x = side === St.Side.LEFT ? sx + sw : side === St.Side.RIGHT ? sx - w : clampX(sx + sw / 2 - w / 2);
+        const y = side === St.Side.BOTTOM ? sy - h : side === St.Side.TOP ? sy + sh : clampY(sy + sh / 2 - h / 2);
+        // The menu's actor: quick settings' submenus sit beside its box.
+        this._tone(entry.glass, box._superGMenuActor ?? box, {x, y, width: w, height: h});
+    }
+
+    // Where a surface shows: where it last was, or centred on its monitor.
+    _toneSurface(surface, holder = surface?.get_parent()) {
+        const glass = surface && this._surfaces.get(surface);
+        if (!glass || !holder)
+            return;
+        let [x, y] = surface.get_transformed_position();
+        let [w, h] = surface.get_transformed_size();
+        if (!surface.has_allocation() || !w || !h) {
+            [, , w, h] = surface.get_preferred_size();
+            const monitor = Main.layoutManager.primaryMonitor;
+            [x, y] = [monitor.x + (monitor.width - w) / 2, monitor.y + (monitor.height - h) / 2];
+        }
+        this._tone(glass, holder, {x, y, width: w, height: h});
+    }
+
+    // Banners drop in at the top of the primary monitor, under the bar.
+    _toneBanner(banner) {
+        const glass = this._surfaces.get(banner);
+        if (!glass)
+            return;
+        const [, , w, h] = banner.get_preferred_size();
+        const monitor = Main.layoutManager.primaryMonitor;
+        this._tone(glass, Main.messageTray._bannerBin,
+            {x: monitor.x + (monitor.width - w) / 2, y: monitor.y + Main.panel.height, width: w, height: h});
+    }
+
     _addSurface(surface, glass) {
         this._surfaces.set(surface, glass);
         surface.add_style_class_name('super-g-glassed');
@@ -429,8 +549,10 @@ export default class GlassModule extends Module {
     }
 
     _ensureMenu(menu) {
-        if (menu._boxPointer)
+        if (menu._boxPointer) {
             this._ensureBox(menu._boxPointer);
+            menu._boxPointer._superGMenuActor = menu.actor;
+        }
         // Quick settings dims itself behind a submenu, redrawing all of itself and
         // its live glass through an offscreen pass, resized on every frame it grows.
         if (menu._setDimmed && menu._dimEffect) {
