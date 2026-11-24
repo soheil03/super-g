@@ -125,7 +125,8 @@ Read this first; it replaces re-exploring the code. Deeper detail: docs/ARCHITEC
 - Liquid style (`glass-style`) lives in the same glass shader behind a `liquid` uniform, after liquid-dom (`GLASS_SHADER`): a monotonic bevel pull on the blurred copy (Snell depth folded content over), per-channel split, rim specular plus mirrored rim, reflection blend. Big panels blur wider and dim in dark (`liquidSize`). Constants are fixed (`LIQ_*`); users get only `glass-clarity` (user's call: one Apple-like slider). liquidGL was rejected: snapshot-based and animates its highlight every frame.
 
 - Live glass decides a copy is clean only when `clip.contains_rectangle(glass in stage coords, rounded out)` is `IN`. Outside the redraw clip the buffer holds an older frame with our own glass in it; summing device-rounded rectangles double-counted at 133% and the glass froze, re-blurring itself. The sandbox does get partial clips (patch `_refresh` to count `get_redraw_clip()`), so liveness is testable there: change an actor in `window_group` and compare `frame()`s.
-- Any edge lens must stay monotonic (sample offset's slope above -1 across the bevel) or it mirrors content: liquid uses `LIQ_PULL * bezel * (1 - x)^2` with `LIQ_PULL < 0.5`.
+- Any edge lens must stay monotonic (sample offset's slope above -1 across the bevel) or it mirrors content: liquid uses `LIQ_PULL * bezel * (1 - x)^2` with `LIQ_PULL < 0.5`. That rule is ours: Apple's lens mirrors on purpose, softened by half-strength frost (docs/LIQUID_GLASS.md).
+- docs/LIQUID_GLASS.md holds Apple's glass model as recovered from QuartzCore (band remap, 20/60 pt bevel, bleed, glint, 27's dark contour), the recipe and our 13 gaps. Read it before touching the glass shader; earlier passes tuned constants on our own model and kept missing.
 
 ## Conventions
 - Comments explain why, not what. Match the existing terse style. GPL-3.0 headers on our files.

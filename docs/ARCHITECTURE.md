@@ -72,3 +72,6 @@ CLONE=1 tools/shell-test.sh /tmp/up light   # then look at the shots
   other extensions) with our accent, then palette rules for menus and popups.
   Popups get a translucent tint when the blur engine marks `#uiGroup` with a
   `bms-popup-*` class, and stay solid otherwise.
+
+Liquid glass: Apple's recovered model, the recipe and where ours differs are in
+[LIQUID_GLASS.md](LIQUID_GLASS.md).

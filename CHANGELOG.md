@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.14.2 - 2026-11-24
+
+### Docs
+- [docs/LIQUID_GLASS.md](docs/LIQUID_GLASS.md): how Apple builds Liquid Glass on macOS 27, from the transcribed QuartzCore shader and the values AppKit sets on a live view, checked against an iOS 27-fitted renderer and macOS 27.2 measurements. It gives a recipe for light and dark glass and ranks thirteen ways ours differs, from a dark band that inverts what's behind to an edge lens a tenth of Apple's. No change to the extension itself.
+
 ## 1.14.1 - 2026-11-24
 
 ### Reverted
