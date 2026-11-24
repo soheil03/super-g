@@ -2,6 +2,19 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.17.0 - 2026-11-24
+
+### Added
+- Larger app grid icons, as Apple's: 96 px by default (GNOME stops at 64), a 7x4 grid on a 1800x1200 screen. App icons, Size in the app grid; 0 keeps GNOME's.
+- Folders in the app grid are one plate the size of an app icon with a 3x3 preview, instead of a card the size of the whole tile around four tiny icons. Their labels line up with the apps'.
+- An open folder sits on a blurred grid (Glass, Blur the grid behind folders). Its glass used to refract the tiles behind it into coloured blobs: glass on glass, which Apple avoids the same way.
+
+### Changed
+- Folder dialogs fit their icons and hold only the rows they need (up to three), instead of a fixed 550 px square with an empty row. Their glass goes a little towards tinted over the dim.
+
+### Fixed
+- Glass ignored its surface's opacity: as a menu or quick settings faded in, a full-strength grey slab and shadow showed under content that was still faint. Glass and its shadow now fade with the surface.
+
 ## 1.16.0 - 2026-11-24
 
 ### Added

@@ -294,11 +294,14 @@ export default class SuperGPrefs extends ExtensionPreferences {
                 ]),
                 ]),
                 switchRow(s, 'glass-overview', 'Blurred overview background'),
+                switchRow(s, 'glass-folder-backdrop', 'Blur the grid behind folders', 'An open folder sits on a calm, blurred backdrop, as on Apple\'s'),
             ]),
             group('App icons', [
                 comboRow(s, 'icon-shape', 'Shape', ICON_SHAPES, {subtitle: 'Every app icon takes one shape: squircle as Apple, circle as Google'}),
                 comboRow(s, 'icon-plate', 'Plate colour', ICON_PLATES),
                 spinRow(s, 'icon-scale', 'Icon size on the plate', {lower: 0.5, upper: 1, step: 0.02, digits: 2}),
+                spinRow(s, 'app-grid-icon-size', 'App grid icon size', {lower: 0, upper: 128, step: 8,
+                    subtitle: 'In the overview\'s app grid and folders; 0 keeps GNOME\'s'}),
             ]),
             group('Apply to', [
                 switchRow(s, 'theme-gtk', 'GTK apps', 'GTK4, libadwaita and GTK3 apps, including Flatpaks'),

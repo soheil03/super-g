@@ -58,6 +58,9 @@ uniform float bleed;
 uniform float hold;
 uniform float glint;
 uniform float contour;
+// 1 - the actor's paint opacity: the snippet writes its colour itself. Unset
+// (the wallpaper backdrop) means fully shown.
+uniform float fade_out;
 uniform float half_du;
 uniform float half_dv;
 uniform float wide_du;
@@ -249,7 +252,7 @@ if (liquid > 0.5) {
     rgb = mix(rgb, vec3(0.0), clamp(1.0 - abs(d + 0.6) / 0.8, 0.0, 1.0) * outline);
     rgb += (hash(px) - 0.5) * grain;
 }
-cogl_color_out = vec4(clamp(rgb, 0.0, 1.0), 1.0) * inside;
+cogl_color_out = vec4(clamp(rgb, 0.0, 1.0), 1.0) * inside * (1.0 - fade_out);
 `;
 
 // The shadow is drawn by the glass itself, after it copied what's behind: a
@@ -456,7 +459,7 @@ function sourceBox(actor, {fb, x: ox, y: oy, scale}, room, pad, align) {
 // copy in ceil(used / 2^L) of its ceil(capacity / 2^L) texels, a slightly
 // different share than level 0 has.
 const UV_UNIFORMS = ['uv_x', 'uv_y', 'uv_w', 'uv_h', 'half_du', 'half_dv', 'wide_du', 'wide_dv', 'used_u', 'used_v',
-    'half_ku', 'half_kv', 'wide_ku', 'wide_kv'];
+    'half_ku', 'half_kv', 'wide_ku', 'wide_kv', 'fade_out'];
 
 // How a level-0 coordinate scales to level L of a copy `used` texels wide in
 // targets of `cap`.
@@ -694,6 +697,9 @@ export const LiveGlassEffect = GObject.registerClass({
         const {half, deep} = this._levels;
         const k = level => [levelScale(shown.width, this._capW, level), levelScale(shown.height, this._capH, level)];
         const [halfKu, halfKv] = k(half), [wideKu, wideKv] = k(deep);
+        // A menu fades in with its BoxPointer: without this the glass and its
+        // shadow showed whole while the content was still faint.
+        const fade = this._layer.get_paint_opacity() / 255;
 
         if (u.shadow) {
             const x = -s.left - SHADOW_PAD, y = -s.top - SHADOW_PAD;
@@ -701,7 +707,7 @@ export const LiveGlassEffect = GObject.registerClass({
             // A vibrant shadow takes its colour from the copy's widest level.
             this._shadow.paint(node, {x, y, width, height,
                 box: {x1: -s.left, y1: -s.top, x2: actor.width + s.right, y2: actor.height + s.bottom},
-                radius: u.radius, exponent: u.exponent, aa: u.aa, layers: u.shadow, vibrant: u.vibrant ?? 0,
+                radius: u.radius, exponent: u.exponent, aa: u.aa, layers: u.shadow, vibrant: u.vibrant ?? 0, fade,
                 map: [(shown.ox + x * box.scale) / this._capW * wideKu, (shown.oy + y * box.scale) / this._capH * wideKv,
                     width * box.scale / this._capW * wideKu, height * box.scale / this._capH * wideKv,
                     used[0] * wideKu, used[1] * wideKv]});
@@ -718,7 +724,7 @@ export const LiveGlassEffect = GObject.registerClass({
         }
         const uv = [uvX1, uvY1, uvX2 - uvX1, uvY2 - uvY1,
             2 ** half / this._capW, 2 ** half / this._capH, 2 ** deep / this._capW, 2 ** deep / this._capH, ...used,
-            halfKu, halfKv, wideKu, wideKv];
+            halfKu, halfKv, wideKu, wideKv, 1 - fade];
         UV_UNIFORMS.forEach((name, i) => {
             if (this._uv[i] !== uv[i]) {
                 this._uv[i] = uv[i];

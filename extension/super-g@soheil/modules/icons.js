@@ -12,6 +12,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {AppGridLook} from '../lib/appGrid.js';
 import {IconPlate} from '../lib/iconPlate.js';
 import {Module} from '../lib/module.js';
 
@@ -139,6 +140,9 @@ export default class IconsModule extends Module {
         for (const key of ['icon-shape', 'icon-scale', 'icon-plate'])
             this.connect(this.settings, `changed::${key}`, () => this.later('icons', 100, () => this._refresh()));
         this.connect(St.Settings.get(), 'notify::color-scheme', () => this.later('icons', 100, () => this._refresh()));
+        this._grid = new AppGridLook(this.settings);
+        this._grid.enable();
+        this.connect(this.settings, 'changed::app-grid-icon-size', () => this.later('grid', 100, () => this._grid.apply()));
         this._refresh();
         this._warmUp();
     }
@@ -168,6 +172,8 @@ export default class IconsModule extends Module {
         this._warmId = 0;
         this.cleanup();
         this._proto.create_icon_texture = this._original;
+        this._grid?.disable();
+        this._grid = null;
         this._looks.clear();
         this._refresh();
     }
@@ -289,5 +295,7 @@ export default class IconsModule extends Module {
         }
         this.ext._active?.get('drawer')?._dropTiles?.();
         Main.overview?.dash?.queueRedisplay?.();
+        // Folder previews are built from icons too.
+        this._grid?.apply();
     }
 }

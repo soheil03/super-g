@@ -19,6 +19,11 @@
       <default>true</default>
       <summary>One shape for every app icon</summary>
     </key>
+    <key name="app-grid-icon-size" type="i">
+      <range min="0" max="128"/>
+      <default>96</default>
+      <summary>Icon size in the app grid and its folders (0: GNOME's own, at most 64)</summary>
+    </key>
     <key name="icon-shape" type="s">
       <choices>
         <choice value="off"/>
@@ -251,6 +256,10 @@
       <range min="8" max="120"/>
       <default>8</default>
       <summary>Blur radius</summary>
+    </key>
+    <key name="glass-folder-backdrop" type="b">
+      <default>true</default>
+      <summary>Blur the app grid behind an open folder, so its glass doesn't sit on other glass</summary>
     </key>
     <key name="glass-overview" type="b">
       <default>true</default>

@@ -6,6 +6,7 @@
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as AppDisplay from 'resource:///org/gnome/shell/ui/appDisplay.js';
 import * as BoxPointer from 'resource:///org/gnome/shell/ui/boxpointer.js';
@@ -38,6 +39,10 @@ function isBlank(actor) {
 const DOCK_REACH = 420;
 const ISLAND_CHECK_MS = 100;
 const PREWRAP_MS = 2000;
+// The app grid behind an open folder: how far it blurs, and how fast.
+const FOLDER_BLUR = 'super-g-folder-backdrop';
+const FOLDER_BLUR_RADIUS = 28;
+const FOLDER_BLUR_MS = 220;
 // Adaptive tone: a surface turns light glass where white text on dark glass
 // would fall under this contrast, and back once it clears the second.
 const LIGHT_BELOW = 3;
@@ -363,7 +368,8 @@ export default class GlassModule extends Module {
         if (this._folders.has(dialog))
             return;
         const box = dialog._viewBox;
-        const glass = new GlassLayer({style: this._style, shapeSource: box, track: box, smoothing: 0.5});
+        // Over the dim it goes a little towards tinted, as dialogs do.
+        const glass = new GlassLayer({style: this._style, shapeSource: box, track: box, smoothing: 0.5, thicken: 0.3});
         dialog.get_parent().insert_child_below(glass, dialog);
         // GNOME's dim is the dialog's own background colour, eased when it opens,
         // and would lie over the glass; ours goes under, a soft wash of the theme.
@@ -375,12 +381,16 @@ export default class GlassModule extends Module {
         const wash = new St.Widget({x: monitor.x, y: monitor.y, width: monitor.width, height: monitor.height, opacity: 0,
             style: this._washStyle()});
         dialog.get_parent().insert_child_below(wash, glass);
-        const show = open => wash.ease({opacity: open ? 255 : 0, duration: 200, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+        const show = open => {
+            wash.ease({opacity: open ? 255 : 0, duration: 200, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+            this._blurGrid(open);
+        };
         show(true);
         // The dialog outlives this module across a lock, and each start adds its
         // own wash: a stale one would darken the folder a little more every time.
-        const signals = [dialog.connect('open-state-changed', (_d, open) => show(open))];
+        const signals = [dialog.connect('open-state-changed', (_d, open) => this.guard(() => show(open)))];
         const drop = () => {
+            this._blurGrid(false, true);
             signals.forEach(id => dialog.disconnect(id));
             delete dialog.ease;
             this._folders.delete(dialog);
@@ -389,6 +399,47 @@ export default class GlassModule extends Module {
         };
         signals.push(dialog.connect('destroy', drop));
         this._folders.set(dialog, {glass, wash, drop});
+    }
+
+    // Glass on glass reads as clutter: the folder's lens refracted the grid's
+    // tiles and labels into coloured blobs. As Apple does, what's under an open
+    // folder blurs away, so its glass sits on a calm field. The effect is
+    // removed once the grid is sharp again, so the grid costs nothing then.
+    _blurGrid(open, now = false) {
+        const view = Main.overview._overview?.controls?._appDisplay;
+        if (!view)
+            return;
+        let effect = view.get_effect(FOLDER_BLUR);
+        const to = open && this.settings.get_boolean('glass-folder-backdrop') ? FOLDER_BLUR_RADIUS : 0;
+        if (!effect && !to)
+            return;
+        if (!effect) {
+            effect = new Shell.BlurEffect({mode: Shell.BlurMode.ACTOR, radius: 0, brightness: 1});
+            view.add_effect_with_name(FOLDER_BLUR, effect);
+        }
+        this._blurTimeline?.stop();
+        this._blurTimeline = null;
+        const finish = () => {
+            effect.radius = to;
+            if (!to)
+                view.remove_effect(effect);
+        };
+        if (now)
+            return finish();
+        const from = effect.radius;
+        // Bound to the stage, and referenced, or it freezes silently.
+        const timeline = this._blurTimeline = new Clutter.Timeline({actor: global.stage,
+            duration: FOLDER_BLUR_MS * St.Settings.get().slow_down_factor,
+            progress_mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+        timeline.connect('new-frame', () => (effect.radius = from + (to - from) * timeline.get_progress()));
+        timeline.connect('stopped', (_t, complete) => {
+            if (complete)
+                finish();
+            if (this._blurTimeline === timeline)
+                this._blurTimeline = null;
+        });
+        timeline.start();
+        return undefined;
     }
 
     _washStyle() {

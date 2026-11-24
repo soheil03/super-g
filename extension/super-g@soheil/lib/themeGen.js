@@ -459,6 +459,9 @@ ${rule('.page-indicator .page-indicator-icon', `background-color: ${c.fg};`)}
 ${rule('.page-navigation-arrow', `background-color: ${withAlpha(c.fg, 0.12)}; color: ${c.fg};`)}` : ''}
 ${rule('.app-folder', `background-color: ${withAlpha(c.fg, dark ? 0.1 : 0.07)}; color: ${c.fg}; box-shadow: inset 0 0 0 1px ${withAlpha(c.fg, 0.08)}; border-radius: 26px;`)}
 ${rule('.app-folder:hover, .app-folder:focus', `background-color: ${withAlpha(c.fg, dark ? 0.16 : 0.12)};`)}
+${rule('.app-folder.super-g-plated', 'background-color: transparent; box-shadow: none;')}
+${tileStates('.app-folder.super-g-plated')}
+${rule('.super-g-folder-plate', `background-color: ${withAlpha(c.fg, dark ? 0.16 : 0.1)}; box-shadow: inset 0 0 0 1px ${withAlpha(c.fg, dark ? 0.12 : 0.08)};`)}
 ${rule('.app-folder-dialog', `background-color: ${opts.glass ? 'transparent' : withAlpha(c.window, 0.94)}; color: ${c.fg}; border-radius: 32px; border: none; box-shadow: ${opts.glass ? 'none' : `inset 0 0 0 1px ${withAlpha(c.fg, 0.08)}`};`)}
 ${opts.glass ? rule('.app-folder-dialog-container', 'background-color: transparent;') : ''}
 ${rule('.app-folder-dialog .icon-button, .app-folder-dialog .icon-button StIcon', `color: ${c.fg};`)}
