@@ -8,6 +8,21 @@ import Gettext from 'gettext';
 
 import { HINT_TIMEOUT, CROSSFADE_TIME, getPrettyDate } from './constants.js';
 import { getHintTextStyle } from './colorUtils.js';
+import { stripLuminance } from '../../../../lib/wallpaper.js';
+
+// Linear luminance of the clock's region (top third, middle half) past which
+// white text loses to the wallpaper, and where its shadow starts to grow.
+const CLOCK_DARK_AT = 0.4;
+const CLOCK_SHADOW_FROM = 0.12;
+
+// The clock's colour and shadow over a region of luminance y (null: unknown).
+function clockTone(y, alpha) {
+    if (y !== null && y >= CLOCK_DARK_AT)
+        return 'color: rgba(0, 0, 0, 0.6); text-shadow: 0 1px 14px rgba(255, 255, 255, 0.18);';
+    const t = y === null ? 0.5 : Math.min(Math.max((y - CLOCK_SHADOW_FROM) / (CLOCK_DARK_AT - CLOCK_SHADOW_FROM), 0), 1);
+    return `color: rgba(255, 255, 255, ${Math.max(alpha, 0.6 + 0.3 * t).toFixed(3)}); ` +
+        `text-shadow: 0 2px 18px rgba(0, 0, 0, ${(0.05 + 0.3 * t).toFixed(3)});`;
+}
 
 const shellGettext = Gettext.domain('gnome-shell').gettext.bind(Gettext.domain('gnome-shell'));
 
@@ -154,9 +169,11 @@ export const WackClock = GObject.registerClass(
             return 1.0; // Statically white text
         }
 
-        setWallpaperAlpha(alpha, promptColor = null) {
-            this._time.set_style(`color: rgba(255, 255, 255, ${alpha});`);
-            this._dateOutput.set_style(`color: rgba(255, 255, 255, ${alpha});`);
+        setWallpaperAlpha(alpha, promptColor = null, uri = null) {
+            const y = uri ? stripLuminance(uri, 'top', 0.35, 0.25, 0.75) : null;
+            const tone = clockTone(y, alpha);
+            this._time.set_style(tone);
+            this._dateOutput.set_style(tone);
             if (this._hint)
                 this._hint.set_style(getHintTextStyle(promptColor, alpha));
         }

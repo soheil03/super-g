@@ -772,3 +772,107 @@ if 'Super G: never bigger' not in s:
     open(p, 'w').write(s)
 print('preview cap patched')
 PY
+
+# Lock clock: upstream's is always white (60-85% opacity, a near-invisible
+# shadow), which washes out over a light wallpaper. Over a light clock region
+# it goes dark and translucent, so the wallpaper's colour shows through, as
+# iOS does; over mid tones the white gets a shadow strong enough to hold it.
+python3 -I - "$v/lockscreen" <<'PY'
+import sys
+root = sys.argv[1]
+p = root + '/extension.js'
+s = open(p).read()
+if 'setWallpaperAlpha(alpha, promptColor, uri)' not in s:
+    old = "dialog._clock.setWallpaperAlpha(alpha, promptColor);"
+    assert old in s, 'lock clock alpha call changed upstream'
+    s = s.replace(old, "dialog._clock.setWallpaperAlpha(alpha, promptColor, uri);")
+    open(p, 'w').write(s)
+p = root + '/src/main/wackClock.js'
+s = open(p).read()
+if 'clockTone' not in s:
+    old = "import { getHintTextStyle } from './colorUtils.js';\n"
+    assert old in s, 'lock clock imports changed upstream'
+    s = s.replace(old, old + """import { stripLuminance } from '../../../../lib/wallpaper.js';
+
+// Linear luminance of the clock's region (top third, middle half) past which
+// white text loses to the wallpaper, and where its shadow starts to grow.
+const CLOCK_DARK_AT = 0.4;
+const CLOCK_SHADOW_FROM = 0.12;
+
+// The clock's colour and shadow over a region of luminance y (null: unknown).
+function clockTone(y, alpha) {
+    if (y !== null && y >= CLOCK_DARK_AT)
+        return 'color: rgba(0, 0, 0, 0.6); text-shadow: 0 1px 14px rgba(255, 255, 255, 0.18);';
+    const t = y === null ? 0.5 : Math.min(Math.max((y - CLOCK_SHADOW_FROM) / (CLOCK_DARK_AT - CLOCK_SHADOW_FROM), 0), 1);
+    return `color: rgba(255, 255, 255, ${Math.max(alpha, 0.6 + 0.3 * t).toFixed(3)}); ` +
+        `text-shadow: 0 2px 18px rgba(0, 0, 0, ${(0.05 + 0.3 * t).toFixed(3)});`;
+}
+""")
+    old = """        setWallpaperAlpha(alpha, promptColor = null) {
+            this._time.set_style(`color: rgba(255, 255, 255, ${alpha});`);
+            this._dateOutput.set_style(`color: rgba(255, 255, 255, ${alpha});`);"""
+    assert old in s, 'lock clock style changed upstream'
+    s = s.replace(old, """        setWallpaperAlpha(alpha, promptColor = null, uri = null) {
+            const y = uri ? stripLuminance(uri, 'top', 0.35, 0.25, 0.75) : null;
+            const tone = clockTone(y, alpha);
+            this._time.set_style(tone);
+            this._dateOutput.set_style(tone);""")
+    open(p, 'w').write(s)
+print('lock clock tone patched')
+PY
+
+# The name and hint under the prompt: same rule, judged from the prompt
+# region's own sample (perceptual lightness, so 0.7 matches the clock's 0.4).
+python3 -I - "$v/lockscreen/src/main" <<'PY'
+import sys
+p = sys.argv[1] + '/colorUtils.js'
+s = open(p).read()
+if 'brightBackdrop' not in s:
+    old = "export function getUserLabelStyle(visualStateOrLightness) {\n"
+    assert old in s, 'lock user label style changed upstream'
+    s = s.replace(old, """// Label text goes dark over a light sample; a bare number is only an alpha.
+const LABEL_DARK_AT = 0.7;
+const DARK_LABEL = 'color: rgba(0, 0, 0, 0.62) !important; text-shadow: 0 1px 8px rgba(255, 255, 255, 0.2) !important;';
+export function brightBackdrop(v) {
+    if (!v || typeof v !== 'object')
+        return false;
+    const pL = v.visualState?.perceptualL ?? v.perceptualL ??
+        (v.luminance != null ? getPerceptualLightness(v.luminance) : null);
+    return pL !== null && pL >= LABEL_DARK_AT;
+}
+
+""" + old + """    if (brightBackdrop(visualStateOrLightness))
+        return DARK_LABEL;
+""")
+    old = "export function getHintTextStyle(visualStateOrLightness, wallpaperAlpha = null) {\n"
+    assert old in s, 'lock hint style changed upstream'
+    s = s.replace(old, old + """    if (brightBackdrop(visualStateOrLightness))
+        return DARK_LABEL;
+""")
+    open(p, 'w').write(s)
+p = sys.argv[1] + '/cupertinoPrompt.js'
+s = open(p).read()
+if 'wack-dark-label' not in s:
+    old = "import { getPromptBlendOverlay, getUserLabelStyle, getHintTextStyle } from './colorUtils.js';"
+    assert old in s, 'lock prompt imports changed upstream'
+    s = s.replace(old, "import { getPromptBlendOverlay, getUserLabelStyle, getHintTextStyle, brightBackdrop } from './colorUtils.js';")
+    # The stylesheet's white for the name is !important, which beats an inline
+    # style; `_label` is a box around the St.Label, so the class goes on it.
+    old = "                label.set_style(getUserLabelStyle(this._lastVisualState ?? this._lastClockAlpha));\n"
+    assert old in s, 'lock user label changed upstream'
+    s = s.replace(old, old + "                label[brightBackdrop(this._lastVisualState) ? 'add_style_class_name' : 'remove_style_class_name']('wack-dark-label');\n")
+    open(p, 'w').write(s)
+p = sys.argv[1] + '/../../stylesheet.css'
+s = open(p).read()
+if 'wack-dark-label' not in s:
+    s += '''
+/* Super G: the name over a light wallpaper. */
+.unlock-dialog .wack-cupertino-rest .wack-dark-label .user-widget-label,
+.unlock-dialog .wack-cupertino-rest .user-widget-label.wack-dark-label {
+    color: rgba(0, 0, 0, 0.62) !important;
+    text-shadow: 0 1px 8px rgba(255, 255, 255, 0.2) !important;
+}
+'''
+    open(p, 'w').write(s)
+print('lock labels tone patched')
+PY

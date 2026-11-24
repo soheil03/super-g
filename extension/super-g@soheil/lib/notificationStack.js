@@ -9,12 +9,13 @@ import * as MessageList from 'resource:///org/gnome/shell/ui/messageList.js';
 
 const Group = MessageList.NotificationMessageGroup;
 let original = null;
-// group -> [[actor, handler id], ...]
+// group -> Map(actor -> [handler ids]). A card leaves the map when it's
+// destroyed: a lock can dispose one before the group's next update.
 const watched = new Map();
 
 function unwatch(group) {
-    for (const [actor, id] of watched.get(group) ?? []) {
-        actor.disconnect(id);
+    for (const [actor, ids] of watched.get(group) ?? []) {
+        ids.forEach(id => actor.disconnect(id));
         actor.remove_clip();
     }
     watched.delete(group);
@@ -51,11 +52,15 @@ function watch(group) {
     const parts = stackOf(group);
     if (!parts)
         return;
-    const ids = [];
-    for (const actor of [parts.top, ...parts.stack])
-        ids.push([actor, actor.connect('notify::allocation', () => clip(group))]);
-    ids.push([group, group.connect('destroy', () => watched.delete(group))]);
-    watched.set(group, ids);
+    const actors = new Map();
+    for (const actor of [parts.top, ...parts.stack]) {
+        actors.set(actor, [
+            actor.connect('notify::allocation', () => clip(group)),
+            actor.connect('destroy', () => actors.delete(actor)),
+        ]);
+    }
+    actors.set(group, [group.connect('destroy', () => watched.delete(group))]);
+    watched.set(group, actors);
     clip(group);
 }
 

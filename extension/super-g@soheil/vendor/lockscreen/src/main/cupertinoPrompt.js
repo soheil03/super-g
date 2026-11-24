@@ -4,7 +4,7 @@ import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
 import St from 'gi://St';
 import * as UserWidget from 'resource:///org/gnome/shell/ui/userWidget.js';
-import { getPromptBlendOverlay, getUserLabelStyle, getHintTextStyle } from './colorUtils.js';
+import { getPromptBlendOverlay, getUserLabelStyle, getHintTextStyle, brightBackdrop } from './colorUtils.js';
 
 export const WackCupertinoRestPrompt = GObject.registerClass(
     class WackCupertinoRestPrompt extends St.BoxLayout {
@@ -145,6 +145,7 @@ export const WackCupertinoRestPrompt = GObject.registerClass(
             if (!label) return;
             if (this._lastVisualState || this._lastClockAlpha != null) {
                 label.set_style(getUserLabelStyle(this._lastVisualState ?? this._lastClockAlpha));
+                label[brightBackdrop(this._lastVisualState) ? 'add_style_class_name' : 'remove_style_class_name']('wack-dark-label');
             }
         }
 

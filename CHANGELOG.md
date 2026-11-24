@@ -2,6 +2,15 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.15.3 - 2026-11-24
+
+### Changed
+- Liquid glass at the clear end of the clarity slider is much thinner: dark glass now lets white through at 0.7 (was 0.53, a grey slab), light glass goes down to 0.42 over black (was 0.55), colour keeps 92% (was 80%), and the frost drops to 0.35 of regular (was 0.65). Regular and tinted glass are unchanged; move the slider up for more calm under text.
+
+### Fixed
+- Lock screen clock and date over a light wallpaper: they were always white at 60 to 85% with an almost invisible shadow. Over a light clock region they now go dark and translucent, so the wallpaper's colour shows through; over mid tones the white gets a stronger shadow. The user name and the unlock hint follow the same rule from the prompt region.
+- Collapsed notification stacks no longer touch a card the lock screen already destroyed (a "has been already disposed" critical on every lock).
+
 ## 1.15.2 - 2026-11-24
 
 ### Performance

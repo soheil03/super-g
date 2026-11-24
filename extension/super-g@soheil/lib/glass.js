@@ -1129,20 +1129,21 @@ const LIQ_REGULAR_AT = 0.3;
 // [black, white, chroma]: what a flat backdrop of luma 0 and 1 shows as, and
 // how much of its colour stays (docs/LIQUID_GLASS.md, "Tone"). Totals, bleed
 // included: liquidTone solves the band under it.
-// The clear end is not Apple's Clear material (0.075 -> 1.15): that one goes
-// on media, not under text, and white text on it vanished over any light
-// window. Ours lets more brightness and colour through while the band stays
-// on the text's side: dark glass reaches 0.53 over white (white text about
-// 3.6:1, dimmer secondary text still legible), light glass 0.55 over black.
+// The clear end goes most of the way to Apple's Clear material (0.075 -> 1.15),
+// which is for media: at 0.53 over white it still read as a grey slab. Dark
+// glass now reaches 0.7 over white (white text about 2.3:1 there, and only
+// over a white window), light glass 0.42 over black. The band stays on the
+// text's side; anyone who reads over bright windows moves the slider up.
 const LIQ_BANDS = {
-    light: {clear: [0.55, 1.0, 0.8], regular: [0.70, 1.0, 0.6], tinted: [0.85, 1.0, 0.4], small: [0.89, 1.0, 0.75]},
+    light: {clear: [0.42, 1.0, 0.92], regular: [0.70, 1.0, 0.6], tinted: [0.85, 1.0, 0.4], small: [0.89, 1.0, 0.75]},
     // macOS 27.2's lighter dark glass, the wash more opaque towards tinted.
-    dark: {clear: [0.05, 0.53, 0.8], regular: [0.08, 0.49, 0.6], tinted: [0.08, 0.42, 0.8]},
+    dark: {clear: [0.03, 0.7, 0.92], regular: [0.08, 0.49, 0.6], tinted: [0.08, 0.42, 0.8]},
 };
 
-// Frost in points: chrome 4.5, big panels 8.5 at regular; clear 0.65 of
-// that, tinted 2.2 times (about 18.7 on a big panel), as macOS 27's slider.
-const LIQ_FROST = {chrome: 4.5, panel: 8.5, clear: 0.65, tinted: 2.2};
+// Frost in points: chrome 4.5, big panels 8.5 at regular; clear 0.35 of
+// that (0.65 still frosted text behind past reading), tinted 2.2 times
+// (about 18.7 on a big panel), as macOS 27's slider.
+const LIQ_FROST = {chrome: 4.5, panel: 8.5, clear: 0.35, tinted: 2.2};
 
 // What sits over a dim (a folder dialog) goes half way towards tinted.
 const clarityWith = (clarity, thicken) => clarity + (1 - clarity) * thicken * 0.5;

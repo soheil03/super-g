@@ -335,3 +335,9 @@
     border: 2px solid transparent !important;
     box-sizing: border-box !important;
 }
+/* Super G: the name over a light wallpaper. */
+.unlock-dialog .wack-cupertino-rest .wack-dark-label .user-widget-label,
+.unlock-dialog .wack-cupertino-rest .user-widget-label.wack-dark-label {
+    color: rgba(0, 0, 0, 0.62) !important;
+    text-shadow: 0 1px 8px rgba(255, 255, 255, 0.2) !important;
+}

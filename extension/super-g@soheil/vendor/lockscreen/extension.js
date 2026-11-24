@@ -610,7 +610,7 @@ export default class WackLockscreenClockExtension extends Extension {
         _log(`[WACK/Extension] _updateClockAlphaAndPromptColor - uri: ${uri}, alpha: ${alpha}, yCenterFraction: ${yCenterFraction}`);
 
         if (dialog?._clock)
-            dialog._clock.setWallpaperAlpha(alpha, promptColor);
+            dialog._clock.setWallpaperAlpha(alpha, promptColor, uri);
 
         if (this._clockLayoutManager?.updateHintStyle)
             this._clockLayoutManager.updateHintStyle(promptColor, alpha);

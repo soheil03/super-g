@@ -491,7 +491,20 @@ export function getPromptShadowAlpha(visualStateOrLightness) {
     return clamp01(Math.max(PROMPT_SHADOW_FLOOR, Math.min(PROMPT_SHADOW_ROOF, shadowAlpha)));
 }
 
+// Label text goes dark over a light sample; a bare number is only an alpha.
+const LABEL_DARK_AT = 0.7;
+const DARK_LABEL = 'color: rgba(0, 0, 0, 0.62) !important; text-shadow: 0 1px 8px rgba(255, 255, 255, 0.2) !important;';
+export function brightBackdrop(v) {
+    if (!v || typeof v !== 'object')
+        return false;
+    const pL = v.visualState?.perceptualL ?? v.perceptualL ??
+        (v.luminance != null ? getPerceptualLightness(v.luminance) : null);
+    return pL !== null && pL >= LABEL_DARK_AT;
+}
+
 export function getUserLabelStyle(visualStateOrLightness) {
+    if (brightBackdrop(visualStateOrLightness))
+        return DARK_LABEL;
     const shadowAlpha = getUserLabelShadowAlpha(visualStateOrLightness);
     return `text-shadow: 0 1px 10px rgba(0, 0, 0, ${shadowAlpha.toFixed(3)}) !important;`;
 }
@@ -573,6 +586,8 @@ export function getHintTextColorAlpha(visualStateOrLightness, wallpaperAlpha = n
 }
 
 export function getHintTextStyle(visualStateOrLightness, wallpaperAlpha = null) {
+    if (brightBackdrop(visualStateOrLightness))
+        return DARK_LABEL;
     const colorAlpha = getHintTextColorAlpha(visualStateOrLightness, wallpaperAlpha);
     const shadowAlpha = getHintTextShadowAlpha(visualStateOrLightness);
     return `color: rgba(255, 255, 255, ${colorAlpha.toFixed(3)}) !important; text-shadow: 0 1px 7px rgba(0, 0, 0, ${shadowAlpha.toFixed(3)}) !important;`;
