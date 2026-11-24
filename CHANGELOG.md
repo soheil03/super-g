@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.15.1 - 2026-11-24
+
+### Docs
+- README leads with a tagline, light and dark hero shots and a list of the best features. New screenshots (hero, dock magnification, drawer, quick settings, calendar) come from a sandbox on a bright wallpaper with real windows open, so the glass shows; none holds personal data. No change to the extension itself.
+
 ## 1.15.0 - 2026-11-24
 
 ### Changed

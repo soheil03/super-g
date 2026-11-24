@@ -1,11 +1,35 @@
 # Super G
 
-One GNOME Shell extension and one theme for a clean, consistent Ubuntu desktop.
+**Live glass, an Apple-style dock and one consistent look for your Ubuntu desktop, from a single GNOME Shell extension.**
+
+<p align="center"><img src="docs/screenshots/hero-light.webp" alt="Super G, light" width="49%"> <img src="docs/screenshots/hero-dark.webp" alt="Super G, dark" width="49%"></p>
+
 Instead of nine separate extensions that each patch the shell their own way,
 Super G runs everything as modules of a single extension, driven by a
 single colour and shape palette, with one settings window.
 
 Built for **Ubuntu 26.04 LTS / GNOME 50**. An independent project, not affiliated with GNOME or Canonical. Dock magnification follows [Dhruva](https://github.com/narkagni/dhruva) by NarkAgni (GPL-3.0).
+
+## Highlights
+
+- **Liquid glass that is really live.** Menus, the dock, the top bar, the app drawer and notifications blur what is actually behind them, frame by frame, with a refracting rim, a lit edge and a soft shadow. Two styles (frosted, or Liquid after Apple's model) and one Clear-to-Tinted slider.
+- **A dock that moves like macOS.** Cosine-bell magnification, bounce on launch, running dots, minimize into the icon, previews, trash and mounts. Icons become squircle tiles.
+- **An app drawer you will actually use.** Popup from the dock, fullscreen, or GNOME's overview: search, category pills, most used, pinned apps, right-click menus, drag to the dock.
+- **One theme for everything.** GTK4/libadwaita, GTK3, Flatpak, shell menus, quick settings, calendar and dialogs share four palettes and seven accents, in light and dark.
+- **Top bar your way.** Floating, islands or adaptive; text colour follows the wallpaper; rounded window corners with shadows.
+- **Sonoma-style lock screen, a command bar, hot corners and touchpad gestures**, all behind the same settings window.
+- **Safe by design.** A failing module switches itself off and nothing else breaks. Upstream engines are vendored and updated with one script, and switching over from the originals keeps your settings.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/dock-dark.webp" alt="Dock magnification"><br><sub><b>Dock</b> with magnification and squircle icons</sub></td>
+<td width="50%"><img src="docs/screenshots/drawer-dark.webp" alt="App drawer"><br><sub><b>App drawer</b> with live glass over open windows</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/quick-dark.webp" alt="Quick settings"><br><sub><b>Quick settings</b> in dark</sub></td>
+<td><img src="docs/screenshots/calendar-light.webp" alt="Calendar"><br><sub><b>Calendar</b> in light, glass over a window</sub></td>
+</tr>
+</table>
 
 ## Tested on
 
@@ -49,11 +73,6 @@ Four palettes (Graphite, Catppuccin, Warm stone, Cool slate) and seven accents
 - **Theme, not a re-skin.** Colours, radii and fonts are applied on top of
   GNOME's own styles (libadwaita, adw-gtk3, the shell theme). Nothing is
   rewritten, so GNOME updates don't break the look.
-
-## Screenshots
-
-![App drawer](docs/screenshots/drawer-light.png)
-![Dark, with magnification](docs/screenshots/dock-dark.png)
 
 ## Install
 
