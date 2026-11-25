@@ -2,6 +2,11 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.17.3 - 2026-11-25
+
+### Fixed
+- Notification text could turn dark on dark glass, unreadable: after a banner over a bright backdrop got light glass, the next banner kept its dark text even when its own glass was dark. The light text style now leaves with the last light banner.
+
 ## 1.17.2 - 2026-11-25
 
 ### Fixed

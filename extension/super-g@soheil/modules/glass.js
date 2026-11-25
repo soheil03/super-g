@@ -134,6 +134,8 @@ export default class GlassModule extends Module {
         trackPaintingView();
         // Glass layer -> the actor carrying LIGHT_CLASS, for light ones.
         this._light = new Map();
+        this._watchedHolders = new WeakSet();
+        this._goneHolders = new WeakSet();
         this._style = this._computeStyle();
 
         this.connect(this._iface, 'changed::color-scheme', () => this._restyle());
@@ -289,8 +291,10 @@ export default class GlassModule extends Module {
 
     disable() {
         this.cleanup();
-        for (const holder of this._light.values())
-            holder.remove_style_class_name(LIGHT_CLASS);
+        for (const holder of new Set(this._light.values())) {
+            if (!this._goneHolders.has(holder))
+                holder.remove_style_class_name(LIGHT_CLASS);
+        }
         this._light.clear();
         if (this._origOpen)
             PopupMenu.PopupMenu.prototype.open = this._origOpen;
@@ -499,21 +503,43 @@ export default class GlassModule extends Module {
         this._setLight(glass, holder, light);
     }
 
+    // Holders can outlive the glass and be shared (every banner's is the
+    // banner bin): the class follows whether any light glass still uses it,
+    // or a dark banner after a light one gets dark text on dark glass.
     _setLight(glass, holder, light) {
-        if (light === this._light.has(glass))
-            return;
-        if (light) {
+        const was = this._light.has(glass);
+        if (light)
             this._light.set(glass, holder);
-            holder.add_style_class_name(LIGHT_CLASS);
-            if (!glass._toneWatched) {
-                glass._toneWatched = true;
-                glass.connect('destroy', () => this._light.delete(glass));
-            }
-        } else {
+        else
             this._light.delete(glass);
-            holder.remove_style_class_name(LIGHT_CLASS);
+        if (light && !glass._toneWatched) {
+            glass._toneWatched = true;
+            glass.connect('destroy', () => {
+                const gone = this._light.get(glass);
+                this._light.delete(glass);
+                if (gone)
+                    this._syncHolder(gone);
+            });
         }
-        glass.setStyle(light ? this._styleLight : this._style);
+        this._syncHolder(holder);
+        if (light !== was)
+            glass.setStyle(light ? this._styleLight : this._style);
+    }
+
+    _syncHolder(holder) {
+        if (this._goneHolders.has(holder))
+            return;
+        if (!this._watchedHolders.has(holder)) {
+            this._watchedHolders.add(holder);
+            holder.connect('destroy', () => this._goneHolders.add(holder));
+        }
+        const used = [...this._light.values()].includes(holder);
+        if (used !== holder.has_style_class_name(LIGHT_CLASS)) {
+            if (used)
+                holder.add_style_class_name(LIGHT_CLASS);
+            else
+                holder.remove_style_class_name(LIGHT_CLASS);
+        }
     }
 
     // Before it opens, a menu has no place yet: it will hang off its source.
