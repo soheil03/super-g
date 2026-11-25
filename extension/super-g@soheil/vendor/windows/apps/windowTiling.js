@@ -13,7 +13,7 @@ const GLYPH_W = 26;
 const GLYPH_H = 18;
 const PANE_GAP = 1;
 const GLYPH_BORDER = 1; // must match the border-width of .kiwi-tile-glyph
-const SECTION_LABEL_OPACITY = 150; // 0-255. CSS opacity is not applied here; set it on the actor.
+const SECTION_LABEL_OPACITY = 255; // 0-255. CSS opacity is not applied here; set it on the actor.
 const PANE_GHOST_OPACITY = 115;
 
 const ANIMATION_MS = 300;

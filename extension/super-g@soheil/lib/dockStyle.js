@@ -250,6 +250,7 @@ ${D}.left #kiwi-minimized-strip .dash-separator, ${D}.right #kiwi-minimized-stri
 ${D} .dash-label, #uiGroup .dash-label {
   background-color: ${withAlpha(c.popover, 0.92)}; color: ${c.fg}; border-radius: 999px;
   border: none; box-shadow: inset 0 0 0 1px ${c.hairline}; padding: 4px 12px; }
+#uiGroup .dash-label.super-g-glassed { background-color: transparent; box-shadow: none; }
 `;
 }
 

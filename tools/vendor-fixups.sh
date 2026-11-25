@@ -876,3 +876,19 @@ if 'wack-dark-label' not in s:
     open(p, 'w').write(s)
 print('lock labels tone patched')
 PY
+
+# The tiling grid's section labels: dimmed by actor opacity on top of the
+# theme's insensitive grey, they vanished on light glass. Our shell sheet
+# colours them (themeGen popupRules), so they stay fully opaque.
+python3 -I - "$v/windows/apps/windowTiling.js" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+old = 'const SECTION_LABEL_OPACITY = 150;'
+if old in s:
+    s = s.replace(old, 'const SECTION_LABEL_OPACITY = 255;', 1)
+    open(p, 'w').write(s)
+else:
+    assert 'const SECTION_LABEL_OPACITY = 255;' in s, 'windowTiling changed upstream'
+print('tiling labels patched')
+PY

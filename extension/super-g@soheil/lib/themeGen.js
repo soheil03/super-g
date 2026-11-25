@@ -340,6 +340,12 @@ function popupRules(c, dark, opts, rule) {
 ${rule('.popup-menu-item', 'border-radius: 10px;')}
 ${rule('.popup-menu-item:hover, .popup-menu-item:focus, .popup-menu-item.selected', `background-color: ${tile};`)}
 ${rule('.popup-separator-menu-item .popup-separator-menu-item-separator', `background-color: ${c.hairline};`)}
+${rule('.popup-menu-item:insensitive, .popup-inactive-menu-item', `color: ${withAlpha(c.fg, 0.5)};`)}
+${rule('.kiwi-tiling-section-label', `color: ${c.fgMuted};`)}
+${rule('.kiwi-tile-glyph', `border-color: ${withAlpha(c.fg, dark ? 0.7 : 0.55)};`)}
+${rule('.kiwi-tile-pane', `background-color: ${c.fg};`)}
+${rule('.kiwi-tile-button:hover .kiwi-tile-glyph, .kiwi-tile-button:active .kiwi-tile-glyph', `border-color: ${c.accentFg};`)}
+${rule('.kiwi-tile-button:hover .kiwi-tile-pane, .kiwi-tile-button:active .kiwi-tile-pane', `background-color: ${c.accentFg};`)}
 
 ${rule('.quick-settings', 'border-radius: 24px; padding: 14px;')}
 ${rule('.quick-toggle', `border-radius: 999px; background-color: ${tile}; color: ${c.fg};`)}

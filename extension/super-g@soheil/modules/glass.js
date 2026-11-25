@@ -232,6 +232,22 @@ export default class GlassModule extends Module {
             for (const monitor of popup.get_children())
                 this._ensureTracked(popup, monitor._list);
         });
+        // The dock's app names: GNOME adds one hidden label per icon to uiGroup.
+        // Thickened rather than toned: the class would have to go on uiGroup.
+        const uiGroup = Main.layoutManager.uiGroup;
+        // The dock raises a label to the top as it shows: raise it first, glass under it.
+        const ensureLabel = actor => {
+            if (!actor.has_style_class_name?.('dash-label') || this._surfaces.has(actor))
+                return;
+            this._ensureTracked(actor, actor, {thicken: 0.4});
+            const glass = this._surfaces.get(actor);
+            actor.connectObject('show', () => this.guard(() => {
+                uiGroup.set_child_above_sibling(actor, null);
+                uiGroup.set_child_below_sibling(glass, actor);
+            }), glass);
+        };
+        uiGroup.get_children().forEach(actor => this.guard(() => ensureLabel(actor)));
+        this.connect(uiGroup, 'child-added', (_g, actor) => ensureLabel(actor));
         this.connect(Main.overview, 'showing', () => this._overviewIn());
         this.connect(Main.overview, 'hidden', () => this._overviewOut());
 

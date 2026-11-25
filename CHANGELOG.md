@@ -2,6 +2,14 @@
 
 Tested versions are in [docs/UPGRADING.md](docs/UPGRADING.md).
 
+## 1.17.2 - 2026-11-25
+
+### Fixed
+- The window menu's "Move & Resize" and "Fill & Arrange" headings were nearly invisible, and its tiling icons stayed white on light glass. The headings now use the palette's secondary text colour at full opacity, and the icons follow the menu's light or dark glass. Greyed-out items in every menu follow it too.
+
+### Added
+- Dock app labels (when Labels is on in the dock settings) sit on glass, thickened so the name stays readable over any window.
+
 ## 1.17.1 - 2026-11-25
 
 ### Fixed
