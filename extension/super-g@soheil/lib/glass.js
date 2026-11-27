@@ -292,38 +292,41 @@ export function adaptiveTone(settings) {
     return settings.get_boolean('module-glass') && SHADERS_OK && settings.get_string('glass-tone') === 'adaptive';
 }
 
-export const GlassEffect = GObject.registerClass(
-class SuperGGlassEffect extends (SHADERS_OK ? Shell.GLSLEffect : Clutter.OffscreenEffect) {
-    _init() {
-        super._init();
-        this._loc = Object.fromEntries(UNIFORMS.map(u => [u, this.get_uniform_location(u)]));
-    }
+const GlassEffectClass = SHADERS_OK
+    ? class SuperGGlassEffect extends Shell.GLSLEffect {
+        _init() {
+            super._init();
+            this._loc = Object.fromEntries(UNIFORMS.map(u => [u, this.get_uniform_location(u)]));
+        }
 
-    vfunc_build_pipeline() {
-        this.add_glsl_snippet(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, CODE, false);
-    }
+        vfunc_build_pipeline() {
+            this.add_glsl_snippet(Cogl.SnippetHook.FRAGMENT, DECLARATIONS, CODE, false);
+        }
 
-    setUniforms(u) {
-        const f = (name, values) => this.set_uniform_float(this._loc[name], values.length, values);
-        f('size', u.size);
-        f('uv_origin', [0, 0]);
-        f('uv_size', [1, 1]);
-        f('radius', [u.radius]);
-        f('exponent', [u.exponent]);
-        f('aa', [u.aa]);
-        f('tint', u.tint);
-        f('saturation', [u.saturation]);
-        f('brightness', [u.brightness]);
-        f('rim', [u.rim]);
-        f('outline', [u.outline]);
-        f('guard', [u.guard]);
-        f('light_text', [u.lightText]);
-        f('lens', [0]);
-        f('liquid', [0]);
-        f('grain', [u.grain]);
-        this.queue_repaint();
+        setUniforms(u) {
+            const f = (name, values) => this.set_uniform_float(this._loc[name], values.length, values);
+            f('size', u.size);
+            f('uv_origin', [0, 0]);
+            f('uv_size', [1, 1]);
+            f('radius', [u.radius]);
+            f('exponent', [u.exponent]);
+            f('aa', [u.aa]);
+            f('tint', u.tint);
+            f('saturation', [u.saturation]);
+            f('brightness', [u.brightness]);
+            f('rim', [u.rim]);
+            f('outline', [u.outline]);
+            f('guard', [u.guard]);
+            f('light_text', [u.lightText]);
+            f('lens', [0]);
+            f('liquid', [0]);
+            f('grain', [u.grain]);
+            this.queue_repaint();
+        }
     }
-});
+    : class SuperGGlassEffect extends Clutter.OffscreenEffect {};
+
+export const GlassEffect = GObject.registerClass(GlassEffectClass);
 
 /* ---------------------------------------------------------- live glass -- */
 
